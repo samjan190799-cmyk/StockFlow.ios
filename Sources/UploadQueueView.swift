@@ -614,3 +614,36 @@ struct ActiveSheetPhoto: Identifiable, Sendable {
     let photos: [PhotoMetadata]
     let index: Int
 }
+
+// MARK: - Filter Chip Component
+@MainActor
+struct FilterChip: View {
+    let text: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(text)
+                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background {
+                    if isSelected {
+                        AppleTheme.primaryGradient
+                    } else {
+                        Color.white.opacity(0.08)
+                    }
+                }
+                .foregroundStyle(isSelected ? .white : .primary.opacity(0.85))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            isSelected ? Color.clear : Color.white.opacity(0.12),
+                            lineWidth: 1
+                        )
+                )
+        }
+    }
+}
