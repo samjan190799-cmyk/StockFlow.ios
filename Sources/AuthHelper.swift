@@ -1,65 +1,4 @@
 import SwiftUI
-import AuthenticationServices
-import WebKit
-
-// MARK: - Native Apple Sign-In Helper
-@MainActor
-class AppleSignInHelper: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
-    private var completion: @MainActor (Result<(email: String, name: String), Error>) -> Void
-    
-    init(completion: @escaping @MainActor (Result<(email: String, name: String), Error>) -> Void) {
-        self.completion = completion
-        super.init()
-    }
-    
-    func startSignIn() {
-        let provider = ASAuthorizationAppleIDProvider()
-        let request = provider.createRequest()
-        request.requestedScopes = [.fullName, .email]
-        
-        let controller = ASAuthorizationController(authorizationRequests: [request])
-        controller.delegate = self
-        controller.presentationContextProvider = self
-        controller.performRequests()
-    }
-    
-    nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        Task { @MainActor in
-            if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
-                let email = appleIDCredential.email ?? "apple.user@icloud.com"
-                let name = [appleIDCredential.fullName?.givenName, appleIDCredential.fullName?.familyName]
-                    .compactMap { $0 }
-                    .joined(separator: " ")
-                completion(.success((email: email, name: name.isEmpty ? "Пользователь Apple" : name)))
-            } else {
-                completion(.failure(NSError(domain: "AppleSignIn", code: -1, userInfo: [NSLocalizedDescriptionKey: "Неверный тип учетных данных"])))
-            }
-        }
-    }
-    
-    nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        Task { @MainActor in
-            completion(.failure(error))
-        }
-    }
-    
-    nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        // Find active window scene in a thread-safe main-actor way
-        var activeWindow = UIWindow()
-        let semaphore = DispatchSemaphore(value: 0)
-        
-        DispatchQueue.main.async {
-            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let window = scene.windows.first {
-                activeWindow = window
-            }
-            semaphore.signal()
-        }
-        
-        semaphore.wait()
-        return activeWindow
-    }
-}
 
 // MARK: - Simulated & Web OAuth Sheet
 struct SimulatedSignInView: View {
@@ -70,7 +9,6 @@ struct SimulatedSignInView: View {
     @State private var email: String = ""
     @State private var isLoading = false
     @State private var statusMessage = ""
-    @State private var isWebViewLoading = true
     
     var body: some View {
         NavigationStack {

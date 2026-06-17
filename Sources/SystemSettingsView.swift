@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 @MainActor
 struct SystemSettingsView: View {
@@ -27,7 +28,6 @@ struct SystemSettingsView: View {
     @State private var showingSavedToast = false
     @State private var showSimulatedAuthSheet = false
     @State private var selectedProviderForAuth = ""
-    @State private var appleSignInHelper: AppleSignInHelper? = nil
     
     var body: some View {
         NavigationStack {
@@ -74,19 +74,26 @@ struct SystemSettingsView: View {
                                 
                                 HStack(spacing: 12) {
                                     // Apple Sign In Button
-                                    Button(action: signInWithApple) {
-                                        HStack {
-                                            Image(systemName: "applelogo")
-                                                .font(.system(size: 14))
-                                            Text("Вход с Apple")
-                                                .font(.system(size: 13, weight: .semibold))
+                                    SignInWithAppleButton(.signIn) { request in
+                                        request.requestedScopes = [.fullName, .email]
+                                    } onCompletion: { result in
+                                        switch result {
+                                        case .success(let authorization):
+                                            if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                                                self.userEmail = appleIDCredential.email ?? "samvel.dev@icloud.com"
+                                                self.userProvider = "Apple"
+                                                self.isUserSignedIn = true
+                                                self.saveSettings()
+                                            }
+                                        case .failure(let error):
+                                            print("Apple Sign In failed: \(error.localizedDescription)")
+                                            self.selectedProviderForAuth = "Apple"
+                                            self.showSimulatedAuthSheet = true
                                         }
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
-                                        .background(Color.white)
-                                        .foregroundStyle(Color.black)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
                                     }
+                                    .signInWithAppleButtonStyle(.white)
+                                    .frame(height: 38)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
                                     
                                     // Google Sign In Button
                                     Button(action: signInWithGoogle) {
@@ -301,28 +308,6 @@ struct SystemSettingsView: View {
         }
     }
     
-    private func signInWithApple() {
-        isSigningIn = true
-        
-        let helper = AppleSignInHelper { result in
-            self.isSigningIn = false
-            switch result {
-            case .success(let credentials):
-                self.userEmail = credentials.email
-                self.userProvider = "Apple"
-                self.isUserSignedIn = true
-                self.saveSettings()
-            case .failure(let error):
-                print("Apple Sign In failed: \(error.localizedDescription)")
-                // Fallback to simulated view on error
-                self.selectedProviderForAuth = "Apple"
-                self.showSimulatedAuthSheet = true
-            }
-        }
-        
-        self.appleSignInHelper = helper
-        helper.startSignIn()
-    }
     
     private func signInWithGoogle() {
         selectedProviderForAuth = "Google"
