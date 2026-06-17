@@ -45,7 +45,7 @@ struct SystemSettingsView: View {
                                 HStack(spacing: 12) {
                                     Image(systemName: userProvider == "Apple" ? "applelogo" : "g.circle.fill")
                                         .font(.system(size: 24))
-                                        .foregroundStyle(userProvider == "Apple" ? .primary : .orange)
+                                        .foregroundStyle(userProvider == "Apple" ? Color.primary : Color.orange)
                                     
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(userEmail)
@@ -74,23 +74,27 @@ struct SystemSettingsView: View {
                                 
                                 HStack(spacing: 12) {
                                     // Apple Sign In Button
-                                    SignInWithAppleButton(.signIn) { request in
-                                        request.requestedScopes = [.fullName, .email]
-                                    } onCompletion: { result in
-                                        switch result {
-                                        case .success(let authorization):
-                                            if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
-                                                self.userEmail = appleIDCredential.email ?? "samvel.dev@icloud.com"
-                                                self.userProvider = "Apple"
-                                                self.isUserSignedIn = true
-                                                self.saveSettings()
+                                    SignInWithAppleButton(
+                                        .signIn,
+                                        onRequest: { request in
+                                            request.requestedScopes = [.fullName, .email]
+                                        },
+                                        onCompletion: { result in
+                                            switch result {
+                                            case .success(let authorization):
+                                                if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                                                    self.userEmail = appleIDCredential.email ?? "samvel.dev@icloud.com"
+                                                    self.userProvider = "Apple"
+                                                    self.isUserSignedIn = true
+                                                    self.saveSettings()
+                                                }
+                                            case .failure(let error):
+                                                print("Apple Sign In failed: \(error.localizedDescription)")
+                                                self.selectedProviderForAuth = "Apple"
+                                                self.showSimulatedAuthSheet = true
                                             }
-                                        case .failure(let error):
-                                            print("Apple Sign In failed: \(error.localizedDescription)")
-                                            self.selectedProviderForAuth = "Apple"
-                                            self.showSimulatedAuthSheet = true
                                         }
-                                    }
+                                    )
                                     .signInWithAppleButtonStyle(.white)
                                     .frame(height: 38)
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
