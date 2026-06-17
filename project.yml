@@ -1,6 +1,7 @@
 name: SmartStock
 options:
   bundleIdPrefix: com.samvel.smartstock
+  xcodeVersion: "15.0"
 targets:
   SmartStock:
     type: application
