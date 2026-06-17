@@ -1,3 +1,11 @@
+//
+//  AIMetadataView.swift
+//  StockFlow
+//
+//  AI-metadata screen: review and edit the AI-generated title, keywords,
+//  and description for each selected photo before choosing stock platforms.
+//
+
 import SwiftUI
 
 // MARK: - AI metadata screen
@@ -10,9 +18,8 @@ struct AIMetadataView: View {
 
     var onContinue: (([PhotoMetadata]) -> Void)?
 
-    init(photos: [PhotoMetadata], currentIndex: Int = 0, onContinue: (([PhotoMetadata]) -> Void)? = nil) {
+    init(photos: [PhotoMetadata], onContinue: (([PhotoMetadata]) -> Void)? = nil) {
         self._photos = State(initialValue: photos)
-        self._currentIndex = State(initialValue: currentIndex)
         self.onContinue = onContinue
     }
 
@@ -30,7 +37,6 @@ struct AIMetadataView: View {
         }
         .navigationTitle("Метаданные")
         .navigationBarTitleDisplayMode(.inline)
-        .background(Color(.systemBackground))
     }
 
     // MARK: Sections
@@ -42,18 +48,10 @@ struct AIMetadataView: View {
             }
             .disabled(currentIndex == 0)
 
-            Group {
-                if let uiImage = photos[currentIndex].uiImage {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Color(.systemGray5)
-                        .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
-                }
-            }
-            .frame(width: 52, height: 52)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.systemGray5))
+                .frame(width: 52, height: 52)
+                .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Фото \(currentIndex + 1) из \(photos.count)")
@@ -138,15 +136,13 @@ struct AIMetadataView: View {
     }
 
     private var continueButton: some View {
-        Button(action: { 
-            onContinue?(photos) 
-        }) {
-            Text("Сохранить и закрыть")
+        Button(action: { onContinue?(photos) }) {
+            Text("Выбрать платформы →")
                 .font(.system(size: 14, weight: .medium))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(Color.blue)
-                .foregroundStyle(.white)
+                .background(Color.primary)
+                .foregroundStyle(Color(.systemBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
@@ -181,11 +177,11 @@ struct AIMetadataView: View {
 
     private func regenerate() {
         isRegenerating = true
+        // TODO: replace with a real call to your metadata-generation backend (e.g. Gemini)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
             photos[currentIndex].title = "Драматичное закатное небо над горой Арарат"
             photos[currentIndex].keywords = ["Арарат", "гора", "закат", "Армения", "пейзаж", "природа", "драматичное небо"]
             photos[currentIndex].description = "Силуэт горы Арарат на фоне яркого закатного неба, снято в сельской местности Армении."
-            photos[currentIndex].status = .ready
             isRegenerating = false
         }
     }
@@ -252,6 +248,26 @@ private struct FlowLayout: Layout {
             subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: .unspecified)
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+// MARK: - Preview
+
+struct AIMetadataView_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationStack {
+            AIMetadataView(photos: [
+                PhotoMetadata(
+                    filename: "IMG_4821.HEIC",
+                    title: "Драматичное закатное небо над горой Арарат",
+                    keywords: ["Арарат", "гора", "закат", "Армения", "пейзаж", "природа", "драматичное небо"],
+                    description: "Силуэт горы Арарат на фоне яркого закатного неба, снято в сельской местности Армении."
+                ),
+                PhotoMetadata(filename: "IMG_4822.HEIC", title: "", keywords: [], description: ""),
+                PhotoMetadata(filename: "IMG_4830.HEIC", title: "", keywords: [], description: ""),
+                PhotoMetadata(filename: "IMG_4835.HEIC", title: "", keywords: [], description: "")
+            ])
         }
     }
 }
