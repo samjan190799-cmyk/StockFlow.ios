@@ -47,6 +47,7 @@ jobs:
 
       - name: Build for iOS Device (unsigned)
         run: |
+          set -o pipefail
           xcodebuild \
             -project SmartStock.xcodeproj \
             -scheme SmartStock \
@@ -59,10 +60,10 @@ jobs:
             VALIDATE_PRODUCT=NO \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             SWIFT_OPTIMIZATION_LEVEL="-O" \
-            build 2>&1 | xcpretty || true
+            build 2>&1 | xcpretty
 
-          # Verify .app was built
-          ls build/Build/Products/Release-iphoneos/
+          # Verify .app executable was built
+          ls -l build/Build/Products/Release-iphoneos/SmartStock.app/SmartStock
 
       - name: Package as IPA
         run: |

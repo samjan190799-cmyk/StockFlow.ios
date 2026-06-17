@@ -21,8 +21,8 @@ class FTPClient {
             return
         }
 
-        // FTP/FTPS — пробуем листинг корневой директории
-        let urlString = "\(scheme)://\(cleanHost):\(port)/"
+        let encodedPassword = password.addingPercentEncoding(withAllowedCharacters: .urlPasswordAllowed) ?? password
+        let urlString = "\(scheme)://\(username):\(encodedPassword)@\(cleanHost):\(port)/"
         guard let url = URL(string: urlString) else {
             throw ftpError("Некорректный URL: \(urlString)")
         }
@@ -33,30 +33,12 @@ class FTPClient {
         let session = URLSession(configuration: config)
         defer { session.invalidateAndCancel() }
 
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 20
-
-        // Встроенная auth через URL
-        let credential = URLCredential(user: username, password: password, persistence: .none)
-        let protectionSpace = URLProtectionSpace(
-            host: cleanHost,
-            port: port,
-            protocol: scheme == "ftps" ? "ftps" : "ftp",
-            realm: nil,
-            authenticationMethod: NSURLAuthenticationMethodDefault
-        )
-
-        let storage = URLCredentialStorage.shared
-        storage.setDefaultCredential(credential, forProtectionSpace: protectionSpace)
-
         do {
             let (_, response) = try await session.data(from: url)
             if let httpResp = response as? HTTPURLResponse, httpResp.statusCode >= 400 {
                 throw ftpError("Сервер вернул ошибку: \(httpResp.statusCode)")
             }
-            storage.removeDefaultCredential(credential, forProtectionSpace: protectionSpace)
         } catch let error as NSError {
-            storage.removeDefaultCredential(credential, forProtectionSpace: protectionSpace)
             // Код 9 = CURLE_FTP_ACCESS_DENIED или auth failure — нормально, значит сервер отвечает
             if error.domain == NSURLErrorDomain && (error.code == NSURLErrorUserAuthenticationRequired || error.code == 9) {
                 throw ftpError("Неверный логин или пароль: \(error.localizedDescription)")
@@ -167,11 +149,11 @@ class FTPClient {
     /// Проверка TCP-доступности хоста (для SFTP)
     private static func checkTCPReachability(host: String, port: Int) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            var sockaddr = sockaddr_in()
-            sockaddr.sin_family = sa_family_t(AF_INET)
-            sockaddr.sin_port = in_port_t(port).bigEndian
+            var addr = sockaddr_in()
+            addr.sin_family = sa_family_t(AF_INET)
+            addr.sin_port = in_port_t(port).bigEndian
 
-            guard inet_pton(AF_INET, host, &sockaddr.sin_addr) == 1 ||
+            guard inet_pton(AF_INET, host, &addr.sin_addr) == 1 ||
                   host.contains(".") else {
                 continuation.resume(throwing: ftpError("Не удалось разрешить хост: \(host)"))
                 return
@@ -186,7 +168,7 @@ class FTPClient {
             // Неблокирующий режим
             fcntl(sock, F_SETFL, O_NONBLOCK)
 
-            withUnsafePointer(to: &sockaddr) {
+            withUnsafePointer(to: &addr) {
                 $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { ptr in
                     _ = connect(sock, ptr, socklen_t(MemoryLayout<sockaddr_in>.size))
                 }
