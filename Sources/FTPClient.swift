@@ -211,7 +211,13 @@ class FTPClient {
         let dataPort = p1 * 256 + p2
         
         // 8. Connect Data Channel (TLS if control connection is TLS)
-        let dataParams = isTLS ? NWParameters.tls : NWParameters.tcp
+        let dataParams: NWParameters
+        if isTLS {
+            let options = NWProtocolTLS.Options()
+            dataParams = NWParameters(tls: options)
+        } else {
+            dataParams = NWParameters.tcp
+        }
         let dataConnection = NWConnection(host: NWEndpoint.Host(dataIp), port: NWEndpoint.Port(rawValue: UInt16(dataPort))!, using: dataParams)
         dataConnection.start(queue: DispatchQueue.global())
         try await waitForReady(connection: dataConnection)
