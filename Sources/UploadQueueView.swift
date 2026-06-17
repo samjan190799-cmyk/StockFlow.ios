@@ -223,8 +223,11 @@ class QueueViewModel: ObservableObject {
         
         let activePlatforms = platforms.filter { $0.isEnabled }
         guard !activePlatforms.isEmpty else {
-            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Нет активных стоков"])
+            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Нет активных стоков. Включите хотя бы один фотосток в настройках."])
         }
+        
+        var uploadErrors: [String] = []
+        var successCount = 0
         
         // Upload to each active platform
         for platform in activePlatforms {
@@ -232,6 +235,7 @@ class QueueViewModel: ObservableObject {
             let password = KeychainHelper.shared.read(for: serviceKey) ?? ""
             
             guard !platform.username.isEmpty, !password.isEmpty else {
+                uploadErrors.append("\(platform.name): не введены логин или пароль")
                 continue
             }
             
@@ -243,14 +247,27 @@ class QueueViewModel: ObservableObject {
                 ftpHost = ftpHost.replacingOccurrences(of: "ftps", with: "ftp")
             }
             
-            try await FTPClient.upload(
-                data: preparedData,
-                filename: photo.filename,
-                host: ftpHost,
-                port: 21,
-                username: platform.username,
-                password: password
-            )
+            do {
+                try await FTPClient.upload(
+                    data: preparedData,
+                    filename: photo.filename,
+                    host: ftpHost,
+                    port: 21,
+                    username: platform.username,
+                    password: password
+                )
+                successCount += 1
+            } catch {
+                uploadErrors.append("\(platform.name): \(error.localizedDescription)")
+            }
+        }
+        
+        if successCount == 0 {
+            let details = uploadErrors.joined(separator: "; ")
+            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Ошибка загрузки: \(details)"])
+        } else if !uploadErrors.isEmpty {
+            let details = uploadErrors.joined(separator: "; ")
+            throw NSError(domain: "Upload", code: -2, userInfo: [NSLocalizedDescriptionKey: "Частичный успех. Ошибки: \(details)"])
         }
     }
     

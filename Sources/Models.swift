@@ -109,7 +109,7 @@ struct StockPlatform: Identifiable, Codable, Sendable {
     static var defaults: [StockPlatform] {
         [
             StockPlatform(id: "adobe", name: "Adobe Stock", defaultHost: "sftp.contributor.adobestock.com", host: "sftp.contributor.adobestock.com", username: "", passwordHash: "", isEnabled: false),
-            StockPlatform(id: "shutterstock", name: "Shutterstock", defaultHost: "ftps.shutterstock.com", host: "ftps.shutterstock.com", username: "", passwordHash: "", isEnabled: false),
+            StockPlatform(id: "shutterstock", name: "Shutterstock", defaultHost: "ftp.shutterstock.com", host: "ftp.shutterstock.com", username: "", passwordHash: "", isEnabled: false),
             StockPlatform(id: "istock", name: "iStock / Getty", defaultHost: "ftp.gettyimages.com", host: "ftp.gettyimages.com", username: "", passwordHash: "", isEnabled: false),
             StockPlatform(id: "freepik", name: "Freepik", defaultHost: "sftp.contributor-ftp.freepik.com", host: "sftp.contributor-ftp.freepik.com", username: "", passwordHash: "", isEnabled: false),
             StockPlatform(id: "depositphotos", name: "Depositphotos", defaultHost: "ftp.depositphotos.com", host: "ftp.depositphotos.com", username: "", passwordHash: "", isEnabled: false),

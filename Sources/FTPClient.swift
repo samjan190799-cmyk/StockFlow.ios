@@ -36,6 +36,55 @@ class FTPClient {
         }
     }
     
+    static func testConnection(host: String, port: Int = 21, username: String, password: String) async throws {
+        var ftpHost = host
+        if ftpHost.contains("sftp") {
+            ftpHost = ftpHost.replacingOccurrences(of: "sftp", with: "ftp")
+        } else if ftpHost.contains("ftps") {
+            ftpHost = ftpHost.replacingOccurrences(of: "ftps", with: "ftp")
+        }
+        
+        let controlConnection = NWConnection(host: NWEndpoint.Host(ftpHost), port: NWEndpoint.Port(rawValue: UInt16(port)), using: .tcp)
+        controlConnection.start(queue: .global())
+        
+        do {
+            try await waitForReady(connection: controlConnection)
+            let reader = ConnectionReader(connection: controlConnection)
+            
+            // 1. Read Banner
+            let banner = try await reader.readLine()
+            guard banner.hasPrefix("220") else {
+                controlConnection.cancel()
+                throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Ошибка баннера FTP: \(banner)"])
+            }
+            
+            // 2. Send USER
+            try await sendCommand(connection: controlConnection, cmd: "USER \(username)\r\n")
+            let userResp = try await reader.readLine()
+            guard userResp.hasPrefix("331") || userResp.hasPrefix("230") else {
+                controlConnection.cancel()
+                throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Пользователь отклонён: \(userResp)"])
+            }
+            
+            // 3. Send PASS if required
+            if userResp.hasPrefix("331") {
+                try await sendCommand(connection: controlConnection, cmd: "PASS \(password)\r\n")
+                let passResp = try await reader.readLine()
+                guard passResp.hasPrefix("230") else {
+                    controlConnection.cancel()
+                    throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Ошибка авторизации: \(passResp)"])
+                }
+            }
+            
+            // 4. Send QUIT
+            try await sendCommand(connection: controlConnection, cmd: "QUIT\r\n")
+            controlConnection.cancel()
+        } catch {
+            controlConnection.cancel()
+            throw error
+        }
+    }
+
     static func upload(data: Data, filename: String, host: String, port: Int = 21, username: String, password: String) async throws {
         let controlConnection = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: UInt16(port)), using: .tcp)
         controlConnection.start(queue: .global())

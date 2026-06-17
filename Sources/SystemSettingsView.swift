@@ -25,6 +25,9 @@ struct SystemSettingsView: View {
     
     @State private var isSigningIn = false
     @State private var showingSavedToast = false
+    @State private var showSimulatedAuthSheet = false
+    @State private var selectedProviderForAuth = ""
+    @State private var appleSignInHelper: AppleSignInHelper? = nil
     
     var body: some View {
         NavigationStack {
@@ -247,6 +250,18 @@ struct SystemSettingsView: View {
                         )
                 }
             }
+            .sheet(isPresented: $showSimulatedAuthSheet) {
+                SimulatedSignInView(
+                    provider: selectedProviderForAuth,
+                    isPresented: $showSimulatedAuthSheet,
+                    onCompletion: { email in
+                        self.userEmail = email
+                        self.userProvider = selectedProviderForAuth
+                        self.isUserSignedIn = true
+                        self.saveSettings()
+                    }
+                )
+            }
         }
     }
     
@@ -288,38 +303,30 @@ struct SystemSettingsView: View {
     
     private func signInWithApple() {
         isSigningIn = true
-        Task {
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            userEmail = "samvel.dev@icloud.com"
-            userProvider = "Apple"
-            isUserSignedIn = true
-            isSigningIn = false
-            withAnimation {
-                showingSavedToast = true
-            }
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            withAnimation {
-                showingSavedToast = false
+        
+        let helper = AppleSignInHelper { result in
+            self.isSigningIn = false
+            switch result {
+            case .success(let credentials):
+                self.userEmail = credentials.email
+                self.userProvider = "Apple"
+                self.isUserSignedIn = true
+                self.saveSettings()
+            case .failure(let error):
+                print("Apple Sign In failed: \(error.localizedDescription)")
+                // Fallback to simulated view on error
+                self.selectedProviderForAuth = "Apple"
+                self.showSimulatedAuthSheet = true
             }
         }
+        
+        self.appleSignInHelper = helper
+        helper.startSignIn()
     }
     
     private func signInWithGoogle() {
-        isSigningIn = true
-        Task {
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            userEmail = "samvel.contributor@gmail.com"
-            userProvider = "Google"
-            isUserSignedIn = true
-            isSigningIn = false
-            withAnimation {
-                showingSavedToast = true
-            }
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            withAnimation {
-                showingSavedToast = false
-            }
-        }
+        selectedProviderForAuth = "Google"
+        showSimulatedAuthSheet = true
     }
     
     private func signOut() {

@@ -150,11 +150,33 @@ struct StockSettingsView: View {
                             
                             Divider().background(Color.white.opacity(0.1))
                             
-                            customInputField(title: "Имя хоста (сервер)", placeholder: "ftp.example.com", text: $platforms[index].host, isSecure: false)
-                            
                             customInputField(title: "Имя пользователя (логин)", placeholder: "Username", text: $platforms[index].username, isSecure: false)
                             
                             customInputField(title: "Пароль", placeholder: "••••••••", text: $platforms[index].passwordHash, isSecure: true)
+                            
+                            HStack {
+                                Text("Сервер выгрузки: \(platforms[index].host)")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            
+                            DisclosureGroup("Дополнительные параметры сервера") {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    customInputField(title: "Имя хоста (сервер)", placeholder: "ftp.example.com", text: $platforms[index].host, isSecure: false)
+                                    
+                                    if platforms[index].id == "adobe" || platforms[index].id == "freepik" {
+                                        Text("Внимание: Данный сток требует SFTP. Plain FTP-соединение для него может быть недоступно.")
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(.orange)
+                                            .lineLimit(nil)
+                                    }
+                                }
+                                .padding(.top, 4)
+                            }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .tint(.secondary)
                         }
                         .glassCard()
                         
@@ -265,10 +287,21 @@ struct StockSettingsView: View {
         
         isVerifying = true
         Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            isVerifying = false
-            alertMessage = "Успешное соединение с сервером \(platform.host)! Аутентификация пройдена."
-            showingAlert = true
+            do {
+                try await FTPClient.testConnection(
+                    host: platform.host,
+                    port: 21,
+                    username: platform.username,
+                    password: platform.passwordHash
+                )
+                isVerifying = false
+                alertMessage = "Успешное соединение с сервером \(platform.host)! Аутентификация пройдена."
+                showingAlert = true
+            } catch {
+                isVerifying = false
+                alertMessage = "Ошибка соединения с \(platform.host): \(error.localizedDescription)"
+                showingAlert = true
+            }
         }
     }
 }
