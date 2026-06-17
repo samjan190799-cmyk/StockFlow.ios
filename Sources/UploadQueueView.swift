@@ -1,20 +1,227 @@
 import SwiftUI
 import PhotosUI
 
+// MARK: - Queue View Model (MainActor Isolated, Safe Concurrency)
+@MainActor
+class QueueViewModel: ObservableObject {
+    @Published var photos: [PhotoMetadata] = []
+    @Published var isAnalyzingAll = false
+    @Published var toastMessage = ""
+    @Published var showToast = false
+    
+    func runAIForPhoto(_ id: UUID) {
+        guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
+        
+        let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? AIProvider.gemini.rawValue
+        let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
+        
+        let apiKey: String
+        if provider.contains("Gemini") {
+            apiKey = UserDefaults.standard.string(forKey: "api_key_gemini") ?? ""
+        } else if provider.contains("OpenAI") {
+            apiKey = UserDefaults.standard.string(forKey: "api_key_openai") ?? ""
+        } else {
+            apiKey = UserDefaults.standard.string(forKey: "api_key_claude") ?? ""
+        }
+        
+        // Check if API key is blank
+        guard !apiKey.trimmingCharacters(in: .whitespaces).isEmpty else {
+            // No Key: Demo Mode
+            photos[idx].status = .aiAnalyzing
+            triggerToast("Запущен демо-анализ (ключ API не введен)")
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                if self.photos.count > idx {
+                    self.photos[idx].title = "Драматичный закат в горах (Демо)"
+                    self.photos[idx].keywords = ["закат", "облака", "небо", "горы", "пейзаж", "демо"]
+                    self.photos[idx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа вашей фотографии."
+                    self.photos[idx].status = .ready
+                    self.triggerToast("Демо-анализ завершен")
+                }
+            }
+            return
+        }
+        
+        photos[idx].status = .aiAnalyzing
+        triggerToast("ИИ анализирует фотографию...")
+        
+        Task {
+            do {
+                let imageData = self.photos[idx].imageData ?? Data()
+                let result = try await AIManager.shared.analyzePhoto(
+                    imageData: imageData,
+                    customPrompt: customPrompt,
+                    provider: provider,
+                    apiKey: apiKey
+                )
+                
+                self.photos[idx].title = result.title
+                self.photos[idx].description = result.description
+                self.photos[idx].keywords = result.keywords
+                self.photos[idx].status = .ready
+                self.triggerToast("Анализ ИИ успешно завершен!")
+            } catch {
+                self.photos[idx].description = "Ошибка: \(error.localizedDescription)"
+                self.photos[idx].status = .error
+                self.triggerToast("Ошибка ИИ: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func runAIForAll() {
+        let newOrErrorPhotos = photos.filter { $0.status == .new || $0.status == .error }
+        guard !newOrErrorPhotos.isEmpty else { return }
+        
+        isAnalyzingAll = true
+        triggerToast("Запущен ИИ-анализ для \(newOrErrorPhotos.count) фото...")
+        
+        let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? AIProvider.gemini.rawValue
+        let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
+        let apiKey: String
+        if provider.contains("Gemini") {
+            apiKey = UserDefaults.standard.string(forKey: "api_key_gemini") ?? ""
+        } else if provider.contains("OpenAI") {
+            apiKey = UserDefaults.standard.string(forKey: "api_key_openai") ?? ""
+        } else {
+            apiKey = UserDefaults.standard.string(forKey: "api_key_claude") ?? ""
+        }
+        
+        // Loop and run
+        Task {
+            for photo in newOrErrorPhotos {
+                if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
+                    self.photos[idx].status = .aiAnalyzing
+                    
+                    if apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
+                        // Demo mode delay
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)
+                        if self.photos.count > idx {
+                            self.photos[idx].title = "Красивый снимок (Демо)"
+                            self.photos[idx].keywords = ["фотография", "снимок", "стоки", "демо", "пейзаж"]
+                            self.photos[idx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
+                            self.photos[idx].status = .ready
+                        }
+                    } else {
+                        // Real analysis
+                        do {
+                            let data = self.photos[idx].imageData ?? Data()
+                            let result = try await AIManager.shared.analyzePhoto(
+                                imageData: data,
+                                customPrompt: customPrompt,
+                                provider: provider,
+                                apiKey: apiKey
+                            )
+                            if self.photos.count > idx {
+                                self.photos[idx].title = result.title
+                                self.photos[idx].description = result.description
+                                self.photos[idx].keywords = result.keywords
+                                self.photos[idx].status = .ready
+                            }
+                        } catch {
+                            if self.photos.count > idx {
+                                self.photos[idx].status = .error
+                                self.photos[idx].description = "Ошибка: \(error.localizedDescription)"
+                            }
+                        }
+                    }
+                }
+            }
+            
+            self.isAnalyzingAll = false
+            self.triggerToast("ИИ-анализ всех фото завершен")
+        }
+    }
+    
+    func uploadPhoto(_ id: UUID) {
+        guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
+        
+        guard checkStockCredentials() else {
+            triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!")
+            return
+        }
+        
+        photos[idx].status = .uploading
+        triggerToast("Загрузка файла \(photos[idx].filename)...")
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            if self.photos.count > idx {
+                self.photos[idx].status = .success
+                self.triggerToast("Файл \(self.photos[idx].filename) успешно загружен на стоки!")
+            }
+        }
+    }
+    
+    func uploadAllReady() {
+        let readyPhotos = photos.filter { $0.status == .ready }
+        guard !readyPhotos.isEmpty else {
+            triggerToast("Нет файлов, готовых к отправке.")
+            return
+        }
+        
+        guard checkStockCredentials() else {
+            triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!")
+            return
+        }
+        
+        triggerToast("Началась отправка \(readyPhotos.count) файлов...")
+        for i in 0..<photos.count {
+            if photos[i].status == .ready {
+                photos[i].status = .uploading
+                let idx = i
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double.random(in: 1.0...2.5)) {
+                    if self.photos.count > idx {
+                        self.photos[idx].status = .success
+                        if idx == self.photos.count - 1 || i == self.photos.count - 1 {
+                            self.triggerToast("Все файлы успешно загружены!")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func checkStockCredentials() -> Bool {
+        if let data = UserDefaults.standard.data(forKey: "stock_platforms"),
+           let decoded = try? JSONDecoder().decode([StockPlatform].self, from: data) {
+            let activePlatforms = decoded.filter { $0.isEnabled }
+            return !activePlatforms.isEmpty && activePlatforms.contains(where: { !$0.username.isEmpty && !$0.passwordHash.isEmpty })
+        }
+        return false
+    }
+    
+    func removePhoto(_ id: UUID) {
+        photos.removeAll(where: { $0.id == id })
+    }
+    
+    func deletePhoto(at offsets: IndexSet) {
+        photos.remove(atOffsets: offsets)
+    }
+    
+    func triggerToast(_ message: String) {
+        toastMessage = message
+        withAnimation {
+            showToast = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            if self.toastMessage == message {
+                withAnimation {
+                    self.showToast = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Upload Queue View
 struct UploadQueueView: View {
-    @Binding var photos: [PhotoMetadata]
+    @ObservedObject var viewModel: QueueViewModel
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var searchText = ""
     @State private var selectedFilter: PhotoStatus? = nil
     @State private var editingPhotoId: UUID? = nil
-    @State private var isAnalyzingAll = false
-    
-    // Status message toast
-    @State private var toastMessage = ""
-    @State private var showToast = false
     
     var filteredPhotos: [PhotoMetadata] {
-        photos.filter { photo in
+        viewModel.photos.filter { photo in
             let matchesSearch = searchText.isEmpty || 
                                 photo.filename.localizedCaseInsensitiveContains(searchText) || 
                                 photo.title.localizedCaseInsensitiveContains(searchText) ||
@@ -31,16 +238,16 @@ struct UploadQueueView: View {
                 LiquidBackgroundView()
                 
                 VStack(spacing: 14) {
-                    // Header Dashboard Summary (Sleek Apple style tags)
+                    // Header Dashboard Summary
                     HStack(spacing: 12) {
-                        summaryCard(title: "В очереди", count: photos.count, icon: "tray.fill", color: .blue)
-                        summaryCard(title: "Готовы", count: photos.filter({ $0.status == .ready }).count, icon: "checkmark.circle.fill", color: .green)
-                        summaryCard(title: "Загружены", count: photos.filter({ $0.status == .success }).count, icon: "paperplane.fill", color: .purple)
+                        summaryCard(title: "В очереди", count: viewModel.photos.count, icon: "tray.fill", color: .blue)
+                        summaryCard(title: "Готовы", count: viewModel.photos.filter({ $0.status == .ready }).count, icon: "checkmark.circle.fill", color: .green)
+                        summaryCard(title: "Загружены", count: viewModel.photos.filter({ $0.status == .success }).count, icon: "paperplane.fill", color: .purple)
                     }
                     .padding(.horizontal)
                     .padding(.top, 14)
                     
-                    // Drag & Drop / Selection Zone (Polished Glass Dropzone)
+                    // Drag & Drop / Selection Zone
                     PhotosPicker(
                         selection: $selectedItems,
                         maxSelectionCount: 50,
@@ -72,7 +279,7 @@ struct UploadQueueView: View {
                         loadSelectedPhotos(from: newItems)
                     }
                     
-                    // Search Bar (Sleeker and smaller)
+                    // Search Bar
                     HStack {
                         Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(.secondary)
                         TextField("Поиск...", text: $searchText)
@@ -84,12 +291,12 @@ struct UploadQueueView: View {
                     // Filter chips
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            FilterChip(text: "Все (\(photos.count))", isSelected: selectedFilter == nil) {
+                            FilterChip(text: "Все (\(viewModel.photos.count))", isSelected: selectedFilter == nil) {
                                 selectedFilter = nil
                             }
                             
                             ForEach(PhotoStatus.allCases, id: \.self) { status in
-                                let count = photos.filter { $0.status == status }.count
+                                let count = viewModel.photos.filter { $0.status == status }.count
                                 FilterChip(text: "\(status.rawValue) (\(count))", isSelected: selectedFilter == status) {
                                     selectedFilter = status
                                 }
@@ -129,19 +336,19 @@ struct UploadQueueView: View {
                                 }
                             }
                             .padding(.horizontal)
-                            .padding(.bottom, 80) // Leave space for floating action bar
+                            .padding(.bottom, 80)
                         }
                     }
                 }
                 
-                // Floating Action Bar at the bottom (Neat Apple style)
-                if !photos.isEmpty {
+                // Floating Action Bar at the bottom
+                if !viewModel.photos.isEmpty {
                     VStack {
                         Spacer()
                         HStack(spacing: 12) {
-                            Button(action: runAIForAll) {
+                            Button(action: { viewModel.runAIForAll() }) {
                                 HStack {
-                                    if isAnalyzingAll {
+                                    if viewModel.isAnalyzingAll {
                                         ProgressView().scaleEffect(0.8).tint(.white)
                                     } else {
                                         Image(systemName: "sparkles")
@@ -156,9 +363,9 @@ struct UploadQueueView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .shadow(color: AppleTheme.glowStart.opacity(0.25), radius: 6, x: 0, y: 3)
                             }
-                            .disabled(isAnalyzingAll)
+                            .disabled(viewModel.isAnalyzingAll)
                             
-                            Button(action: uploadAllReady) {
+                            Button(action: { viewModel.uploadAllReady() }) {
                                 HStack {
                                     Image(systemName: "paperplane.fill")
                                     Text("Отправить")
@@ -183,10 +390,10 @@ struct UploadQueueView: View {
                 }
                 
                 // Toast notification overlay
-                if showToast {
+                if viewModel.showToast {
                     VStack {
                         Spacer()
-                        Text(toastMessage)
+                        Text(viewModel.toastMessage)
                             .font(.system(size: 12, weight: .semibold))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
@@ -204,8 +411,8 @@ struct UploadQueueView: View {
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: Binding(
                 get: { 
-                    if let id = editingPhotoId, let index = photos.firstIndex(where: { $0.id == id }) {
-                        return ActiveSheetPhoto(id: id, photos: photos, index: index)
+                    if let id = editingPhotoId, let index = viewModel.photos.firstIndex(where: { $0.id == id }) {
+                        return ActiveSheetPhoto(id: id, photos: viewModel.photos, index: index)
                     }
                     return nil
                 },
@@ -216,8 +423,8 @@ struct UploadQueueView: View {
                 NavigationStack {
                     AIMetadataView(photos: wrapper.photos, currentIndex: wrapper.index) { updatedPhotos in
                         for updated in updatedPhotos {
-                            if let idx = photos.firstIndex(where: { $0.id == updated.id }) {
-                                photos[idx] = updated
+                            if let idx = viewModel.photos.firstIndex(where: { $0.id == updated.id }) {
+                                viewModel.photos[idx] = updated
                             }
                         }
                         editingPhotoId = nil
@@ -234,10 +441,9 @@ struct UploadQueueView: View {
         }
     }
     
-    // MARK: - Photo Row Component (Refined & Neat)
+    // MARK: - Photo Row Component
     private func photoRow(_ photo: PhotoMetadata) -> some View {
         HStack(spacing: 12) {
-            // Photo Thumbnail
             Group {
                 if let uiImage = photo.uiImage {
                     Image(uiImage: uiImage)
@@ -295,7 +501,6 @@ struct UploadQueueView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                     
-                    // Small status circle
                     Circle()
                         .fill(photo.status.color)
                         .frame(width: 5, height: 5)
@@ -308,10 +513,10 @@ struct UploadQueueView: View {
             
             Spacer()
             
-            // Neat Action Menu
+            // Action Menu
             VStack(spacing: 8) {
                 HStack(spacing: 6) {
-                    Button(action: { runAIForPhoto(photo.id) }) {
+                    Button(action: { viewModel.runAIForPhoto(photo.id) }) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.white)
@@ -320,7 +525,7 @@ struct UploadQueueView: View {
                             .clipShape(Circle())
                     }
                     
-                    Button(action: { uploadPhoto(photo.id) }) {
+                    Button(action: { viewModel.uploadPhoto(photo.id) }) {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 10))
                             .foregroundStyle(.primary)
@@ -331,7 +536,7 @@ struct UploadQueueView: View {
                     }
                 }
                 
-                Button(action: { removePhoto(photo.id) }) {
+                Button(action: { viewModel.removePhoto(photo.id) }) {
                     Image(systemName: "trash")
                         .font(.system(size: 10))
                         .foregroundStyle(.red.opacity(0.7))
@@ -340,7 +545,7 @@ struct UploadQueueView: View {
         }
     }
     
-    // MARK: - Dashboard Card (Polished & Compact)
+    // MARK: - Dashboard Card
     private func summaryCard(title: String, count: Int, icon: String, color: Color) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
@@ -386,7 +591,7 @@ struct UploadQueueView: View {
                         )
                         
                         DispatchQueue.main.async {
-                            self.photos.append(newPhoto)
+                            self.viewModel.photos.append(newPhoto)
                         }
                     }
                 case .failure(let error):
@@ -395,252 +600,5 @@ struct UploadQueueView: View {
             }
         }
         selectedItems = []
-    }
-    
-    // MARK: - Real AI Analysis integration
-    private func runAIForPhoto(_ id: UUID) {
-        guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
-        
-        let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? AIProvider.gemini.rawValue
-        let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
-        
-        let apiKey: String
-        if provider.contains("Gemini") {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_gemini") ?? ""
-        } else if provider.contains("OpenAI") {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_openai") ?? ""
-        } else {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_claude") ?? ""
-        }
-        
-        // Check if API key is blank
-        guard !apiKey.trimmingCharacters(in: .whitespaces).isEmpty else {
-            // No Key: Demo Mode
-            photos[idx].status = .aiAnalyzing
-            triggerToast("Запущен демо-анализ (ключ API не введен)")
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                if photos.count > idx {
-                    photos[idx].title = "Драматичный закат в горах (Демо)"
-                    photos[idx].keywords = ["закат", "облака", "небо", "горы", "пейзаж", "демо"]
-                    photos[idx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа вашей фотографии."
-                    photos[idx].status = .ready
-                    triggerToast("Демо-анализ завершен")
-                }
-            }
-            return
-        }
-        
-        photos[idx].status = .aiAnalyzing
-        triggerToast("ИИ анализирует фотографию...")
-        
-        let sendablePhotos = SendableBinding(binding: $photos)
-        
-        Task {
-            do {
-                let imageData = await MainActor.run { sendablePhotos.binding.wrappedValue[idx].imageData ?? Data() }
-                let result = try await AIManager.shared.analyzePhoto(
-                    imageData: imageData,
-                    customPrompt: customPrompt,
-                    provider: provider,
-                    apiKey: apiKey
-                )
-                
-                await MainActor.run {
-                    let binding = sendablePhotos.binding
-                    if let currentIdx = binding.wrappedValue.firstIndex(where: { $0.id == id }) {
-                        binding.wrappedValue[currentIdx].title = result.title
-                        binding.wrappedValue[currentIdx].description = result.description
-                        binding.wrappedValue[currentIdx].keywords = result.keywords
-                        binding.wrappedValue[currentIdx].status = .ready
-                        triggerToast("Анализ ИИ успешно завершен!")
-                    }
-                }
-            } catch {
-                let errString = error.localizedDescription
-                await MainActor.run {
-                    let binding = sendablePhotos.binding
-                    if let currentIdx = binding.wrappedValue.firstIndex(where: { $0.id == id }) {
-                        binding.wrappedValue[currentIdx].description = "Ошибка: \(errString)"
-                        binding.wrappedValue[currentIdx].status = .error
-                        triggerToast("Ошибка ИИ: \(errString)")
-                    }
-                }
-            }
-        }
-    }
-    
-    private func runAIForAll() {
-        let newOrErrorPhotos = photos.filter { $0.status == .new || $0.status == .error }
-        guard !newOrErrorPhotos.isEmpty else { return }
-        
-        isAnalyzingAll = true
-        triggerToast("Запущен ИИ-анализ для \(newOrErrorPhotos.count) фото...")
-        
-        let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? AIProvider.gemini.rawValue
-        let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
-        let apiKey: String
-        if provider.contains("Gemini") {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_gemini") ?? ""
-        } else if provider.contains("OpenAI") {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_openai") ?? ""
-        } else {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_claude") ?? ""
-        }
-        
-        let sendablePhotos = SendableBinding(binding: $photos)
-        
-        // Loop and run
-        Task {
-            for photo in newOrErrorPhotos {
-                let pId = photo.id
-                
-                await MainActor.run {
-                    let binding = sendablePhotos.binding
-                    if let idx = binding.wrappedValue.firstIndex(where: { $0.id == pId }) {
-                        binding.wrappedValue[idx].status = .aiAnalyzing
-                    }
-                }
-                
-                if apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
-                    // Demo mode delay
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    await MainActor.run {
-                        let binding = sendablePhotos.binding
-                        if let idx = binding.wrappedValue.firstIndex(where: { $0.id == pId }) {
-                            binding.wrappedValue[idx].title = "Красивый снимок (Демо)"
-                            binding.wrappedValue[idx].keywords = ["фотография", "снимок", "стоки", "демо", "пейзаж"]
-                            binding.wrappedValue[idx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
-                            binding.wrappedValue[idx].status = .ready
-                        }
-                    }
-                } else {
-                    // Real analysis
-                    do {
-                        let data = await MainActor.run {
-                            let binding = sendablePhotos.binding
-                            if let idx = binding.wrappedValue.firstIndex(where: { $0.id == pId }) {
-                                return binding.wrappedValue[idx].imageData ?? Data()
-                            }
-                            return Data()
-                        }
-                        
-                        let result = try await AIManager.shared.analyzePhoto(
-                            imageData: data,
-                            customPrompt: customPrompt,
-                            provider: provider,
-                            apiKey: apiKey
-                        )
-                        
-                        await MainActor.run {
-                            let binding = sendablePhotos.binding
-                            if let idx = binding.wrappedValue.firstIndex(where: { $0.id == pId }) {
-                                binding.wrappedValue[idx].title = result.title
-                                binding.wrappedValue[idx].description = result.description
-                                binding.wrappedValue[idx].keywords = result.keywords
-                                binding.wrappedValue[idx].status = .ready
-                            }
-                        }
-                    } catch {
-                        let errString = error.localizedDescription
-                        await MainActor.run {
-                            let binding = sendablePhotos.binding
-                            if let idx = binding.wrappedValue.firstIndex(where: { $0.id == pId }) {
-                                binding.wrappedValue[idx].status = .error
-                                binding.wrappedValue[idx].description = "Ошибка: \(errString)"
-                            }
-                        }
-                    }
-                }
-            }
-            
-            await MainActor.run {
-                isAnalyzingAll = false
-                triggerToast("ИИ-анализ всех фото завершен")
-            }
-        }
-    }
-    
-    // MARK: - FTP Upload simulation with credentials check
-    private func uploadPhoto(_ id: UUID) {
-        guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
-        
-        // Ensure at least one stock platform is enabled and has credentials
-        guard checkStockCredentials() else {
-            triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!")
-            return
-        }
-        
-        photos[idx].status = .uploading
-        triggerToast("Загрузка файла \(photos[idx].filename)...")
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            if photos.count > idx {
-                photos[idx].status = .success
-                triggerToast("Файл \(photos[idx].filename) успешно загружен на стоки!")
-            }
-        }
-    }
-    
-    private func uploadAllReady() {
-        let readyPhotos = photos.filter { $0.status == .ready }
-        guard !readyPhotos.isEmpty else {
-            triggerToast("Нет файлов, готовых к отправке.")
-            return
-        }
-        
-        guard checkStockCredentials() else {
-            triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!")
-            return
-        }
-        
-        triggerToast("Началась отправка \(readyPhotos.count) файлов...")
-        for i in 0..<photos.count {
-            if photos[i].status == .ready {
-                photos[i].status = .uploading
-                let idx = i
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double.random(in: 1.0...2.5)) {
-                    if photos.count > idx {
-                        photos[idx].status = .success
-                        if idx == photos.count - 1 || i == photos.count - 1 {
-                            triggerToast("Все файлы успешно загружены!")
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    private func checkStockCredentials() -> Bool {
-        if let data = UserDefaults.standard.data(forKey: "stock_platforms"),
-           let decoded = try? JSONDecoder().decode([StockPlatform].self, from: data) {
-            let activePlatforms = decoded.filter { $0.isEnabled }
-            // Must have at least one active platform and it must have username/password
-            return !activePlatforms.isEmpty && activePlatforms.contains(where: { !$0.username.isEmpty && !$0.passwordHash.isEmpty })
-        }
-        return false
-    }
-    
-    private func removePhoto(_ id: UUID) {
-        photos.removeAll(where: { $0.id == id })
-    }
-    
-    private func deletePhoto(at offsets: IndexSet) {
-        photos.remove(atOffsets: offsets)
-    }
-    
-    private func triggerToast(_ message: String) {
-        toastMessage = message
-        withAnimation {
-            showToast = true
-        }
-        // Dismiss after 2.5s
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            if toastMessage == message {
-                withAnimation {
-                    showToast = false
-                }
-            }
-        }
     }
 }

@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct SmartStockApp: App {
     @AppStorage("sys_theme") private var sysTheme: String = "Темная"
-    @State private var photos: [PhotoMetadata] = []
+    @StateObject private var viewModel = QueueViewModel()
     
     var colorScheme: ColorScheme? {
         switch sysTheme {
@@ -25,7 +25,7 @@ struct SmartStockApp: App {
     var body: some Scene {
         WindowGroup {
             TabView {
-                UploadQueueView(photos: $photos)
+                UploadQueueView(viewModel: viewModel)
                     .tabItem {
                         Label("Очередь", systemImage: "tray.and.arrow.down")
                     }
