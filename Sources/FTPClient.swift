@@ -53,14 +53,7 @@ class FTPClient {
                     group.cancelAll()
                     return result
                 } catch {
-                    self.connection.cancel()
-                    throw error
-                }
-            }
-        }
-    }
-    
-    // MARK: - Test Connection
+          // MARK: - Test Connection
     static func testConnection(
         host: String,
         port: Int = 21,
@@ -92,32 +85,71 @@ class FTPClient {
             let reader = ConnectionReader(connection: controlConnection)
             
             // 1. Read Banner
-            let banner = try await reader.readLine()
+            let banner: String
+            do {
+                banner = try await reader.readLine()
+            } catch {
+                throw ftpError("Ошибка при чтении приветствия сервера (Banner): \(error.localizedDescription)")
+            }
             guard banner.hasPrefix("220") else {
                 controlConnection.cancel()
-                throw ftpError("Ошибка FTP: \(banner)")
+                throw ftpError("Ошибка FTP (неверное приветствие): \(banner)")
             }
             
             // 2. Send AUTH TLS
-            try await sendCommand(connection: controlConnection, cmd: "AUTH TLS\r\n")
-            let authResp = try await reader.readLine()
+            do {
+                try await sendCommand(connection: controlConnection, cmd: "AUTH TLS\r\n")
+            } catch {
+                throw ftpError("Ошибка при отправке команды AUTH TLS: \(error.localizedDescription)")
+            }
+            
+            let authResp: String
+            do {
+                authResp = try await reader.readLine()
+            } catch {
+                throw ftpError("Ошибка при чтении ответа на AUTH TLS: \(error.localizedDescription)")
+            }
             
             let isTLS = authResp.hasPrefix("234")
             if isTLS {
-                try await upgradeToTLS(connection: controlConnection)
+                do {
+                    try await upgradeToTLS(connection: controlConnection, host: cleanHost)
+                } catch {
+                    throw ftpError("Ошибка при переходе на защищенное соединение (TLS upgrade): \(error.localizedDescription)")
+                }
             }
             
             // 3. Send USER
-            try await sendCommand(connection: controlConnection, cmd: "USER \(username)\r\n")
-            let userResp = try await reader.readLine()
+            do {
+                try await sendCommand(connection: controlConnection, cmd: "USER \(username)\r\n")
+            } catch {
+                throw ftpError("Ошибка при отправке имени пользователя (USER): \(error.localizedDescription)")
+            }
+            
+            let userResp: String
+            do {
+                userResp = try await reader.readLine()
+            } catch {
+                throw ftpError("Ошибка при чтении ответа на имя пользователя (USER): \(error.localizedDescription)")
+            }
             
             // 4. Send PASS if required
             if userResp.hasPrefix("331") {
-                try await sendCommand(connection: controlConnection, cmd: "PASS \(password)\r\n")
-                let passResp = try await reader.readLine()
+                do {
+                    try await sendCommand(connection: controlConnection, cmd: "PASS \(password)\r\n")
+                } catch {
+                    throw ftpError("Ошибка при отправке пароля (PASS): \(error.localizedDescription)")
+                }
+                
+                let passResp: String
+                do {
+                    passResp = try await reader.readLine()
+                } catch {
+                    throw ftpError("Ошибка при чтении ответа на пароль (PASS): \(error.localizedDescription)")
+                }
                 guard passResp.hasPrefix("230") else {
                     controlConnection.cancel()
-                    throw ftpError("Неверный логин или пароль")
+                    throw ftpError("Неверный логин или пароль (код: \(passResp))")
                 }
             } else if !userResp.hasPrefix("230") {
                 controlConnection.cancel()
@@ -125,7 +157,7 @@ class FTPClient {
             }
             
             // 5. Send QUIT
-            try await sendCommand(connection: controlConnection, cmd: "QUIT\r\n")
+            try? await sendCommand(connection: controlConnection, cmd: "QUIT\r\n")
             controlConnection.cancel()
         } catch {
             controlConnection.cancel()
@@ -166,32 +198,71 @@ class FTPClient {
             let reader = ConnectionReader(connection: controlConnection)
             
             // 1. Read Banner
-            let banner = try await reader.readLine()
+            let banner: String
+            do {
+                banner = try await reader.readLine()
+            } catch {
+                throw ftpError("Ошибка при чтении приветствия сервера (Banner): \(error.localizedDescription)")
+            }
             guard banner.hasPrefix("220") else {
                 controlConnection.cancel()
-                throw ftpError("Ошибка FTP: \(banner)")
+                throw ftpError("Ошибка FTP (неверное приветствие): \(banner)")
             }
             
             // 2. Send AUTH TLS
-            try await sendCommand(connection: controlConnection, cmd: "AUTH TLS\r\n")
-            let authResp = try await reader.readLine()
+            do {
+                try await sendCommand(connection: controlConnection, cmd: "AUTH TLS\r\n")
+            } catch {
+                throw ftpError("Ошибка при отправке команды AUTH TLS: \(error.localizedDescription)")
+            }
+            
+            let authResp: String
+            do {
+                authResp = try await reader.readLine()
+            } catch {
+                throw ftpError("Ошибка при чтении ответа на AUTH TLS: \(error.localizedDescription)")
+            }
             
             let isTLS = authResp.hasPrefix("234")
             if isTLS {
-                try await upgradeToTLS(connection: controlConnection)
+                do {
+                    try await upgradeToTLS(connection: controlConnection, host: cleanHost)
+                } catch {
+                    throw ftpError("Ошибка при переходе на защищенное соединение (TLS upgrade): \(error.localizedDescription)")
+                }
             }
             
             // 3. Send USER
-            try await sendCommand(connection: controlConnection, cmd: "USER \(username)\r\n")
-            let userResp = try await reader.readLine()
+            do {
+                try await sendCommand(connection: controlConnection, cmd: "USER \(username)\r\n")
+            } catch {
+                throw ftpError("Ошибка при отправке имени пользователя (USER): \(error.localizedDescription)")
+            }
+            
+            let userResp: String
+            do {
+                userResp = try await reader.readLine()
+            } catch {
+                throw ftpError("Ошибка при чтении ответа на имя пользователя (USER): \(error.localizedDescription)")
+            }
             
             // 4. Send PASS if required
             if userResp.hasPrefix("331") {
-                try await sendCommand(connection: controlConnection, cmd: "PASS \(password)\r\n")
-                let passResp = try await reader.readLine()
+                do {
+                    try await sendCommand(connection: controlConnection, cmd: "PASS \(password)\r\n")
+                } catch {
+                    throw ftpError("Ошибка при отправке пароля (PASS): \(error.localizedDescription)")
+                }
+                
+                let passResp: String
+                do {
+                    passResp = try await reader.readLine()
+                } catch {
+                    throw ftpError("Ошибка при чтении ответа на пароль (PASS): \(error.localizedDescription)")
+                }
                 guard passResp.hasPrefix("230") else {
                     controlConnection.cancel()
-                    throw ftpError("Неверный логин или пароль")
+                    throw ftpError("Неверный логин или пароль (код: \(passResp))")
                 }
             } else if !userResp.hasPrefix("230") {
                 controlConnection.cancel()
@@ -201,24 +272,48 @@ class FTPClient {
             // 5. Send PBSZ and PROT (устанавливаем PROT C — незашифрованный канал данных)
             // Это решает проблему отсутствия TLS Session Resumption в NWConnection (ошибка NWError 53)
             if isTLS {
-                try await sendCommand(connection: controlConnection, cmd: "PBSZ 0\r\n")
-                _ = try await reader.readLine()
-                
-                try await sendCommand(connection: controlConnection, cmd: "PROT C\r\n")
-                _ = try await reader.readLine()
+                do {
+                    try await sendCommand(connection: controlConnection, cmd: "PBSZ 0\r\n")
+                    _ = try await reader.readLine()
+                    
+                    try await sendCommand(connection: controlConnection, cmd: "PROT C\r\n")
+                    _ = try await reader.readLine()
+                } catch {
+                    throw ftpError("Ошибка при настройке параметров защиты (PBSZ/PROT): \(error.localizedDescription)")
+                }
             }
             
             // 6. Send TYPE I (Binary Mode)
-            try await sendCommand(connection: controlConnection, cmd: "TYPE I\r\n")
-            let typeResp = try await reader.readLine()
+            do {
+                try await sendCommand(connection: controlConnection, cmd: "TYPE I\r\n")
+            } catch {
+                throw ftpError("Ошибка при отправке команды TYPE I: \(error.localizedDescription)")
+            }
+            
+            let typeResp: String
+            do {
+                typeResp = try await reader.readLine()
+            } catch {
+                throw ftpError("Ошибка при чтении ответа на TYPE I: \(error.localizedDescription)")
+            }
             guard typeResp.hasPrefix("200") else {
                 controlConnection.cancel()
                 throw ftpError("Ошибка установки бинарного режима: \(typeResp)")
             }
             
             // 7. Send PASV
-            try await sendCommand(connection: controlConnection, cmd: "PASV\r\n")
-            let pasvResp = try await reader.readLine()
+            do {
+                try await sendCommand(connection: controlConnection, cmd: "PASV\r\n")
+            } catch {
+                throw ftpError("Ошибка при отправке команды PASV: \(error.localizedDescription)")
+            }
+            
+            let pasvResp: String
+            do {
+                pasvResp = try await reader.readLine()
+            } catch {
+                throw ftpError("Ошибка при чтении ответа на PASV: \(error.localizedDescription)")
+            }
             guard pasvResp.hasPrefix("227") else {
                 controlConnection.cancel()
                 throw ftpError("Ошибка пассивного режима: \(pasvResp)")
@@ -254,11 +349,25 @@ class FTPClient {
             )
             dataConnection = conn
             conn.start(queue: DispatchQueue.global())
-            try await waitForReady(connection: conn)
+            do {
+                try await waitForReady(connection: conn)
+            } catch {
+                throw ftpError("Ошибка при открытии канала данных: \(error.localizedDescription)")
+            }
             
             // 9. Send STOR on Control Channel
-            try await sendCommand(connection: controlConnection, cmd: "STOR \(filename)\r\n")
-            let storResp = try await reader.readLine()
+            do {
+                try await sendCommand(connection: controlConnection, cmd: "STOR \(filename)\r\n")
+            } catch {
+                throw ftpError("Ошибка при отправке команды STOR: \(error.localizedDescription)")
+            }
+            
+            let storResp: String
+            do {
+                storResp = try await reader.readLine()
+            } catch {
+                throw ftpError("Ошибка при чтении ответа на STOR: \(error.localizedDescription)")
+            }
             guard storResp.hasPrefix("150") || storResp.hasPrefix("125") else {
                 conn.cancel()
                 controlConnection.cancel()
@@ -266,19 +375,28 @@ class FTPClient {
             }
             
             // 10. Send bytes on Data Channel and Close it
-            try await send(connection: conn, data: data)
+            do {
+                try await send(connection: conn, data: data)
+            } catch {
+                throw ftpError("Ошибка при передаче данных файла: \(error.localizedDescription)")
+            }
             conn.cancel()
             dataConnection = nil
             
             // 11. Read Transfer Complete on Control Channel
-            let completeResp = try await reader.readLine()
+            let completeResp: String
+            do {
+                completeResp = try await reader.readLine()
+            } catch {
+                throw ftpError("Ошибка при чтении подтверждения передачи: \(error.localizedDescription)")
+            }
             guard completeResp.hasPrefix("226") else {
                 controlConnection.cancel()
                 throw ftpError("Ошибка завершения передачи: \(completeResp)")
             }
             
             // 12. Send QUIT
-            try await sendCommand(connection: controlConnection, cmd: "QUIT\r\n")
+            try? await sendCommand(connection: controlConnection, cmd: "QUIT\r\n")
             controlConnection.cancel()
         } catch {
             dataConnection?.cancel()
@@ -289,9 +407,10 @@ class FTPClient {
     
     // MARK: - Private Helpers
     
-    private static func upgradeToTLS(connection: NWConnection) async throws {
+    private static func upgradeToTLS(connection: NWConnection, host: String) async throws {
         let message = NWProtocolFramer.Message(definition: FTPESFramer.definition)
         message["upgradeTLS"] = true
+        message["peerName"] = host
         
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             connection.send(
@@ -453,7 +572,7 @@ class FTPClient {
 // MARK: - FTPES (Explicit TLS) Framer
 class FTPESFramer: NWProtocolFramerImplementation {
     static let label = "FTPESFramer"
-    static let definition = NWProtocolFramer.Definition(implementation: FTPESFramer.self)
+    static let definition = NWProtocolFramer.Definition(implementation: FTPESFramer.definition)
     
     required init(framer: NWProtocolFramer.Instance) {}
     
@@ -480,11 +599,19 @@ class FTPESFramer: NWProtocolFramerImplementation {
     func handleOutput(framer: NWProtocolFramer.Instance, message: NWProtocolFramer.Message, messageLength: Int, isComplete: Bool) {
         if message["upgradeTLS"] as? Bool == true {
             let tlsOptions = NWProtocolTLS.Options()
+            if let peerName = message["peerName"] as? String {
+                sec_protocol_options_set_peer_name(tlsOptions.securityProtocolOptions, peerName)
+            }
             sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
                 completionHandler(true)
             }, DispatchQueue.global())
             
-            try? framer.prependApplicationProtocol(options: tlsOptions)
+            do {
+                try framer.prependApplicationProtocol(options: tlsOptions)
+            } catch {
+                framer.markFailed(error: NWError.posix(.ECONNABORTED))
+                return
+            }
             
             // Переводим фреймер в режим прозрачной передачи, чтобы TLS работал напрямую с TCP
             framer.passThroughInput()
