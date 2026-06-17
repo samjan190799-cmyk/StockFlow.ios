@@ -82,7 +82,17 @@ struct StockSettingsView: View {
                     selectedPlatformId = value?.id
                 }
             )) { wrapper in
-                platformDetailSheet(id: wrapper.id)
+                if let index = platforms.firstIndex(where: { $0.id == wrapper.id }) {
+                    PlatformDetailSheet(
+                        platform: $platforms[index],
+                        onSave: {
+                            savePlatforms()
+                        },
+                        testConnection: { platform in
+                            testConnection(platform)
+                        }
+                    )
+                }
             }
             .alert("Подключение", isPresented: $showingAlert) {
                 Button("OK", role: .cancel) {}
@@ -123,129 +133,11 @@ struct StockSettingsView: View {
         }
     }
     
-    private func platformDetailSheet(id: String) -> some View {
-        let index = platforms.firstIndex(where: { $0.id == id })!
-        let platform = platforms[index]
-        
-        return NavigationStack {
-            ZStack {
-                LiquidBackgroundView()
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Параметры SFTP / FTP для \(platform.name)")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-                            
-                            HStack {
-                                Text("Активен")
-                                    .font(.system(size: 14, weight: .medium))
-                                Spacer()
-                                Toggle("", isOn: $platforms[index].isEnabled)
-                                    .labelsHidden()
-                                    .tint(Color(hex: "7C3AED"))
-                            }
-                            
-                            Divider().background(Color.white.opacity(0.1))
-                            
-                            customInputField(title: "Имя пользователя (логин)", placeholder: "Username", text: $platforms[index].username, isSecure: false)
-                            
-                            customInputField(title: "Пароль", placeholder: "••••••••", text: $platforms[index].passwordHash, isSecure: true)
-                            
-                            HStack {
-                                Text("Сервер выгрузки: \(platforms[index].host)")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                            
-                            DisclosureGroup("Дополнительные параметры сервера") {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    customInputField(title: "Имя хоста (сервер)", placeholder: "ftp.example.com", text: $platforms[index].host, isSecure: false)
-                                    
-                                    if platforms[index].id == "adobe" || platforms[index].id == "freepik" {
-                                        Text("Внимание: Данный сток требует SFTP. Plain FTP-соединение для него может быть недоступно.")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(.orange)
-                                            .lineLimit(nil)
-                                    }
-                                }
-                                .padding(.top, 4)
-                            }
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .tint(.secondary)
-                        }
-                        .glassCard()
-                        
-                        Button(action: { testConnection(platforms[index]) }) {
-                            Text("Проверить соединение")
-                                .font(.system(size: 14, weight: .bold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(.ultraThinMaterial)
-                                .foregroundStyle(.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                                )
-                        }
-                    }
-                    .padding()
-                }
-            }
-            .navigationTitle(platform.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") {
-                        savePlatforms()
-                        selectedPlatformId = nil
-                    }
-                    .font(.system(size: 14, weight: .bold))
-                }
-            }
-        }
-        .onDisappear {
-            savePlatforms()
-        }
-    }
-    
-    // MARK: - Custom Input Field
-    private func customInputField(title: String, placeholder: String, text: Binding<String>, isSecure: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.secondary)
-            
-            Group {
-                if isSecure {
-                    SecureField(placeholder, text: text)
-                        .textContentType(.password)
-                } else {
-                    TextField(placeholder, text: text)
-                        .textContentType(.username)
-                }
-            }
-            .textFieldStyle(.plain)
-            .font(.system(size: 13))
-            .padding(10)
-            .background(Color.white.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
-            )
-            .textInputAutocapitalization(.never)
-            .disableAutocorrection(true)
-        }
-    }
+
     
     // MARK: - Data Storage
     private func loadPlatforms() {
+        guard platforms.isEmpty else { return }
         if let data = UserDefaults.standard.data(forKey: "stock_platforms"),
            var decoded = try? JSONDecoder().decode([StockPlatform].self, from: data) {
             for i in 0..<decoded.count {
@@ -312,4 +204,130 @@ struct StockSettingsView: View {
 // MARK: - Helper Models for Sheet Presentation
 struct ActiveSheetPlatformId: Identifiable, Sendable {
     let id: String
+}
+
+// MARK: - Platform Detail Sheet
+struct PlatformDetailSheet: View {
+    @Binding var platform: StockPlatform
+    var onSave: () -> Void
+    var testConnection: (StockPlatform) -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                LiquidBackgroundView()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Параметры SFTP / FTP для \(platform.name)")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                            
+                            HStack {
+                                Text("Активен")
+                                    .font(.system(size: 14, weight: .medium))
+                                Spacer()
+                                Toggle("", isOn: $platform.isEnabled)
+                                    .labelsHidden()
+                                    .tint(Color(hex: "7C3AED"))
+                            }
+                            
+                            Divider().background(Color.white.opacity(0.1))
+                            
+                            customInputField(title: "Имя пользователя (логин)", placeholder: "Username", text: $platform.username, isSecure: false)
+                            
+                            customInputField(title: "Пароль", placeholder: "••••••••", text: $platform.passwordHash, isSecure: true)
+                            
+                            HStack {
+                                Text("Сервер выгрузки: \(platform.host)")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            
+                            DisclosureGroup("Дополнительные параметры сервера") {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    customInputField(title: "Имя хоста (сервер)", placeholder: "ftp.example.com", text: $platform.host, isSecure: false)
+                                    
+                                    if platform.id == "adobe" || platform.id == "freepik" {
+                                        Text("Внимание: Данный сток требует SFTP. Plain FTP-соединение для него может быть недоступно.")
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(.orange)
+                                            .lineLimit(nil)
+                                    }
+                                }
+                                .padding(.top, 4)
+                            }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .tint(.secondary)
+                        }
+                        .glassCard()
+                        
+                        Button(action: { testConnection(platform) }) {
+                            Text("Проверить соединение")
+                                .font(.system(size: 14, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(.ultraThinMaterial)
+                                .foregroundStyle(.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                                )
+                        }
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle(platform.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Готово") {
+                        onSave()
+                        dismiss()
+                    }
+                    .font(.system(size: 14, weight: .bold))
+                }
+            }
+        }
+        .onDisappear {
+            onSave()
+        }
+    }
+    
+    // MARK: - Custom Input Field
+    private func customInputField(title: String, placeholder: String, text: Binding<String>, isSecure: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.secondary)
+            
+            Group {
+                if isSecure {
+                    SecureField(placeholder, text: text)
+                        .textContentType(.password)
+                } else {
+                    TextField(placeholder, text: text)
+                        .textContentType(.username)
+                }
+            }
+            .textFieldStyle(.plain)
+            .font(.system(size: 13))
+            .padding(10)
+            .background(Color.white.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            )
+            .textInputAutocapitalization(.never)
+            .disableAutocorrection(true)
+        }
+    }
 }
