@@ -173,3 +173,8 @@ struct SmartStockLogoView: View {
         }
     }
 }
+
+// MARK: - Safe Sendable Binding Wrapper for Strict Concurrency
+struct SendableBinding<Value>: @unchecked Sendable {
+    let binding: Binding<Value>
+}

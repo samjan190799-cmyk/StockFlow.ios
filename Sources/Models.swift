@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 // MARK: - Photo Status
 enum PhotoStatus: String, Codable, CaseIterable {

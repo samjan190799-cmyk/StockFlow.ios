@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - AI metadata screen
 struct AIMetadataView: View {
@@ -268,9 +269,12 @@ struct AIMetadataView: View {
             return
         }
         
+        let sendablePhotos = SendableBinding(binding: $photos)
+        let curIdx = currentIndex
+        
         Task {
             do {
-                let data = photos[currentIndex].imageData ?? Data()
+                let data = await MainActor.run { sendablePhotos.binding.wrappedValue[curIdx].imageData ?? Data() }
                 let result = try await AIManager.shared.analyzePhoto(
                     imageData: data,
                     customPrompt: customPrompt,
@@ -278,14 +282,17 @@ struct AIMetadataView: View {
                     apiKey: apiKey
                 )
                 await MainActor.run {
-                    photos[currentIndex].title = result.title
-                    photos[currentIndex].description = result.description
-                    photos[currentIndex].keywords = result.keywords
+                    let binding = sendablePhotos.binding
+                    binding.wrappedValue[curIdx].title = result.title
+                    binding.wrappedValue[curIdx].description = result.description
+                    binding.wrappedValue[curIdx].keywords = result.keywords
                     isRegenerating = false
                 }
             } catch {
+                let errString = error.localizedDescription
                 await MainActor.run {
-                    photos[currentIndex].description = "Ошибка: \(error.localizedDescription)"
+                    let binding = sendablePhotos.binding
+                    binding.wrappedValue[curIdx].description = "Ошибка: \(errString)"
                     isRegenerating = false
                 }
             }

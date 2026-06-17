@@ -434,9 +434,11 @@ struct UploadQueueView: View {
         photos[idx].status = .aiAnalyzing
         triggerToast("ИИ анализирует фотографию...")
         
+        let sendablePhotos = SendableBinding(binding: $photos)
+        
         Task {
             do {
-                let imageData = photos[idx].imageData ?? Data()
+                let imageData = await MainActor.run { sendablePhotos.binding.wrappedValue[idx].imageData ?? Data() }
                 let result = try await AIManager.shared.analyzePhoto(
                     imageData: imageData,
                     customPrompt: customPrompt,
@@ -445,20 +447,23 @@ struct UploadQueueView: View {
                 )
                 
                 await MainActor.run {
-                    if let currentIdx = photos.firstIndex(where: { $0.id == id }) {
-                        photos[currentIdx].title = result.title
-                        photos[currentIdx].description = result.description
-                        photos[currentIdx].keywords = result.keywords
-                        photos[currentIdx].status = .ready
+                    let binding = sendablePhotos.binding
+                    if let currentIdx = binding.wrappedValue.firstIndex(where: { $0.id == id }) {
+                        binding.wrappedValue[currentIdx].title = result.title
+                        binding.wrappedValue[currentIdx].description = result.description
+                        binding.wrappedValue[currentIdx].keywords = result.keywords
+                        binding.wrappedValue[currentIdx].status = .ready
                         triggerToast("Анализ ИИ успешно завершен!")
                     }
                 }
             } catch {
+                let errString = error.localizedDescription
                 await MainActor.run {
-                    if let currentIdx = photos.firstIndex(where: { $0.id == id }) {
-                        photos[currentIdx].description = "Ошибка: \(error.localizedDescription)"
-                        photos[currentIdx].status = .error
-                        triggerToast("Ошибка ИИ: \(error.localizedDescription)")
+                    let binding = sendablePhotos.binding
+                    if let currentIdx = binding.wrappedValue.firstIndex(where: { $0.id == id }) {
+                        binding.wrappedValue[currentIdx].description = "Ошибка: \(errString)"
+                        binding.wrappedValue[currentIdx].status = .error
+                        triggerToast("Ошибка ИИ: \(errString)")
                     }
                 }
             }
@@ -483,47 +488,66 @@ struct UploadQueueView: View {
             apiKey = UserDefaults.standard.string(forKey: "api_key_claude") ?? ""
         }
         
+        let sendablePhotos = SendableBinding(binding: $photos)
+        
         // Loop and run
         Task {
             for photo in newOrErrorPhotos {
-                if let idx = photos.firstIndex(where: { $0.id == photo.id }) {
-                    await MainActor.run { photos[idx].status = .aiAnalyzing }
-                    
-                    if apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
-                        // Demo mode delay
-                        try? await Task.sleep(nanoseconds: 1_000_000_000)
+                let pId = photo.id
+                
+                await MainActor.run {
+                    let binding = sendablePhotos.binding
+                    if let idx = binding.wrappedValue.firstIndex(where: { $0.id == pId }) {
+                        binding.wrappedValue[idx].status = .aiAnalyzing
+                    }
+                }
+                
+                if apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
+                    // Demo mode delay
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    await MainActor.run {
+                        let binding = sendablePhotos.binding
+                        if let idx = binding.wrappedValue.firstIndex(where: { $0.id == pId }) {
+                            binding.wrappedValue[idx].title = "Красивый снимок (Демо)"
+                            binding.wrappedValue[idx].keywords = ["фотография", "снимок", "стоки", "демо", "пейзаж"]
+                            binding.wrappedValue[idx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
+                            binding.wrappedValue[idx].status = .ready
+                        }
+                    }
+                } else {
+                    // Real analysis
+                    do {
+                        let data = await MainActor.run {
+                            let binding = sendablePhotos.binding
+                            if let idx = binding.wrappedValue.firstIndex(where: { $0.id == pId }) {
+                                return binding.wrappedValue[idx].imageData ?? Data()
+                            }
+                            return Data()
+                        }
+                        
+                        let result = try await AIManager.shared.analyzePhoto(
+                            imageData: data,
+                            customPrompt: customPrompt,
+                            provider: provider,
+                            apiKey: apiKey
+                        )
+                        
                         await MainActor.run {
-                            if photos.count > idx {
-                                photos[idx].title = "Красивый снимок \(photo.filename) (Демо)"
-                                photos[idx].keywords = ["фотография", "снимок", "стоки", "демо", "пейзаж"]
-                                photos[idx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
-                                photos[idx].status = .ready
+                            let binding = sendablePhotos.binding
+                            if let idx = binding.wrappedValue.firstIndex(where: { $0.id == pId }) {
+                                binding.wrappedValue[idx].title = result.title
+                                binding.wrappedValue[idx].description = result.description
+                                binding.wrappedValue[idx].keywords = result.keywords
+                                binding.wrappedValue[idx].status = .ready
                             }
                         }
-                    } else {
-                        // Real analysis
-                        do {
-                            let data = photos[idx].imageData ?? Data()
-                            let result = try await AIManager.shared.analyzePhoto(
-                                imageData: data,
-                                customPrompt: customPrompt,
-                                provider: provider,
-                                apiKey: apiKey
-                            )
-                            await MainActor.run {
-                                if photos.count > idx {
-                                    photos[idx].title = result.title
-                                    photos[idx].description = result.description
-                                    photos[idx].keywords = result.keywords
-                                    photos[idx].status = .ready
-                                }
-                            }
-                        } catch {
-                            await MainActor.run {
-                                if photos.count > idx {
-                                    photos[idx].status = .error
-                                    photos[idx].description = "Ошибка: \(error.localizedDescription)"
-                                }
+                    } catch {
+                        let errString = error.localizedDescription
+                        await MainActor.run {
+                            let binding = sendablePhotos.binding
+                            if let idx = binding.wrappedValue.firstIndex(where: { $0.id == pId }) {
+                                binding.wrappedValue[idx].status = .error
+                                binding.wrappedValue[idx].description = "Ошибка: \(errString)"
                             }
                         }
                     }
