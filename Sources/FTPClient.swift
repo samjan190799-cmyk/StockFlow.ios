@@ -1,4 +1,5 @@
 import Foundation
+import Network
 
 // MARK: - FTPClient
 // Реализация через URLSession (нативная поддержка iOS)
@@ -148,47 +149,50 @@ class FTPClient {
 
     /// Проверка TCP-доступности хоста (для SFTP)
     private static func checkTCPReachability(host: String, port: Int) async throws {
+        let connection = NWConnection(
+            host: NWEndpoint.Host(host),
+            port: NWEndpoint.Port(rawValue: UInt16(port))!,
+            using: .tcp
+        )
+        
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            var addr = sockaddr_in()
-            addr.sin_family = sa_family_t(AF_INET)
-            addr.sin_port = in_port_t(port).bigEndian
-
-            guard inet_pton(AF_INET, host, &addr.sin_addr) == 1 ||
-                  host.contains(".") else {
-                continuation.resume(throwing: ftpError("Не удалось разрешить хост: \(host)"))
-                return
-            }
-
-            let sock = socket(AF_INET, SOCK_STREAM, 0)
-            guard sock >= 0 else {
-                continuation.resume(throwing: ftpError("Ошибка создания сокета"))
-                return
-            }
-
-            // Неблокирующий режим
-            fcntl(sock, F_SETFL, O_NONBLOCK)
-
-            withUnsafePointer(to: &addr) {
-                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { ptr in
-                    _ = connect(sock, ptr, socklen_t(MemoryLayout<sockaddr_in>.size))
+            var resolved = false
+            connection.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    if !resolved {
+                        resolved = true
+                        connection.cancel()
+                        continuation.resume()
+                    }
+                case .failed(let error):
+                    if !resolved {
+                        resolved = true
+                        connection.cancel()
+                        continuation.resume(throwing: error)
+                    }
+                case .waiting(let error):
+                    if !resolved {
+                        resolved = true
+                        connection.cancel()
+                        continuation.resume(throwing: error)
+                    }
+                default:
+                    break
                 }
             }
-
-            var fdset = fd_set()
-            fdset.__fds_bits = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-            var timeout = timeval(tv_sec: 10, tv_usec: 0)
-            let result = withUnsafeMutablePointer(to: &fdset) { fdPtr in
-                select(sock + 1, nil, fdPtr, nil, &timeout)
+            
+            // Таймаут через 10 секунд
+            Task {
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                if !resolved {
+                    resolved = true
+                    connection.cancel()
+                    continuation.resume(throwing: ftpError("Таймаут подключения к хосту \(host):\(port)"))
+                }
             }
-
-            close(sock)
-
-            if result > 0 {
-                continuation.resume()
-            } else {
-                continuation.resume(throwing: ftpError("Хост \(host):\(port) недоступен (таймаут)"))
-            }
+            
+            connection.start(queue: .global())
         }
     }
 
