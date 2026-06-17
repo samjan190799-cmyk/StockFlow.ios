@@ -44,8 +44,8 @@ class FTPClient {
             ftpHost = ftpHost.replacingOccurrences(of: "ftps", with: "ftp")
         }
         
-        let controlConnection = NWConnection(host: NWEndpoint.Host(ftpHost), port: NWEndpoint.Port(rawValue: UInt16(port)), using: .tcp)
-        controlConnection.start(queue: .global())
+        let controlConnection = NWConnection(host: NWEndpoint.Host(ftpHost), port: NWEndpoint.Port(rawValue: UInt16(port))!, using: .tcp)
+        controlConnection.start(queue: DispatchQueue.global())
         
         do {
             try await waitForReady(connection: controlConnection)
@@ -86,8 +86,8 @@ class FTPClient {
     }
 
     static func upload(data: Data, filename: String, host: String, port: Int = 21, username: String, password: String) async throws {
-        let controlConnection = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: UInt16(port)), using: .tcp)
-        controlConnection.start(queue: .global())
+        let controlConnection = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: UInt16(port))!, using: .tcp)
+        controlConnection.start(queue: DispatchQueue.global())
         
         try await waitForReady(connection: controlConnection)
         let reader = ConnectionReader(connection: controlConnection)
@@ -156,8 +156,8 @@ class FTPClient {
         let dataPort = p1 * 256 + p2
         
         // 6. Connect Data Channel
-        let dataConnection = NWConnection(host: NWEndpoint.Host(dataIp), port: NWEndpoint.Port(rawValue: UInt16(dataPort)), using: .tcp)
-        dataConnection.start(queue: .global())
+        let dataConnection = NWConnection(host: NWEndpoint.Host(dataIp), port: NWEndpoint.Port(rawValue: UInt16(dataPort))!, using: .tcp)
+        dataConnection.start(queue: DispatchQueue.global())
         try await waitForReady(connection: dataConnection)
         
         // 7. Send STOR on Control Channel
