@@ -252,7 +252,7 @@ class FTPClient {
         message["upgradeTLS"] = true
         
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            connection.send(content: nil, contentContext: .init(identifier: "upgrade", metadata: [message]), isComplete: true, completion: .contentProcessed({ error in
+            connection.send(content: Data([0]), contentContext: .init(identifier: "upgrade", metadata: [message]), isComplete: true, completion: .contentProcessed({ error in
                 if let error = error {
                     continuation.resume(throwing: error)
                 } else {
@@ -316,14 +316,14 @@ class FTPESFramer: NWProtocolFramerImplementation {
     func handleInput(framer: NWProtocolFramer.Instance) -> Int {
         while true {
             var parsedCount = 0
-            let success = framer.parseInput(minimumIncompleteLength: 1, maximumLength: 65536) { buffer in
+            let success = framer.parseInput(minimumIncompleteLength: 1, maximumLength: 65536) { buffer, _ in
                 guard let buffer = buffer else { return 0 }
                 parsedCount = buffer.count
                 return buffer.count
             }
             guard success && parsedCount > 0 else { break }
             
-            let message = NWProtocolFramer.Message()
+            let message = NWProtocolFramer.Message(definition: FTPESFramer.definition)
             _ = framer.deliverInputNoCopy(length: parsedCount, message: message, isComplete: true)
         }
         return 0
