@@ -11,12 +11,15 @@ final class AIManager: Sendable {
     static let shared = AIManager()
     private init() {}
     
+    static let defaultPrompt = "Analyze this image for a stock photo agency. Provide: 1. A commercially viable Title (max 70 characters), 2. A detailed Description (max 200 characters), 3. A list of 25-35 highly relevant Keywords (comma separated). Output strictly in JSON format matching this schema: {\"title\": \"string\", \"description\": \"string\", \"keywords\": [\"keyword1\", \"keyword2\", ...]}"
+    
     func analyzePhoto(imageData: Data, customPrompt: String, provider: String, apiKey: String) async throws -> AIResult {
         guard !imageData.isEmpty else {
             throw NSError(domain: "AIManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Изображение не найдено."])
         }
         
         let base64Image = imageData.base64EncodedString()
+        let prompt = customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AIManager.defaultPrompt : customPrompt
         
         var attempts = 0
         let maxRetries = 3
@@ -25,9 +28,9 @@ final class AIManager: Sendable {
         while true {
             do {
                 if provider.contains("Gemini") {
-                    return try await analyzeWithGemini(base64Image: base64Image, prompt: customPrompt, apiKey: apiKey)
+                    return try await analyzeWithGemini(base64Image: base64Image, prompt: prompt, apiKey: apiKey)
                 } else if provider.contains("OpenAI") {
-                    return try await analyzeWithOpenAI(base64Image: base64Image, prompt: customPrompt, apiKey: apiKey)
+                    return try await analyzeWithOpenAI(base64Image: base64Image, prompt: prompt, apiKey: apiKey)
                 } else {
                     throw NSError(domain: "AIManager", code: 501, userInfo: [NSLocalizedDescriptionKey: "Провайдер \(provider) пока не поддерживается."])
                 }

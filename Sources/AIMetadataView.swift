@@ -191,10 +191,11 @@ struct AIMetadataView: View {
                 .textCase(.uppercase)
             
             TextEditor(text: binding(\.description))
-                .font(.system(size: 13))
-                .frame(height: 90)
-                .padding(6)
+                .font(.system(size: 14))
                 .scrollContentBackground(.hidden)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 6)
+                .frame(height: 90)
                 .background(Color.white.opacity(0.05))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(

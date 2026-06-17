@@ -66,10 +66,11 @@ struct AIAssistantView: View {
                                 .textCase(.uppercase)
                             
                             TextEditor(text: $customPrompt)
-                                .font(.system(size: 12, design: .monospaced))
-                                .frame(height: 140)
-                                .padding(8)
+                                .font(.system(size: 13, design: .monospaced))
                                 .scrollContentBackground(.hidden)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 4)
+                                .frame(height: 140)
                                 .background(Color.white.opacity(0.05))
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
                                 .overlay(
