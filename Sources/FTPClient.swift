@@ -17,33 +17,29 @@ class FTPClient {
         func readLine(timeout: TimeInterval = 10) async throws -> String {
             try await withThrowingTaskGroup(of: String.self) { group in
                 group.addTask {
-                    try await withTaskCancellationHandler {
-                        while true {
-                            try Task.checkCancellation()
-                            
-                            if let newlineIndex = self.buffer.firstIndex(of: 10) { // 10 is '\n'
-                                let lineData = self.buffer.subdata(in: 0..<newlineIndex + 1)
-                                self.buffer.removeSubrange(0..<newlineIndex + 1)
-                                if let str = String(data: lineData, encoding: .utf8) {
-                                    return str
-                                }
+                    while true {
+                        try Task.checkCancellation()
+                        
+                        if let newlineIndex = self.buffer.firstIndex(of: 10) { // 10 is '\n'
+                            let lineData = self.buffer.subdata(in: 0..<newlineIndex + 1)
+                            self.buffer.removeSubrange(0..<newlineIndex + 1)
+                            if let str = String(data: lineData, encoding: .utf8) {
+                                return str
                             }
-                            
-                            let chunk = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
-                                self.connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, error in
-                                    if let error = error {
-                                        continuation.resume(throwing: error)
-                                    } else if let data = data {
-                                        continuation.resume(returning: data)
-                                    } else {
-                                        continuation.resume(throwing: NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Соединение закрыто сервером"]))
-                                    }
-                                }
-                            }
-                            self.buffer.append(chunk)
                         }
-                    } onCancel: {
-                        self.connection.cancel()
+                        
+                        let chunk = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+                            self.connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, error in
+                                if let error = error {
+                                    continuation.resume(throwing: error)
+                                } else if let data = data {
+                                    continuation.resume(returning: data)
+                                } else {
+                                    continuation.resume(throwing: NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Соединение закрыто сервером"]))
+                                }
+                            }
+                        }
+                        self.buffer.append(chunk)
                     }
                 }
                 
@@ -52,9 +48,14 @@ class FTPClient {
                     throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Таймаут ожидания ответа от сервера (\(timeout) сек)"])
                 }
                 
-                let result = try await group.next()!
-                group.cancelAll()
-                return result
+                do {
+                    let result = try await group.next()!
+                    group.cancelAll()
+                    return result
+                } catch {
+                    self.connection.cancel()
+                    throw error
+                }
             }
         }
     }
@@ -330,38 +331,34 @@ class FTPClient {
     private static func waitForReady(connection: NWConnection, timeout: TimeInterval = 10) async throws {
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
-                try await withTaskCancellationHandler {
-                    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                        let state = connection.state
-                        if state == .ready {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    let state = connection.state
+                    if state == .ready {
+                        continuation.resume()
+                        return
+                    } else if case .failed(let error) = state {
+                        continuation.resume(throwing: error)
+                        return
+                    } else if state == .cancelled {
+                        continuation.resume(throwing: ftpError("Соединение отменено"))
+                        return
+                    }
+                    
+                    connection.stateUpdateHandler = { newState in
+                        switch newState {
+                        case .ready:
+                            connection.stateUpdateHandler = nil
                             continuation.resume()
-                            return
-                        } else if case .failed(let error) = state {
+                        case .failed(let error):
+                            connection.stateUpdateHandler = nil
                             continuation.resume(throwing: error)
-                            return
-                        } else if state == .cancelled {
+                        case .cancelled:
+                            connection.stateUpdateHandler = nil
                             continuation.resume(throwing: ftpError("Соединение отменено"))
-                            return
-                        }
-                        
-                        connection.stateUpdateHandler = { newState in
-                            switch newState {
-                            case .ready:
-                                connection.stateUpdateHandler = nil
-                                continuation.resume()
-                            case .failed(let error):
-                                connection.stateUpdateHandler = nil
-                                continuation.resume(throwing: error)
-                            case .cancelled:
-                                connection.stateUpdateHandler = nil
-                                continuation.resume(throwing: ftpError("Соединение отменено"))
-                            default:
-                                break
-                            }
+                        default:
+                            break
                         }
                     }
-                } onCancel: {
-                    connection.cancel()
                 }
             }
             
@@ -370,8 +367,13 @@ class FTPClient {
                 throw ftpError("Превышено время ожидания готовности подключения (\(timeout) сек)")
             }
             
-            try await group.next()
-            group.cancelAll()
+            do {
+                try await group.next()
+                group.cancelAll()
+            } catch {
+                connection.cancel()
+                throw error
+            }
         }
     }
     
