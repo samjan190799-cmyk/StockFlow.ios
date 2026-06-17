@@ -418,7 +418,7 @@ class FTPESFramer: NWProtocolFramerImplementation {
             }
             guard success && parsedCount > 0 else { break }
             
-            let message = NWProtocolFramer.Message()
+            let message = NWProtocolFramer.Message(definition: FTPESFramer.definition)
             _ = framer.deliverInputNoCopy(length: parsedCount, message: message, isComplete: true)
         }
         return 0
