@@ -59,10 +59,8 @@ struct StockPlatform: Identifiable, Codable, Sendable {
     let defaultHost: String
     var host: String
     var username: String
-    var isEnabled: Bool
-    
-    // Stored securely in Keychain, not in UserDefaults JSON
     var passwordHash: String = ""
+    var isEnabled: Bool
     
     enum CodingKeys: String, CodingKey {
         case id, name, defaultHost, host, username, isEnabled
