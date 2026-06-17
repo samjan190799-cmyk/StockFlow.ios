@@ -80,18 +80,20 @@ struct SystemSettingsView: View {
                                             request.requestedScopes = [.fullName, .email]
                                         },
                                         onCompletion: { result in
-                                            switch result {
-                                            case .success(let authorization):
-                                                if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
-                                                    self.userEmail = appleIDCredential.email ?? "samvel.dev@icloud.com"
-                                                    self.userProvider = "Apple"
-                                                    self.isUserSignedIn = true
-                                                    self.saveSettings()
+                                            Task { @MainActor in
+                                                switch result {
+                                                case .success(let authorization):
+                                                    if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                                                        self.userEmail = appleIDCredential.email ?? "samvel.dev@icloud.com"
+                                                        self.userProvider = "Apple"
+                                                        self.isUserSignedIn = true
+                                                        self.saveSettings()
+                                                    }
+                                                case .failure(let error):
+                                                    print("Apple Sign In failed: \(error.localizedDescription)")
+                                                    self.selectedProviderForAuth = "Apple"
+                                                    self.showSimulatedAuthSheet = true
                                                 }
-                                            case .failure(let error):
-                                                print("Apple Sign In failed: \(error.localizedDescription)")
-                                                self.selectedProviderForAuth = "Apple"
-                                                self.showSimulatedAuthSheet = true
                                             }
                                         }
                                     )
