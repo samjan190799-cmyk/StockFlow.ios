@@ -1,39 +1,49 @@
-//
-//  AIMetadataView.swift
-//  StockFlow
-//
-//  AI-metadata screen: review and edit the AI-generated title, keywords,
-//  and description for each selected photo before choosing stock platforms.
-//
-
 import SwiftUI
 
 // MARK: - AI metadata screen
-
 struct AIMetadataView: View {
     @State private var photos: [PhotoMetadata]
-    @State private var currentIndex = 0
+    @State private var currentIndex: Int
     @State private var newKeyword = ""
     @State private var isRegenerating = false
 
     var onContinue: (([PhotoMetadata]) -> Void)?
 
-    init(photos: [PhotoMetadata], onContinue: (([PhotoMetadata]) -> Void)? = nil) {
+    init(photos: [PhotoMetadata], currentIndex: Int = 0, onContinue: (([PhotoMetadata]) -> Void)? = nil) {
         self._photos = State(initialValue: photos)
+        self._currentIndex = State(initialValue: currentIndex)
         self.onContinue = onContinue
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                photoNavigator
-                titleField
-                keywordsField
-                descriptionField
-                continueButton
-                    .padding(.top, 4)
+        ZStack {
+            LiquidBackgroundView()
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    
+                    // Photo Navigator Panel
+                    photoNavigator
+                        .glassCard(cornerRadius: 14, padding: 12)
+                    
+                    // Title Panel
+                    titleField
+                        .glassCard(cornerRadius: 14, padding: 14)
+                    
+                    // Keywords Panel
+                    keywordsField
+                        .glassCard(cornerRadius: 14, padding: 14)
+                    
+                    // Description Panel
+                    descriptionField
+                        .glassCard(cornerRadius: 14, padding: 14)
+                    
+                    // Continue Button
+                    continueButton
+                        .padding(.top, 4)
+                }
+                .padding()
             }
-            .padding(16)
         }
         .navigationTitle("Метаданные")
         .navigationBarTitleDisplayMode(.inline)
@@ -42,64 +52,103 @@ struct AIMetadataView: View {
     // MARK: Sections
 
     private var photoNavigator: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Button(action: goToPrevious) {
-                Image(systemName: "chevron.left").foregroundStyle(.secondary)
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .padding(8)
+                    .background(.white.opacity(0.1))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
             }
             .disabled(currentIndex == 0)
+            .opacity(currentIndex == 0 ? 0.3 : 1.0)
 
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(.systemGray5))
-                .frame(width: 52, height: 52)
-                .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
+            // Image Preview (if present) or Placeholder
+            Group {
+                if let uiImage = photos[currentIndex].uiImage {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ZStack {
+                        Color.white.opacity(0.05)
+                        Image(systemName: "photo")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(width: 52, height: 52)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.white.opacity(0.12), lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Фото \(currentIndex + 1) из \(photos.count)")
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .bold))
                 Text(photos[currentIndex].filename)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer()
 
             Button(action: goToNext) {
-                Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .padding(8)
+                    .background(.white.opacity(0.1))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
             }
             .disabled(currentIndex == photos.count - 1)
+            .opacity(currentIndex == photos.count - 1 ? 0.3 : 1.0)
         }
     }
 
     private var titleField: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Заголовок")
-                    .font(.system(size: 12))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
                 Spacer()
                 Button(action: regenerate) {
                     HStack(spacing: 4) {
                         if isRegenerating {
-                            ProgressView().scaleEffect(0.6)
+                            ProgressView().scaleEffect(0.6).tint(.purple)
                         } else {
                             Image(systemName: "arrow.clockwise").font(.system(size: 11))
                         }
-                        Text("Заново").font(.system(size: 12))
+                        Text("Заново").font(.system(size: 12, weight: .bold))
                     }
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color(hex: "7C3AED"))
                 }
                 .disabled(isRegenerating)
             }
+            
             TextField("Заголовок фото", text: binding(\.title))
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14))
+                .padding(10)
+                .background(Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
         }
     }
 
     private var keywordsField: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Ключевые слова")
-                .font(.system(size: 12))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
+                .textCase(.uppercase)
 
             FlowLayout(spacing: 6) {
                 ForEach(photos[currentIndex].keywords, id: \.self) { keyword in
@@ -109,41 +158,60 @@ struct AIMetadataView: View {
 
             HStack(spacing: 8) {
                 TextField("Добавить слово", text: $newKeyword)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
                     .font(.system(size: 13))
+                    .padding(8)
+                    .background(Color.white.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
                     .onSubmit(addKeyword)
+                
                 Button("Добавить", action: addKeyword)
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .bold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(AppleTheme.primaryGradient)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                     .disabled(newKeyword.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
     }
 
     private var descriptionField: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Описание")
-                .font(.system(size: 12))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            
             TextEditor(text: binding(\.description))
-                .font(.system(size: 14))
-                .frame(height: 80)
+                .font(.system(size: 13))
+                .frame(height: 90)
                 .padding(6)
+                .scrollContentBackground(.hidden)
+                .background(Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color(.systemGray4), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
                 )
         }
     }
 
     private var continueButton: some View {
         Button(action: { onContinue?(photos) }) {
-            Text("Выбрать платформы →")
-                .font(.system(size: 14, weight: .medium))
+            Text("Сохранить изменения")
+                .font(.system(size: 14, weight: .bold))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.primary)
-                .foregroundStyle(Color(.systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .padding(.vertical, 14)
+                .background(AppleTheme.primaryGradient)
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(color: AppleTheme.glowStart.opacity(0.3), radius: 8, x: 0, y: 4)
         }
     }
 
@@ -177,7 +245,6 @@ struct AIMetadataView: View {
 
     private func regenerate() {
         isRegenerating = true
-        // TODO: replace with a real call to your metadata-generation backend (e.g. Gemini)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
             photos[currentIndex].title = "Драматичное закатное небо над горой Арарат"
             photos[currentIndex].keywords = ["Арарат", "гора", "закат", "Армения", "пейзаж", "природа", "драматичное небо"]
@@ -188,28 +255,33 @@ struct AIMetadataView: View {
 }
 
 // MARK: - Keyword chip
-
 private struct KeywordChip: View {
     let text: String
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(text).font(.system(size: 12))
+        HStack(spacing: 6) {
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.primary)
             Button(action: onRemove) {
-                Image(systemName: "xmark").font(.system(size: 9))
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Color(.systemGray6))
-        .foregroundStyle(.secondary)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.08))
         .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
     }
 }
 
-// MARK: - Wrapping layout for keyword chips (requires iOS 16+)
-
+// MARK: - Wrapping layout for keyword chips
 private struct FlowLayout: Layout {
     var spacing: CGFloat = 6
 
@@ -248,26 +320,6 @@ private struct FlowLayout: Layout {
             subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: .unspecified)
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
-        }
-    }
-}
-
-// MARK: - Preview
-
-struct AIMetadataView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationStack {
-            AIMetadataView(photos: [
-                PhotoMetadata(
-                    filename: "IMG_4821.HEIC",
-                    title: "Драматичное закатное небо над горой Арарат",
-                    keywords: ["Арарат", "гора", "закат", "Армения", "пейзаж", "природа", "драматичное небо"],
-                    description: "Силуэт горы Арарат на фоне яркого закатного неба, снято в сельской местности Армении."
-                ),
-                PhotoMetadata(filename: "IMG_4822.HEIC", title: "", keywords: [], description: ""),
-                PhotoMetadata(filename: "IMG_4830.HEIC", title: "", keywords: [], description: ""),
-                PhotoMetadata(filename: "IMG_4835.HEIC", title: "", keywords: [], description: "")
-            ])
         }
     }
 }

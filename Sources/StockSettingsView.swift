@@ -11,43 +11,60 @@ struct StockSettingsView: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                Section(header: Text("Интегрированные фотостоки")) {
-                    ForEach(platforms) { platform in
-                        HStack(spacing: 12) {
-                            // Mini brand icon / initials circle
-                            Circle()
-                                .fill(colorForPlatform(platform.id))
-                                .frame(width: 36, height: 36)
-                                .overlay(
-                                    Text(String(platform.name.prefix(2)))
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundStyle(.white)
-                                )
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(platform.name)
-                                    .font(.system(size: 15, weight: .semibold))
-                                Text(platform.host)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Toggle("", isOn: Binding(
-                                get: { platform.isEnabled },
-                                set: { value in
-                                    togglePlatform(platform.id, isEnabled: value)
+            ZStack {
+                LiquidBackgroundView()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Интегрированные фотостоки")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+                            .padding(.leading, 4)
+                        
+                        LazyVStack(spacing: 10) {
+                            ForEach(platforms) { platform in
+                                HStack(spacing: 12) {
+                                    // Mini brand icon / initials circle
+                                    Circle()
+                                        .fill(colorForPlatform(platform.id))
+                                        .frame(width: 38, height: 38)
+                                        .overlay(
+                                            Text(String(platform.name.prefix(2)))
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundStyle(.white)
+                                        )
+                                        .shadow(color: colorForPlatform(platform.id).opacity(0.3), radius: 4)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(platform.name)
+                                            .font(.system(size: 15, weight: .bold))
+                                            .foregroundStyle(.primary)
+                                        Text(platform.host)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Toggle("", isOn: Binding(
+                                        get: { platform.isEnabled },
+                                        set: { value in
+                                            togglePlatform(platform.id, isEnabled: value)
+                                        }
+                                    ))
+                                    .labelsHidden()
+                                    .tint(Color(hex: "7C3AED")) // Premium purple tint
                                 }
-                            ))
-                            .labelsHidden()
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selectedPlatformId = platform.id
+                                .glassCard(cornerRadius: 14, padding: 12)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    selectedPlatformId = platform.id
+                                }
+                            }
                         }
                     }
+                    .padding()
                 }
             }
             .navigationTitle("Настройки стоков")
@@ -73,14 +90,16 @@ struct StockSettingsView: View {
             }
             .overlay {
                 if isVerifying {
-                    Color.black.opacity(0.15)
+                    Color.black.opacity(0.25)
                         .ignoresSafeArea()
                         .overlay(
-                            ProgressView("Проверка соединения...")
-                                .padding()
-                                .background(Color(.systemBackground))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .shadow(radius: 10)
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                    .tint(.primary)
+                                Text("Проверка соединения...")
+                                    .font(.system(size: 14, weight: .medium))
+                            }
+                            .glassCard(cornerRadius: 16, padding: 24)
                         )
                 }
             }
@@ -90,15 +109,15 @@ struct StockSettingsView: View {
     // MARK: - Brand Colors Mock
     private func colorForPlatform(_ id: String) -> Color {
         switch id {
-        case "adobe": return .red
-        case "shutterstock": return .orange
-        case "istock": return .black
-        case "freepik": return .blue
-        case "depositphotos": return .green
-        case "alamy": return .gray
-        case "dreamstime": return .indigo
-        case "123rf": return .yellow
-        case "pond5": return .teal
+        case "adobe": return Color(hex: "FF0000") // Adobe Red
+        case "shutterstock": return Color(hex: "FF6600") // Shutterstock Orange
+        case "istock": return Color(hex: "1F2937") // Dark Charcoal
+        case "freepik": return Color(hex: "0066FF") // Freepik Blue
+        case "depositphotos": return Color(hex: "10B981") // Mint Green
+        case "alamy": return Color(hex: "6B7280") // Gray
+        case "dreamstime": return Color(hex: "6366F1") // Indigo
+        case "123rf": return Color(hex: "FBBF24") // Amber Yellow
+        case "pond5": return Color(hex: "06B6D4") // Teal/Cyan
         default: return .blue
         }
     }
@@ -108,46 +127,51 @@ struct StockSettingsView: View {
         let index = platforms.firstIndex(where: { $0.id == platform.id })!
         
         return NavigationStack {
-            Form {
-                Section(header: Text("Параметры SFTP / FTP для \(platform.name)")) {
-                    Toggle("Активен", isOn: $platforms[index].isEnabled)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Имя хоста (сервер)")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                        TextField("ftp.example.com", text: $platforms[index].host)
-                            .textFieldStyle(.roundedBorder)
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Имя пользователя (логин)")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                        TextField("Username", text: $platforms[index].username)
-                            .textFieldStyle(.roundedBorder)
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Пароль")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                        SecureField("••••••••", text: $platforms[index].passwordHash)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                }
+            ZStack {
+                LiquidBackgroundView()
                 
-                Section {
-                    Button(action: { testConnection(platforms[index]) }) {
-                        Text("Проверить соединение")
-                            .font(.system(size: 14, weight: .bold))
-                            .frame(maxWidth: .infinity)
-                            .foregroundStyle(.blue)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Параметры SFTP / FTP для \(platform.name)")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                            
+                            HStack {
+                                Text("Активен")
+                                    .font(.system(size: 14, weight: .medium))
+                                Spacer()
+                                Toggle("", isOn: $platforms[index].isEnabled)
+                                    .labelsHidden()
+                                    .tint(Color(hex: "7C3AED"))
+                            }
+                            
+                            Divider().background(Color.white.opacity(0.1))
+                            
+                            customInputField(title: "Имя хоста (сервер)", placeholder: "ftp.example.com", text: $platforms[index].host, isSecure: false)
+                            
+                            customInputField(title: "Имя пользователя (логин)", placeholder: "Username", text: $platforms[index].username, isSecure: false)
+                            
+                            customInputField(title: "Пароль", placeholder: "••••••••", text: $platforms[index].passwordHash, isSecure: true)
+                        }
+                        .glassCard()
+                        
+                        Button(action: { testConnection(platforms[index]) }) {
+                            Text("Проверить соединение")
+                                .font(.system(size: 14, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(.ultraThinMaterial)
+                                .foregroundStyle(.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                                )
+                        }
                     }
+                    .padding()
                 }
             }
             .navigationTitle(platform.name)
@@ -158,8 +182,37 @@ struct StockSettingsView: View {
                         savePlatforms()
                         selectedPlatformId = nil
                     }
+                    .font(.system(size: 14, weight: .bold))
                 }
             }
+        }
+    }
+    
+    // MARK: - Custom Input Field
+    private func customInputField(title: String, placeholder: String, text: Binding<String>, isSecure: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.secondary)
+            
+            Group {
+                if isSecure {
+                    SecureField(placeholder, text: text)
+                } else {
+                    TextField(placeholder, text: text)
+                }
+            }
+            .textFieldStyle(.plain)
+            .font(.system(size: 13))
+            .padding(10)
+            .background(Color.white.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            )
+            .textInputAutocapitalization(.never)
+            .disableAutocorrection(true)
         }
     }
     

@@ -21,68 +21,117 @@ struct SystemSettingsView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                Section(header: Text("Интерфейс")) {
-                    Picker("Язык интерфейса", selection: $sysLanguage) {
-                        Text("Русский").tag("Русский")
-                        Text("English").tag("English")
-                    }
-                    
-                    Picker("Тема оформления", selection: $sysTheme) {
-                        Text("Темная").tag("Темная")
-                        Text("Светлая").tag("Светлая")
-                        Text("Системная").tag("Системная")
-                    }
-                    
-                    Picker("Предел частоты кадров", selection: $sysFps) {
-                        Text("120 FPS (Ультра-плавность)").tag("120 FPS (Ультра-плавность)")
-                        Text("60 FPS (Стандартный)").tag("60 FPS (Стандартный)")
-                        Text("30 FPS (Энергосбережение)").tag("30 FPS (Энергосбережение)")
-                    }
-                }
+            ZStack {
+                LiquidBackgroundView()
                 
-                Section(header: Text("Планировщик"), footer: Text("При активации планировщика система будет проверять новые фото и отправлять их в фоновом режиме.")) {
-                    Toggle("Фоновый планировщик выгрузки", isOn: $bgScheduler)
-                }
-                
-                Section(header: Text("Автоматический Апскейл мелких фото")) {
-                    Toggle("Включить авто-апскейл", isOn: $autoUpscale)
-                    
-                    if autoUpscale {
-                        Picker("Порог срабатывания", selection: $upscaleThreshold) {
-                            Text("Меньше 4 МБ (Рекомендуется)").tag("Меньше 4 МБ (Рекомендуется)")
-                            Text("Меньше 2 МБ").tag("Меньше 2 МБ")
-                            Text("Меньше 8 МБ").tag("Меньше 8 МБ")
-                        }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
                         
-                        Picker("Коэффициент (масштаб)", selection: $upscaleFactor) {
-                            Text("Увеличение 2x (Бикубическое)").tag("Увеличение 2x (Бикубическое)")
-                            Text("Увеличение 4x (Нейросеть)").tag("Увеличение 4x (Нейросеть)")
+                        // SECTION 1: Interface
+                        VStack(alignment: .leading, spacing: 12) {
+                            sectionHeader("Интерфейс")
+                            
+                            pickerRow("Язык интерфейса", selection: $sysLanguage, options: ["Русский", "English"])
+                            
+                            Divider().background(Color.white.opacity(0.1))
+                            
+                            pickerRow("Тема оформления", selection: $sysTheme, options: ["Темная", "Светлая", "Системная"])
+                            
+                            Divider().background(Color.white.opacity(0.1))
+                            
+                            pickerRow("Предел частоты кадров", selection: $sysFps, options: [
+                                "120 FPS (Ультра-плавность)",
+                                "60 FPS (Стандартный)",
+                                "30 FPS (Энергосбережение)"
+                            ])
+                        }
+                        .glassCard()
+                        
+                        // SECTION 2: Scheduler
+                        VStack(alignment: .leading, spacing: 10) {
+                            sectionHeader("Планировщик")
+                            
+                            Toggle("Фоновый планировщик выгрузки", isOn: $bgScheduler)
+                                .tint(Color(hex: "7C3AED"))
+                            
+                            Text("При активации планировщика система будет проверять новые фото и отправлять их в фоновом режиме.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        .glassCard()
+                        
+                        // SECTION 3: Auto Upscaling
+                        VStack(alignment: .leading, spacing: 12) {
+                            sectionHeader("Автоматический Апскейл")
+                            
+                            Toggle("Включить авто-апскейл", isOn: $autoUpscale)
+                                .tint(Color(hex: "7C3AED"))
+                            
+                            if autoUpscale {
+                                Divider().background(Color.white.opacity(0.1))
+                                
+                                pickerRow("Порог срабатывания", selection: $upscaleThreshold, options: [
+                                    "Меньше 4 МБ (Рекомендуется)",
+                                    "Меньше 2 МБ",
+                                    "Меньше 8 МБ"
+                                ])
+                                
+                                Divider().background(Color.white.opacity(0.1))
+                                
+                                pickerRow("Коэффициент (масштаб)", selection: $upscaleFactor, options: [
+                                    "Увеличение 2x (Бикубическое)",
+                                    "Увеличение 4x (Нейросеть)"
+                                ])
+                            }
+                        }
+                        .glassCard()
+                        
+                        // SECTION 4: Upload parameters
+                        VStack(alignment: .leading, spacing: 12) {
+                            sectionHeader("Параметры выгрузки")
+                            
+                            HStack {
+                                Text("Потоки параллельной загрузки")
+                                    .font(.system(size: 14))
+                                Spacer()
+                                Picker("", selection: $parallelStreams) {
+                                    Text("1 поток").tag(1)
+                                    Text("3 потока").tag(3)
+                                    Text("5 потоков").tag(5)
+                                }
+                                .pickerStyle(.menu)
+                            }
+                            
+                            Divider().background(Color.white.opacity(0.1))
+                            
+                            Toggle("Автоповтор при сбоях", isOn: $retryOnFail)
+                                .tint(Color(hex: "7C3AED"))
+                            
+                            Divider().background(Color.white.opacity(0.1))
+                            
+                            Toggle("Сжатие JPEG перед загрузкой", isOn: $compressJpeg)
+                                .tint(Color(hex: "7C3AED"))
+                            
+                            Divider().background(Color.white.opacity(0.1))
+                            
+                            Toggle("Системные уведомления", isOn: $sysNotifications)
+                                .tint(Color(hex: "7C3AED"))
+                        }
+                        .glassCard()
+                        
+                        // Save Button
+                        Button(action: saveSettings) {
+                            Text("Сохранить все настройки")
+                                .font(.system(size: 14, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(AppleTheme.primaryGradient)
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .shadow(color: AppleTheme.glowStart.opacity(0.3), radius: 8, x: 0, y: 4)
                         }
                     }
-                }
-                
-                Section(header: Text("Параметры выгрузки")) {
-                    Picker("Параллельные загрузки (потоки)", selection: $parallelStreams) {
-                        Text("1 поток").tag(1)
-                        Text("3 потока (По умолчанию)").tag(3)
-                        Text("5 потоков").tag(5)
-                    }
-                    
-                    Toggle("Автоповтор при сбоях", isOn: $retryOnFail)
-                    Toggle("Сжатие JPEG перед загрузкой", isOn: $compressJpeg)
-                    Toggle("Системные уведомления", isOn: $sysNotifications)
-                }
-                
-                Section {
-                    Button(action: saveSettings) {
-                        Text("Сохранить все настройки")
-                            .font(.system(size: 14, weight: .bold))
-                            .frame(maxWidth: .infinity)
-                            .foregroundStyle(.white)
-                            .padding(.vertical, 8)
-                    }
-                    .listRowBackground(Color.blue)
+                    .padding()
                 }
             }
             .navigationTitle("Параметры системы")
@@ -93,14 +142,39 @@ struct SystemSettingsView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
-                        .background(Color.black.opacity(0.85))
-                        .foregroundStyle(.white)
+                        .background(.ultraThinMaterial)
+                        .foregroundStyle(.primary)
                         .clipShape(Capsule())
-                        .shadow(radius: 5)
+                        .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                        .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
                         .padding(.bottom, 20)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+        }
+    }
+    
+    // MARK: - Row Helpers
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .padding(.bottom, 2)
+    }
+    
+    private func pickerRow(_ label: String, selection: Binding<String>, options: [String]) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 14))
+                .foregroundStyle(.primary)
+            Spacer()
+            Picker("", selection: selection) {
+                ForEach(options, id: \.self) { option in
+                    Text(option).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
         }
     }
     

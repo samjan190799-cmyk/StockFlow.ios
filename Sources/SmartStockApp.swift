@@ -46,37 +46,6 @@ struct SmartStockApp: App {
                     }
             }
             .preferredColorScheme(colorScheme)
-            .onAppear(perform: loadMockPhotos)
         }
-    }
-    
-    private func loadMockPhotos() {
-        // Prepopulate with a few demo photos so the app isn't blank on startup
-        photos = [
-            PhotoMetadata(
-                filename: "2025_01_19_16_42_IMG_0876.JPG",
-                fileSize: "2.34 МБ",
-                title: "Flock of Birds Soaring in Overcast Grey Sky",
-                keywords: ["птицы", "стая", "небо", "полет", "серое небо", "пасмурно"],
-                description: "Стая птиц летит в пасмурном сером небе, минималистичный кадр.",
-                status: .ready
-            ),
-            PhotoMetadata(
-                filename: "2025_02_04_00_22_IMG_5830.JPG",
-                fileSize: "0.34 МБ",
-                title: "Deep Blue Sunset Sky with Silhouetted Trees",
-                keywords: ["закат", "деревья", "силуэт", "синее небо", "вечер"],
-                description: "Яркий закат переходящий в глубокий синий цвет с силуэтами деревьев на переднем плане.",
-                status: .ready
-            ),
-            PhotoMetadata(
-                filename: "2025_02_07_09_33_IMG_1382.JPG",
-                fileSize: "2.37 МБ",
-                title: "Industrial Landscape under Warm Sunrise Light",
-                keywords: ["промзона", "рассвет", "завод", "трубы", "дым", "солнце"],
-                description: "Индустриальный пейзаж на рассвете, заводы и трубы в лучах утреннего солнца.",
-                status: .new
-            )
-        ]
     }
 }

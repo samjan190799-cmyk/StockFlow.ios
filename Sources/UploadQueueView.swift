@@ -23,147 +23,142 @@ struct UploadQueueView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Header Dashboard Summary
-                HStack(spacing: 16) {
-                    summaryCard(title: "В очереди", count: photos.count, icon: "tray.and.arrow.down.fill", color: .blue)
-                    summaryCard(title: "Готовы", count: photos.filter({ $0.status == .ready }).count, icon: "checkmark.circle.fill", color: .green)
-                }
-                .padding(.horizontal)
-                .padding(.top, 10)
+            ZStack {
+                LiquidBackgroundView()
                 
-                // Drag & Drop / Selection Zone
-                PhotosPicker(
-                    selection: $selectedItems,
-                    maxSelectionCount: 50,
-                    matching: .images,
-                    photoLibrary: .shared()
-                ) {
-                    VStack(spacing: 8) {
-                        Image(systemName: "arrow.up.doc.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(.blue)
-                        Text("Нажмите для выбора фотографий")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.primary)
-                        Text("JPEG/PNG файлы")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
-                            .foregroundStyle(Color(.systemGray3))
-                    )
-                }
-                .padding()
-                .onChange(of: selectedItems) { newItems in
-                    loadSelectedPhotos(from: newItems)
-                }
-                
-                // Action Buttons Toolbar
-                if !photos.isEmpty {
-                    HStack(spacing: 10) {
-                        Button(action: runAIForAll) {
-                            HStack {
-                                if isAnalyzingAll {
-                                    ProgressView().scaleEffect(0.8).tint(.white)
-                                } else {
-                                    Image(systemName: "sparkles")
-                                }
-                                Text("ИИ-Заполнение")
-                            }
-                            .font(.system(size: 13, weight: .bold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(Color.blue)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                        .disabled(isAnalyzingAll)
-                        
-                        Button(action: uploadAllReady) {
-                            HStack {
-                                Image(systemName: "paperplane.fill")
-                                Text("Отправить на стоки")
-                            }
-                            .font(.system(size: 13, weight: .bold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(Color.primary)
-                            .foregroundStyle(Color(.systemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
+                VStack(spacing: 12) {
+                    // Header Dashboard Summary
+                    HStack(spacing: 12) {
+                        summaryCard(title: "В очереди", count: photos.count, icon: "tray.and.arrow.down.fill", color: .blue)
+                        summaryCard(title: "Готовы", count: photos.filter({ $0.status == .ready }).count, icon: "checkmark.circle.fill", color: .green)
                     }
                     .padding(.horizontal)
-                    .padding(.bottom, 10)
-                }
-                
-                // Filter chips
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        FilterChip(text: "Все (\(photos.count))", isSelected: selectedFilter == nil) {
-                            selectedFilter = nil
+                    .padding(.top, 12)
+                    
+                    // Drag & Drop / Selection Zone
+                    PhotosPicker(
+                        selection: $selectedItems,
+                        maxSelectionCount: 50,
+                        matching: .images,
+                        photoLibrary: .shared()
+                    ) {
+                        VStack(spacing: 6) {
+                            Image(systemName: "arrow.up.doc.fill")
+                                .font(.system(size: 24))
+                                .foregroundStyle(AppleTheme.primaryGradient)
+                            Text("Выбрать фотографии")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.primary)
+                            Text("JPEG/PNG или HEIC файлы")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
                         }
-                        
-                        ForEach(PhotoStatus.allCases, id: \.self) { status in
-                            let count = photos.filter { $0.status == status }.count
-                            FilterChip(text: "\(status.rawValue) (\(count))", isSelected: selectedFilter == status) {
-                                selectedFilter = status
-                            }
-                        }
+                        .frame(maxWidth: .infinity)
+                        .glassCard(cornerRadius: 14, padding: 14)
                     }
                     .padding(.horizontal)
-                }
-                .padding(.bottom, 10)
-                
-                // Search Bar
-                HStack {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Поиск по названию, тегам...", text: $searchText)
-                        .font(.system(size: 14))
-                }
-                .padding(8)
-                .background(Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-                
-                // Photo Queue List
-                if filteredPhotos.isEmpty {
-                    VStack(spacing: 12) {
-                        Spacer()
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.secondary)
-                        Text("Очередь пуста")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Text("Добавьте новые фото для обработки")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                        Spacer()
+                    .onChange(of: selectedItems) { newItems in
+                        loadSelectedPhotos(from: newItems)
                     }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    List {
-                        ForEach(filteredPhotos) { photo in
-                            photoRow(photo)
-                                .listRowInsets(EdgeInsets())
-                                .listRowSeparator(.hidden)
-                                .background(Color(.systemBackground))
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    editingPhotoId = photo.id
+                    
+                    // Action Buttons Toolbar
+                    if !photos.isEmpty {
+                        HStack(spacing: 12) {
+                            Button(action: runAIForAll) {
+                                HStack {
+                                    if isAnalyzingAll {
+                                        ProgressView().scaleEffect(0.8).tint(.white)
+                                    } else {
+                                        Image(systemName: "sparkles")
+                                    }
+                                    Text("ИИ-Заполнение")
                                 }
+                                .font(.system(size: 13, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(AppleTheme.primaryGradient)
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .shadow(color: AppleTheme.glowStart.opacity(0.3), radius: 8, x: 0, y: 4)
+                            }
+                            .disabled(isAnalyzingAll)
+                            
+                            Button(action: uploadAllReady) {
+                                HStack {
+                                    Image(systemName: "paperplane.fill")
+                                    Text("Отправить на стоки")
+                                }
+                                .font(.system(size: 13, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(.ultraThinMaterial)
+                                .foregroundStyle(.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.15), lineWidth: 1))
+                            }
                         }
-                        .onDelete(perform: deletePhoto)
+                        .padding(.horizontal)
                     }
-                    .listStyle(.plain)
+                    
+                    // Filter chips
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            FilterChip(text: "Все (\(photos.count))", isSelected: selectedFilter == nil) {
+                                selectedFilter = nil
+                            }
+                            
+                            ForEach(PhotoStatus.allCases, id: \.self) { status in
+                                let count = photos.filter { $0.status == status }.count
+                                FilterChip(text: "\(status.rawValue) (\(count))", isSelected: selectedFilter == status) {
+                                    selectedFilter = status
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    // Search Bar
+                    HStack {
+                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                        TextField("Поиск по названию, тегам...", text: $searchText)
+                            .font(.system(size: 14))
+                    }
+                    .glassCard(cornerRadius: 12, padding: 10)
+                    .padding(.horizontal)
+                    
+                    // Photo Queue List
+                    if filteredPhotos.isEmpty {
+                        Spacer()
+                        VStack(spacing: 14) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 44))
+                                .foregroundStyle(.secondary)
+                            Text("Очередь пуста")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.primary)
+                            Text("Выберите новые фото для отправки")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .glassCard(cornerRadius: 16, padding: 32)
+                        .padding(.horizontal)
+                        Spacer()
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 10) {
+                                ForEach(filteredPhotos) { photo in
+                                    photoRow(photo)
+                                        .glassCard(cornerRadius: 14, padding: 12)
+                                        .onTapGesture {
+                                            editingPhotoId = photo.id
+                                        }
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.bottom, 20)
+                        }
+                    }
                 }
             }
             .navigationTitle("SmartStock")
@@ -202,103 +197,107 @@ struct UploadQueueView: View {
     
     // MARK: - Photo Row Component
     private func photoRow(_ photo: PhotoMetadata) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                // Photo Thumbnail
-                Group {
-                    if let uiImage = photo.uiImage {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Color(.systemGray5)
-                            .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
-                    }
-                }
-                .frame(width: 68, height: 68)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .shadow(radius: 1)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(photo.filename)
-                        .font(.system(size: 14, weight: .bold))
-                        .lineLimit(1)
-                    
-                    if !photo.title.isEmpty {
-                        Text(photo.title)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                    } else {
-                        Text("Нет заголовка")
-                            .font(.system(size: 12))
+        HStack(spacing: 12) {
+            // Photo Thumbnail
+            Group {
+                if let uiImage = photo.uiImage {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ZStack {
+                        Color.white.opacity(0.05)
+                        Image(systemName: "photo")
                             .foregroundStyle(.secondary)
-                            .italic()
-                    }
-                    
-                    HStack(spacing: 6) {
-                        Text(photo.fileSize)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                        
-                        Text("•")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                        
-                        Text("Тегов: \(photo.keywords.count)")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    // Status Badge
-                    HStack {
-                        Circle()
-                            .fill(photo.status.color)
-                            .frame(width: 6, height: 6)
-                        Text(photo.status.rawValue)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(photo.status.color)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(photo.status.color.opacity(0.12))
-                    .clipShape(Capsule())
-                }
-                
-                Spacer()
-                
-                // Quick actions
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        Button(action: { runAIForPhoto(photo.id) }) {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 12))
-                                .padding(8)
-                                .background(Color(.systemGray5))
-                                .clipShape(Circle())
-                        }
-                        
-                        Button(action: { uploadPhoto(photo.id) }) {
-                            Image(systemName: "paperplane")
-                                .font(.system(size: 12))
-                                .padding(8)
-                                .background(Color(.systemGray5))
-                                .clipShape(Circle())
-                        }
-                    }
-                    
-                    Button(action: { removePhoto(photo.id) }) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.red)
                     }
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
+            .frame(width: 62, height: 62)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.1), radius: 2)
             
-            Divider()
-                .padding(.leading, 92)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(photo.filename)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                
+                if !photo.title.isEmpty {
+                    Text(photo.title)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.primary.opacity(0.9))
+                        .lineLimit(1)
+                } else {
+                    Text("Нет заголовка")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .italic()
+                }
+                
+                HStack(spacing: 6) {
+                    Text(photo.fileSize)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    
+                    Text("•")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    
+                    Text("Тегов: \(photo.keywords.count)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                
+                // Status Badge
+                HStack {
+                    Circle()
+                        .fill(photo.status.color)
+                        .frame(width: 6, height: 6)
+                    Text(photo.status.rawValue)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(photo.status.color)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(photo.status.color.opacity(0.12))
+                .clipShape(Capsule())
+            }
+            
+            Spacer()
+            
+            // Quick actions
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    Button(action: { runAIForPhoto(photo.id) }) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white)
+                            .padding(8)
+                            .background(AppleTheme.primaryGradient)
+                            .clipShape(Circle())
+                    }
+                    
+                    Button(action: { uploadPhoto(photo.id) }) {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.primary)
+                            .padding(8)
+                            .background(.white.opacity(0.1))
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                    }
+                }
+                
+                Button(action: { removePhoto(photo.id) }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red.opacity(0.8))
+                }
+            }
         }
     }
     
@@ -306,7 +305,7 @@ struct UploadQueueView: View {
     private func summaryCard(title: String, count: Int, icon: String, color: Color) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.system(size: 18))
                 .foregroundStyle(color)
                 .padding(10)
                 .background(color.opacity(0.12))
@@ -318,12 +317,11 @@ struct UploadQueueView: View {
                     .foregroundStyle(.secondary)
                 Text("\(count)")
                     .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.primary)
             }
             Spacer()
         }
-        .padding(10)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .glassCard(cornerRadius: 12, padding: 10)
     }
     
     // MARK: - Load Photos Logic
@@ -368,7 +366,7 @@ struct UploadQueueView: View {
             photos[idx].status = .aiAnalyzing
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 if photos.count > idx {
-                    photos[idx].title = "Драматичное закатное небо"
+                    photos[idx].title = "Драматичное закатное небо над горой"
                     photos[idx].keywords = ["закат", "облака", "небо", "пейзаж", "природа", "красиво"]
                     photos[idx].description = "Красивый закат над горизонтом с драматичными облаками."
                     photos[idx].status = .ready
@@ -451,9 +449,13 @@ struct FilterChip: View {
                 .font(.system(size: 12, weight: isSelected ? .bold : .regular))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(isSelected ? Color.blue : Color(.systemGray6))
+                .background(isSelected ? AppleTheme.primaryGradient : LinearGradient(colors: [.white.opacity(0.06)], startPoint: .top, endPoint: .bottom))
                 .foregroundStyle(isSelected ? .white : .primary)
                 .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? Color.clear : Color.white.opacity(0.12), lineWidth: 1)
+                )
         }
     }
 }

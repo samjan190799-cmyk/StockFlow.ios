@@ -13,85 +13,77 @@ struct AIAssistantView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                Section(header: Text("Интеллектуальный ИИ-Ассистент")) {
-                    Picker("Приоритетный ИИ-провайдер", selection: $selectedProvider) {
-                        ForEach(AIProvider.allCases) { provider in
-                            Text(provider.rawValue).tag(provider.rawValue)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
+            ZStack {
+                LiquidBackgroundView()
                 
-                Section(header: Text("Настройка интеграции ИИ")) {
-                    // Gemini Key
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("GEMINI API КЛЮЧ").font(.system(size: 11, weight: .bold)).foregroundStyle(.secondary)
-                        HStack {
-                            SecureField("AIzaSy...", text: $apiKeyGemini)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 13, design: .monospaced))
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        // Section 1: Provider selection
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Интеллектуальный ИИ-Ассистент")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
                             
-                            Button(action: { verifyKey(apiKeyGemini, for: "Gemini") }) {
-                                Text("Проверить")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(Color.blue)
-                                    .foregroundStyle(.white)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                            HStack {
+                                Text("Провайдер")
+                                    .font(.system(size: 14, weight: .medium))
+                                Spacer()
+                                Picker("Провайдер", selection: $selectedProvider) {
+                                    ForEach(AIProvider.allCases) { provider in
+                                        Text(provider.rawValue).tag(provider.rawValue)
+                                    }
+                                }
+                                .pickerStyle(.menu)
                             }
                         }
-                    }
-                    .padding(.vertical, 4)
-                    
-                    // OpenAI Key
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("OPENAI API КЛЮЧ").font(.system(size: 11, weight: .bold)).foregroundStyle(.secondary)
-                        HStack {
-                            SecureField("sk-...", text: $apiKeyOpenAI)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 13, design: .monospaced))
+                        .glassCard()
+                        
+                        // Section 2: API Keys
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Настройка интеграции ИИ")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
                             
-                            Button(action: { verifyKey(apiKeyOpenAI, for: "OpenAI") }) {
-                                Text("Проверить")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(Color.blue)
-                                    .foregroundStyle(.white)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                    
-                    // Claude Key
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("CLAUDE (ANTHROPIC) API КЛЮЧ").font(.system(size: 11, weight: .bold)).foregroundStyle(.secondary)
-                        HStack {
-                            SecureField("sk-ant-...", text: $apiKeyClaude)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 13, design: .monospaced))
+                            apiKeyField(title: "GEMINI API КЛЮЧ", placeholder: "AIzaSy...", text: $apiKeyGemini, provider: "Gemini")
                             
-                            Button(action: { verifyKey(apiKeyClaude, for: "Claude") }) {
-                                Text("Проверить")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(Color.blue)
-                                    .foregroundStyle(.white)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                            }
+                            Divider().background(Color.white.opacity(0.1))
+                            
+                            apiKeyField(title: "OPENAI API КЛЮЧ", placeholder: "sk-...", text: $apiKeyOpenAI, provider: "OpenAI")
+                            
+                            Divider().background(Color.white.opacity(0.1))
+                            
+                            apiKeyField(title: "CLAUDE API КЛЮЧ", placeholder: "sk-ant-...", text: $apiKeyClaude, provider: "Claude")
                         }
+                        .glassCard()
+                        
+                        // Section 3: Custom Prompt
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Промпт для ИИ-анализа")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                            
+                            TextEditor(text: $customPrompt)
+                                .font(.system(size: 12, design: .monospaced))
+                                .frame(height: 140)
+                                .padding(8)
+                                .scrollContentBackground(.hidden)
+                                .background(Color.white.opacity(0.05))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                )
+                            
+                            Text("Промпт сообщает модели, в каком виде генерировать заголовок, описание и ключевые слова.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        .glassCard()
                     }
-                    .padding(.vertical, 4)
-                }
-                
-                Section(header: Text("Промпт для ИИ-анализа"), footer: Text("Промпт сообщает модели, в каком виде генерировать заголовок, описание и ключевые слова.")) {
-                    TextEditor(text: $customPrompt)
-                        .font(.system(size: 12, design: .monospaced))
-                        .frame(height: 140)
+                    .padding()
                 }
             }
             .navigationTitle("ИИ-Ассистент")
@@ -103,15 +95,49 @@ struct AIAssistantView: View {
             }
             .overlay {
                 if isVerifying {
-                    Color.black.opacity(0.15)
+                    Color.black.opacity(0.25)
                         .ignoresSafeArea()
                         .overlay(
-                            ProgressView("Проверка...")
-                                .padding()
-                                .background(Color(.systemBackground))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .shadow(radius: 10)
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                    .tint(.primary)
+                                Text("Проверка...")
+                                    .font(.system(size: 14, weight: .medium))
+                            }
+                            .glassCard(cornerRadius: 16, padding: 24)
                         )
+                }
+            }
+        }
+    }
+    
+    // MARK: - API Key Field Helper
+    private func apiKeyField(title: String, placeholder: String, text: Binding<String>, provider: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.secondary)
+            
+            HStack(spacing: 10) {
+                SecureField(placeholder, text: text)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, design: .monospaced))
+                    .padding(8)
+                    .background(Color.white.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+                
+                Button(action: { verifyKey(text.wrappedValue, for: provider) }) {
+                    Text("Проверить")
+                        .font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(AppleTheme.primaryGradient)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
         }
