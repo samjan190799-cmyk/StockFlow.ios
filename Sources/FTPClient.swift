@@ -14,28 +14,41 @@ class FTPClient {
             self.connection = connection
         }
         
-        func readLine() async throws -> String {
-            while true {
-                if let newlineIndex = buffer.firstIndex(of: 10) { // 10 is '\n'
-                    let lineData = buffer.subdata(in: 0..<newlineIndex + 1)
-                    buffer.removeSubrange(0..<newlineIndex + 1)
-                    if let str = String(data: lineData, encoding: .utf8) {
-                        return str
+        func readLine(timeout: TimeInterval = 10) async throws -> String {
+            try await withThrowingTaskGroup(of: String.self) { group in
+                group.addTask {
+                    while true {
+                        if let newlineIndex = self.buffer.firstIndex(of: 10) { // 10 is '\n'
+                            let lineData = self.buffer.subdata(in: 0..<newlineIndex + 1)
+                            self.buffer.removeSubrange(0..<newlineIndex + 1)
+                            if let str = String(data: lineData, encoding: .utf8) {
+                                return str
+                            }
+                        }
+                        
+                        let chunk = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+                            self.connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, error in
+                                if let error = error {
+                                    continuation.resume(throwing: error)
+                                } else if let data = data {
+                                    continuation.resume(returning: data)
+                                } else {
+                                    continuation.resume(throwing: NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Соединение закрыто сервером"]))
+                                }
+                            }
+                        }
+                        self.buffer.append(chunk)
                     }
                 }
                 
-                let chunk = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
-                    connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, error in
-                        if let error = error {
-                            continuation.resume(throwing: error)
-                        } else if let data = data {
-                            continuation.resume(returning: data)
-                        } else {
-                            continuation.resume(throwing: NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Соединение закрыто сервером"]))
-                        }
-                    }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Таймаут ожидания ответа от сервера (\(timeout) сек)"])
                 }
-                buffer.append(chunk)
+                
+                let result = try await group.next()!
+                group.cancelAll()
+                return result
             }
         }
     }
@@ -304,23 +317,35 @@ class FTPClient {
         try await send(connection: connection, data: data)
     }
     
-    private static func waitForReady(connection: NWConnection) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            connection.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    connection.stateUpdateHandler = nil
-                    continuation.resume()
-                case .failed(let error):
-                    connection.stateUpdateHandler = nil
-                    continuation.resume(throwing: error)
-                case .cancelled:
-                    connection.stateUpdateHandler = nil
-                    continuation.resume(throwing: ftpError("Соединение отменено"))
-                default:
-                    break
+    private static func waitForReady(connection: NWConnection, timeout: TimeInterval = 10) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    connection.stateUpdateHandler = { state in
+                        switch state {
+                        case .ready:
+                            connection.stateUpdateHandler = nil
+                            continuation.resume()
+                        case .failed(let error):
+                            connection.stateUpdateHandler = nil
+                            continuation.resume(throwing: error)
+                        case .cancelled:
+                            connection.stateUpdateHandler = nil
+                            continuation.resume(throwing: ftpError("Соединение отменено"))
+                        default:
+                            break
+                        }
+                    }
                 }
             }
+            
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                throw ftpError("Превышено время ожидания готовности подключения (\(timeout) сек)")
+            }
+            
+            try await group.next()
+            group.cancelAll()
         }
     }
     
@@ -432,6 +457,10 @@ class FTPESFramer: NWProtocolFramerImplementation {
             }, DispatchQueue.global())
             
             try? framer.prependApplicationProtocol(options: tlsOptions)
+            
+            // Переводим фреймер в режим прозрачной передачи, чтобы TLS работал напрямую с TCP
+            framer.passThroughInput()
+            framer.passThroughOutput()
             return
         }
         try? framer.writeOutputNoCopy(length: messageLength)
