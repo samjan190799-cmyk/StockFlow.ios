@@ -411,7 +411,7 @@ class FTPESFramer: NWProtocolFramerImplementation {
     func handleInput(framer: NWProtocolFramer.Instance) -> Int {
         while true {
             var parsedCount = 0
-            let success = framer.parseInput(minimumIncompleteLength: 1, maximumLength: 65536) { buffer in
+            let success = framer.parseInput(minimumIncompleteLength: 1, maximumLength: 65536) { buffer, _ in
                 guard let buffer = buffer else { return 0 }
                 parsedCount = buffer.count
                 return buffer.count
