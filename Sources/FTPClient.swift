@@ -1,6 +1,6 @@
 import Foundation
 import Network
-
+import Security
 // MARK: - FTPClient
 // Реализация нативного FTP/FTPS-клиента через сокеты NWConnection.
 // Решает проблему неработающего URLSession FTP на iOS 16+.
