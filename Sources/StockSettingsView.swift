@@ -199,8 +199,10 @@ struct StockSettingsView: View {
             Group {
                 if isSecure {
                     SecureField(placeholder, text: text)
+                        .textContentType(.password)
                 } else {
                     TextField(placeholder, text: text)
+                        .textContentType(.username)
                 }
             }
             .textFieldStyle(.plain)
@@ -220,7 +222,11 @@ struct StockSettingsView: View {
     // MARK: - Data Storage
     private func loadPlatforms() {
         if let data = UserDefaults.standard.data(forKey: "stock_platforms"),
-           let decoded = try? JSONDecoder().decode([StockPlatform].self, from: data) {
+           var decoded = try? JSONDecoder().decode([StockPlatform].self, from: data) {
+            for i in 0..<decoded.count {
+                let serviceKey = "com.samvel.smartstock.platform.\(decoded[i].id)"
+                decoded[i].passwordHash = KeychainHelper.shared.read(for: serviceKey) ?? ""
+            }
             self.platforms = decoded
         } else {
             // Prepopulate with defaults
@@ -230,6 +236,14 @@ struct StockSettingsView: View {
     }
     
     private func savePlatforms() {
+        for platform in platforms {
+            let serviceKey = "com.samvel.smartstock.platform.\(platform.id)"
+            if !platform.passwordHash.isEmpty {
+                KeychainHelper.shared.save(password: platform.passwordHash, for: serviceKey)
+            } else {
+                KeychainHelper.shared.delete(for: serviceKey)
+            }
+        }
         if let encoded = try? JSONEncoder().encode(platforms) {
             UserDefaults.standard.set(encoded, forKey: "stock_platforms")
         }

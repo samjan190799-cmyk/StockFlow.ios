@@ -188,7 +188,12 @@ class QueueViewModel: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: "stock_platforms"),
            let decoded = try? JSONDecoder().decode([StockPlatform].self, from: data) {
             let activePlatforms = decoded.filter { $0.isEnabled }
-            return !activePlatforms.isEmpty && activePlatforms.contains(where: { !$0.username.isEmpty && !$0.passwordHash.isEmpty })
+            return !activePlatforms.isEmpty && activePlatforms.contains(where: { platform in
+                if platform.username.isEmpty { return false }
+                let serviceKey = "com.samvel.smartstock.platform.\(platform.id)"
+                let pwd = KeychainHelper.shared.read(for: serviceKey) ?? ""
+                return !pwd.isEmpty
+            })
         }
         return false
     }
