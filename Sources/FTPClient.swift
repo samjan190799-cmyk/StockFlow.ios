@@ -159,6 +159,7 @@ class FTPClient {
         )
         controlConnection.start(queue: DispatchQueue.global())
         
+        var dataConnection: NWConnection? = nil
         do {
             try await waitForReady(connection: controlConnection)
             let reader = ConnectionReader(connection: controlConnection)
@@ -245,46 +246,44 @@ class FTPClient {
             let dataPort = p1 * 256 + p2
             
             // 8. Connect Data Channel (всегда plain TCP, так как мы отправили PROT C)
-            var dataConnection: NWConnection? = nil
-            do {
-                let conn = NWConnection(
-                    host: NWEndpoint.Host(dataIp),
-                    port: NWEndpoint.Port(rawValue: UInt16(dataPort))!,
-                    using: .tcp
-                )
-                dataConnection = conn
-                conn.start(queue: DispatchQueue.global())
-                try await waitForReady(connection: conn)
-                
-                // 9. Send STOR on Control Channel
-                try await sendCommand(connection: controlConnection, cmd: "STOR \(filename)\r\n")
-                let storResp = try await reader.readLine()
-                guard storResp.hasPrefix("150") || storResp.hasPrefix("125") else {
-                    conn.cancel()
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка начала передачи STOR: \(storResp)")
-                }
-                
-                // 10. Send bytes on Data Channel and Close it
-                try await send(connection: conn, data: data)
+            let conn = NWConnection(
+                host: NWEndpoint.Host(dataIp),
+                port: NWEndpoint.Port(rawValue: UInt16(dataPort))!,
+                using: .tcp
+            )
+            dataConnection = conn
+            conn.start(queue: DispatchQueue.global())
+            try await waitForReady(connection: conn)
+            
+            // 9. Send STOR on Control Channel
+            try await sendCommand(connection: controlConnection, cmd: "STOR \(filename)\r\n")
+            let storResp = try await reader.readLine()
+            guard storResp.hasPrefix("150") || storResp.hasPrefix("125") else {
                 conn.cancel()
-                dataConnection = nil
-                
-                // 11. Read Transfer Complete on Control Channel
-                let completeResp = try await reader.readLine()
-                guard completeResp.hasPrefix("226") else {
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка завершения передачи: \(completeResp)")
-                }
-                
-                // 12. Send QUIT
-                try await sendCommand(connection: controlConnection, cmd: "QUIT\r\n")
                 controlConnection.cancel()
-            } catch {
-                dataConnection?.cancel()
-                controlConnection.cancel()
-                throw error
+                throw ftpError("Ошибка начала передачи STOR: \(storResp)")
             }
+            
+            // 10. Send bytes on Data Channel and Close it
+            try await send(connection: conn, data: data)
+            conn.cancel()
+            dataConnection = nil
+            
+            // 11. Read Transfer Complete on Control Channel
+            let completeResp = try await reader.readLine()
+            guard completeResp.hasPrefix("226") else {
+                controlConnection.cancel()
+                throw ftpError("Ошибка завершения передачи: \(completeResp)")
+            }
+            
+            // 12. Send QUIT
+            try await sendCommand(connection: controlConnection, cmd: "QUIT\r\n")
+            controlConnection.cancel()
+        } catch {
+            dataConnection?.cancel()
+            controlConnection.cancel()
+            throw error
+        }
     }
     
     // MARK: - Private Helpers
