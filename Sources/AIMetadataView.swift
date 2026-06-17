@@ -244,12 +244,51 @@ struct AIMetadataView: View {
     }
 
     private func regenerate() {
+        let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? AIProvider.gemini.rawValue
+        let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
+        let apiKey: String
+        if provider.contains("Gemini") {
+            apiKey = UserDefaults.standard.string(forKey: "api_key_gemini") ?? ""
+        } else if provider.contains("OpenAI") {
+            apiKey = UserDefaults.standard.string(forKey: "api_key_openai") ?? ""
+        } else {
+            apiKey = UserDefaults.standard.string(forKey: "api_key_claude") ?? ""
+        }
+        
         isRegenerating = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            photos[currentIndex].title = "Драматичное закатное небо над горой Арарат"
-            photos[currentIndex].keywords = ["Арарат", "гора", "закат", "Армения", "пейзаж", "природа", "драматичное небо"]
-            photos[currentIndex].description = "Силуэт горы Арарат на фоне яркого закатного неба, снято в сельской местности Армении."
-            isRegenerating = false
+        
+        guard !apiKey.trimmingCharacters(in: .whitespaces).isEmpty else {
+            // Mock fallback
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                photos[currentIndex].title = "Драматичное закатное небо над горой Арарат (Демо)"
+                photos[currentIndex].keywords = ["Арарат", "гора", "закат", "Армения", "пейзаж", "природа", "демо"]
+                photos[currentIndex].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
+                isRegenerating = false
+            }
+            return
+        }
+        
+        Task {
+            do {
+                let data = photos[currentIndex].imageData ?? Data()
+                let result = try await AIManager.shared.analyzePhoto(
+                    imageData: data,
+                    customPrompt: customPrompt,
+                    provider: provider,
+                    apiKey: apiKey
+                )
+                await MainActor.run {
+                    photos[currentIndex].title = result.title
+                    photos[currentIndex].description = result.description
+                    photos[currentIndex].keywords = result.keywords
+                    isRegenerating = false
+                }
+            } catch {
+                await MainActor.run {
+                    photos[currentIndex].description = "Ошибка: \(error.localizedDescription)"
+                    isRegenerating = false
+                }
+            }
         }
     }
 }
