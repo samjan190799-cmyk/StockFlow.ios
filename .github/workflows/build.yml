@@ -46,14 +46,15 @@ jobs:
         run: |
           xcodebuild -project SmartStock.xcodeproj \
             -scheme SmartStock \
-            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -configuration Release \
             -derivedDataPath build \
-            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             VALIDATE_PRODUCT=NO \
-            clean build
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            build
 
       - name: Package as IPA
         run: |
