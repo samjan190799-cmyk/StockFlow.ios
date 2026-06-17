@@ -18,12 +18,34 @@ final class AIManager: Sendable {
         
         let base64Image = imageData.base64EncodedString()
         
-        if provider.contains("Gemini") {
-            return try await analyzeWithGemini(base64Image: base64Image, prompt: customPrompt, apiKey: apiKey)
-        } else if provider.contains("OpenAI") {
-            return try await analyzeWithOpenAI(base64Image: base64Image, prompt: customPrompt, apiKey: apiKey)
-        } else {
-            throw NSError(domain: "AIManager", code: 501, userInfo: [NSLocalizedDescriptionKey: "Провайдер \(provider) пока не поддерживается."])
+        var attempts = 0
+        let maxRetries = 3
+        let initialDelay: Double = 1.5
+        
+        while true {
+            do {
+                if provider.contains("Gemini") {
+                    return try await analyzeWithGemini(base64Image: base64Image, prompt: customPrompt, apiKey: apiKey)
+                } else if provider.contains("OpenAI") {
+                    return try await analyzeWithOpenAI(base64Image: base64Image, prompt: customPrompt, apiKey: apiKey)
+                } else {
+                    throw NSError(domain: "AIManager", code: 501, userInfo: [NSLocalizedDescriptionKey: "Провайдер \(provider) пока не поддерживается."])
+                }
+            } catch {
+                attempts += 1
+                
+                let nsError = error as NSError
+                let isTransient = (nsError.domain == "AIManager" && (nsError.code == 503 || nsError.code == 429 || nsError.code == 500 || nsError.code == 502 || nsError.code == 504)) ||
+                                  (nsError.domain == NSURLErrorDomain && (nsError.code == URLError.timedOut.rawValue || nsError.code == URLError.cannotConnectToHost.rawValue || nsError.code == URLError.networkConnectionLost.rawValue))
+                
+                if attempts > maxRetries || !isTransient {
+                    throw error
+                }
+                
+                // Exponential backoff delay (e.g. 1.5s, 3.0s, 6.0s)
+                let delay = initialDelay * pow(2.0, Double(attempts - 1))
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
         }
     }
     
