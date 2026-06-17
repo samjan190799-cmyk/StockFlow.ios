@@ -577,7 +577,7 @@ class FTPClient {
 // MARK: - FTPES (Explicit TLS) Framer
 class FTPESFramer: NWProtocolFramerImplementation {
     static let label = "FTPESFramer"
-    static let definition = NWProtocolFramer.Definition(implementation: FTPESFramer.definition)
+    static let definition = NWProtocolFramer.Definition(implementation: FTPESFramer.self)
     
     required init(framer: NWProtocolFramer.Instance) {}
     
