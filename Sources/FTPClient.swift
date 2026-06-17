@@ -329,7 +329,7 @@ class FTPESFramer: NWProtocolFramerImplementation {
             try? framer.prependApplicationProtocol(options: tlsOptions)
             return
         }
-        framer.writeOutputNoCopy(length: messageLength)
+        try? framer.writeOutputNoCopy(length: messageLength)
     }
     
     func wakeup(framer: NWProtocolFramer.Instance) {}
