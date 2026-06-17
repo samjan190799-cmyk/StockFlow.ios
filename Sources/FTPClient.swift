@@ -44,7 +44,11 @@ class FTPClient {
             ftpHost = ftpHost.replacingOccurrences(of: "ftps", with: "ftp")
         }
         
-        let controlConnection = NWConnection(host: NWEndpoint.Host(ftpHost), port: NWEndpoint.Port(rawValue: UInt16(port))!, using: .tcp)
+        let parameters = NWParameters.tcp
+        let customFramerOptions = NWProtocolFramer.Options(definition: FTPESFramer.definition)
+        parameters.defaultProtocolStack.applicationProtocols.insert(customFramerOptions, at: 0)
+        
+        let controlConnection = NWConnection(host: NWEndpoint.Host(ftpHost), port: NWEndpoint.Port(rawValue: UInt16(port))!, using: parameters)
         controlConnection.start(queue: DispatchQueue.global())
         
         do {
@@ -58,7 +62,19 @@ class FTPClient {
                 throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Ошибка баннера FTP: \(banner)"])
             }
             
-            // 2. Send USER
+            // 2. Send AUTH TLS
+            try await sendCommand(connection: controlConnection, cmd: "AUTH TLS\r\n")
+            let authResp = try await reader.readLine()
+            
+            let isTLS: Bool
+            if authResp.hasPrefix("234") {
+                try await upgradeToTLS(connection: controlConnection)
+                isTLS = true
+            } else {
+                isTLS = false
+            }
+            
+            // 3. Send USER
             try await sendCommand(connection: controlConnection, cmd: "USER \(username)\r\n")
             let userResp = try await reader.readLine()
             guard userResp.hasPrefix("331") || userResp.hasPrefix("230") else {
@@ -66,7 +82,7 @@ class FTPClient {
                 throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Пользователь отклонён: \(userResp)"])
             }
             
-            // 3. Send PASS if required
+            // 4. Send PASS if required
             if userResp.hasPrefix("331") {
                 try await sendCommand(connection: controlConnection, cmd: "PASS \(password)\r\n")
                 let passResp = try await reader.readLine()
@@ -76,7 +92,15 @@ class FTPClient {
                 }
             }
             
-            // 4. Send QUIT
+            // 5. Send PBSZ and PROT if TLS is active
+            if isTLS {
+                try await sendCommand(connection: controlConnection, cmd: "PBSZ 0\r\n")
+                _ = try await reader.readLine()
+                try await sendCommand(connection: controlConnection, cmd: "PROT P\r\n")
+                _ = try await reader.readLine()
+            }
+            
+            // 6. Send QUIT
             try await sendCommand(connection: controlConnection, cmd: "QUIT\r\n")
             controlConnection.cancel()
         } catch {
@@ -86,7 +110,18 @@ class FTPClient {
     }
 
     static func upload(data: Data, filename: String, host: String, port: Int = 21, username: String, password: String) async throws {
-        let controlConnection = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: UInt16(port))!, using: .tcp)
+        var ftpHost = host
+        if ftpHost.contains("sftp") {
+            ftpHost = ftpHost.replacingOccurrences(of: "sftp", with: "ftp")
+        } else if ftpHost.contains("ftps") {
+            ftpHost = ftpHost.replacingOccurrences(of: "ftps", with: "ftp")
+        }
+        
+        let parameters = NWParameters.tcp
+        let customFramerOptions = NWProtocolFramer.Options(definition: FTPESFramer.definition)
+        parameters.defaultProtocolStack.applicationProtocols.insert(customFramerOptions, at: 0)
+        
+        let controlConnection = NWConnection(host: NWEndpoint.Host(ftpHost), port: NWEndpoint.Port(rawValue: UInt16(port))!, using: parameters)
         controlConnection.start(queue: DispatchQueue.global())
         
         try await waitForReady(connection: controlConnection)
@@ -99,7 +134,19 @@ class FTPClient {
             throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Ошибка баннера FTP: \(banner)"])
         }
         
-        // 2. Send USER
+        // 2. Send AUTH TLS
+        try await sendCommand(connection: controlConnection, cmd: "AUTH TLS\r\n")
+        let authResp = try await reader.readLine()
+        
+        let isTLS: Bool
+        if authResp.hasPrefix("234") {
+            try await upgradeToTLS(connection: controlConnection)
+            isTLS = true
+        } else {
+            isTLS = false
+        }
+        
+        // 3. Send USER
         try await sendCommand(connection: controlConnection, cmd: "USER \(username)\r\n")
         let userResp = try await reader.readLine()
         guard userResp.hasPrefix("331") || userResp.hasPrefix("230") else {
@@ -107,7 +154,7 @@ class FTPClient {
             throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Пользователь отклонён: \(userResp)"])
         }
         
-        // 3. Send PASS if required
+        // 4. Send PASS if required
         if userResp.hasPrefix("331") {
             try await sendCommand(connection: controlConnection, cmd: "PASS \(password)\r\n")
             let passResp = try await reader.readLine()
@@ -117,7 +164,15 @@ class FTPClient {
             }
         }
         
-        // 4. Send TYPE I (Binary Mode)
+        // 5. Send PBSZ and PROT if TLS is active
+        if isTLS {
+            try await sendCommand(connection: controlConnection, cmd: "PBSZ 0\r\n")
+            _ = try await reader.readLine()
+            try await sendCommand(connection: controlConnection, cmd: "PROT P\r\n")
+            _ = try await reader.readLine()
+        }
+        
+        // 6. Send TYPE I (Binary Mode)
         try await sendCommand(connection: controlConnection, cmd: "TYPE I\r\n")
         let typeResp = try await reader.readLine()
         guard typeResp.hasPrefix("200") else {
@@ -125,7 +180,7 @@ class FTPClient {
             throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Ошибка установки бинарного режима: \(typeResp)"])
         }
         
-        // 5. Send PASV
+        // 7. Send PASV
         try await sendCommand(connection: controlConnection, cmd: "PASV\r\n")
         let pasvResp = try await reader.readLine()
         guard pasvResp.hasPrefix("227") else {
@@ -155,12 +210,13 @@ class FTPClient {
         }
         let dataPort = p1 * 256 + p2
         
-        // 6. Connect Data Channel
-        let dataConnection = NWConnection(host: NWEndpoint.Host(dataIp), port: NWEndpoint.Port(rawValue: UInt16(dataPort))!, using: .tcp)
+        // 8. Connect Data Channel (TLS if control connection is TLS)
+        let dataParams = isTLS ? NWParameters.tls : NWParameters.tcp
+        let dataConnection = NWConnection(host: NWEndpoint.Host(dataIp), port: NWEndpoint.Port(rawValue: UInt16(dataPort))!, using: dataParams)
         dataConnection.start(queue: DispatchQueue.global())
         try await waitForReady(connection: dataConnection)
         
-        // 7. Send STOR on Control Channel
+        // 9. Send STOR on Control Channel
         try await sendCommand(connection: controlConnection, cmd: "STOR \(filename)\r\n")
         let storResp = try await reader.readLine()
         guard storResp.hasPrefix("150") || storResp.hasPrefix("125") else {
@@ -169,20 +225,35 @@ class FTPClient {
             throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Ошибка отправки команды STOR: \(storResp)"])
         }
         
-        // 8. Send bytes on Data Channel and Close it
+        // 10. Send bytes on Data Channel and Close it
         try await send(connection: dataConnection, data: data)
         dataConnection.cancel()
         
-        // 9. Read Transfer Complete on Control Channel
+        // 11. Read Transfer Complete on Control Channel
         let completeResp = try await reader.readLine()
         guard completeResp.hasPrefix("226") else {
             controlConnection.cancel()
             throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Ошибка завершения загрузки: \(completeResp)"])
         }
         
-        // 10. Send QUIT
+        // 12. Send QUIT
         try await sendCommand(connection: controlConnection, cmd: "QUIT\r\n")
         controlConnection.cancel()
+    }
+    
+    private static func upgradeToTLS(connection: NWConnection) async throws {
+        let message = NWProtocolFramer.Message(definition: FTPESFramer.definition)
+        message["upgradeTLS"] = true
+        
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            connection.send(content: nil, contentContext: .init(identifier: "upgrade", metadata: [message]), isComplete: true, completion: .contentProcessed({ error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }))
+        }
     }
     
     private static func send(connection: NWConnection, data: Data) async throws {
@@ -223,4 +294,45 @@ class FTPClient {
             }
         }
     }
+}
+
+// MARK: - FTPES (Explicit TLS) Framer
+class FTPESFramer: NWProtocolFramerImplementation {
+    static let label = "FTPESFramer"
+    static let definition = NWProtocolFramer.Definition(implementation: FTPESFramer.self)
+    
+    required init(framer: NWProtocolFramer.Instance) {}
+    
+    func start(framer: NWProtocolFramer.Instance) -> NWProtocolFramer.StartResult {
+        return .ready
+    }
+    
+    func handleInput(framer: NWProtocolFramer.Instance) -> Int {
+        while true {
+            var parsedCount = 0
+            let success = framer.parseInput(minimumIncompleteLength: 1, maximumLength: 65536) { buffer in
+                guard let buffer = buffer else { return 0 }
+                parsedCount = buffer.count
+                return buffer.count
+            }
+            guard success && parsedCount > 0 else { break }
+            
+            let message = NWProtocolFramer.Message()
+            _ = framer.deliverInputNoCopy(length: parsedCount, message: message, isComplete: true)
+        }
+        return 0
+    }
+    
+    func handleOutput(framer: NWProtocolFramer.Instance, message: NWProtocolFramer.Message, messageLength: Int, isComplete: Bool) {
+        if message["upgradeTLS"] as? Bool == true {
+            let tlsOptions = NWProtocolTLS.Options()
+            try? framer.prependApplicationProtocol(options: tlsOptions)
+            return
+        }
+        framer.writeOutputNoCopy(length: messageLength)
+    }
+    
+    func wakeup(framer: NWProtocolFramer.Instance) {}
+    func stop(framer: NWProtocolFramer.Instance) -> Bool { return true }
+    func cleanup(framer: NWProtocolFramer.Instance) {}
 }
