@@ -146,9 +146,9 @@ class QueueViewModel: ObservableObject {
         
         Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
-            if self.photos.count > idx {
-                self.photos[idx].status = .success
-                self.triggerToast("Файл \(self.photos[idx].filename) успешно загружен на стоки!")
+            if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                self.photos[index].status = .success
+                self.triggerToast("Файл \(self.photos[index].filename) успешно загружен на стоки!")
             }
         }
     }
@@ -166,18 +166,23 @@ class QueueViewModel: ObservableObject {
         }
         
         triggerToast("Началась отправка \(readyPhotos.count) файлов...")
-        for i in 0..<photos.count {
-            if photos[i].status == .ready {
-                photos[i].status = .uploading
-                let idx = i
-                Task {
-                    let sleepTime = Double.random(in: 1.0...2.5)
-                    try? await Task.sleep(nanoseconds: UInt64(sleepTime * 1_000_000_000))
-                    if self.photos.count > idx {
-                        self.photos[idx].status = .success
-                        if idx == self.photos.count - 1 || i == self.photos.count - 1 {
-                            self.triggerToast("Все файлы успешно загружены!")
-                        }
+        
+        for photo in readyPhotos {
+            let pId = photo.id
+            if let idx = self.photos.firstIndex(where: { $0.id == pId }) {
+                self.photos[idx].status = .uploading
+            }
+            
+            Task {
+                let sleepTime = Double.random(in: 1.0...2.5)
+                try? await Task.sleep(nanoseconds: UInt64(sleepTime * 1_000_000_000))
+                if let index = self.photos.firstIndex(where: { $0.id == pId }) {
+                    self.photos[index].status = .success
+                    self.triggerToast("Файл \(self.photos[index].filename) успешно загружен на стоки!")
+                    
+                    let remaining = self.photos.filter { $0.status == .uploading }.count
+                    if remaining == 0 {
+                        self.triggerToast("Все файлы успешно загружены!")
                     }
                 }
             }

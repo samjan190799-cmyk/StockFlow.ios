@@ -24,7 +24,15 @@ final class KeychainHelper: Sendable {
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
         
-        SecItemAdd(addQuery as CFDictionary, nil)
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        if status != errSecSuccess {
+            // Keychain write failed (likely sandbox/sideload entitlement restriction)
+            // Save in UserDefaults fallback
+            UserDefaults.standard.set(password, forKey: "fallback_keychain_" + service)
+        } else {
+            // Successfully saved in Keychain, delete fallback if present
+            UserDefaults.standard.removeObject(forKey: "fallback_keychain_" + service)
+        }
     }
     
     func read(for service: String) -> String? {
@@ -41,7 +49,9 @@ final class KeychainHelper: Sendable {
         if status == errSecSuccess, let data = dataTypeRef as? Data {
             return String(data: data, encoding: .utf8)
         }
-        return nil
+        
+        // Fallback to UserDefaults if Keychain fails or has no value
+        return UserDefaults.standard.string(forKey: "fallback_keychain_" + service)
     }
     
     func delete(for service: String) {
@@ -50,5 +60,6 @@ final class KeychainHelper: Sendable {
             kSecAttrService as String: service
         ]
         SecItemDelete(query as CFDictionary)
+        UserDefaults.standard.removeObject(forKey: "fallback_keychain_" + service)
     }
 }
