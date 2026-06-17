@@ -73,8 +73,8 @@ struct StockSettingsView: View {
             .onAppear(perform: loadPlatforms)
             .sheet(item: Binding(
                 get: { 
-                    if let id = selectedPlatformId, let platform = platforms.first(where: { $0.id == id }) {
-                        return ActiveSheetPlatform(id: id, platform: platform)
+                    if let id = selectedPlatformId {
+                        return ActiveSheetPlatformId(id: id)
                     }
                     return nil
                 },
@@ -82,7 +82,7 @@ struct StockSettingsView: View {
                     selectedPlatformId = value?.id
                 }
             )) { wrapper in
-                platformDetailSheet(wrapper.platform)
+                platformDetailSheet(id: wrapper.id)
             }
             .alert("Подключение", isPresented: $showingAlert) {
                 Button("OK", role: .cancel) {}
@@ -123,9 +123,9 @@ struct StockSettingsView: View {
         }
     }
     
-    // MARK: - Detail Sheet Component
-    private func platformDetailSheet(_ platform: StockPlatform) -> some View {
-        let index = platforms.firstIndex(where: { $0.id == platform.id })!
+    private func platformDetailSheet(id: String) -> some View {
+        let index = platforms.firstIndex(where: { $0.id == id })!
+        let platform = platforms[index]
         
         return NavigationStack {
             ZStack {
@@ -208,6 +208,9 @@ struct StockSettingsView: View {
                     .font(.system(size: 14, weight: .bold))
                 }
             }
+        }
+        .onDisappear {
+            savePlatforms()
         }
     }
     
@@ -307,7 +310,6 @@ struct StockSettingsView: View {
 }
 
 // MARK: - Helper Models for Sheet Presentation
-struct ActiveSheetPlatform: Identifiable, Sendable {
+struct ActiveSheetPlatformId: Identifiable, Sendable {
     let id: String
-    let platform: StockPlatform
 }
