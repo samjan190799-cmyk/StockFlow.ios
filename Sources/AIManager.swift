@@ -82,12 +82,7 @@ final class AIManager: Sendable {
             throw NSError(domain: "AIManager", code: 500, userInfo: [NSLocalizedDescriptionKey: "Не удалось распарсить ответ Gemini."])
         }
         
-        // Parse inner JSON from the text
-        guard let textData = text.data(using: .utf8) else {
-            throw NSError(domain: "AIManager", code: 500, userInfo: [NSLocalizedDescriptionKey: "Ошибка кодирования ответа."])
-        }
-        
-        return try JSONDecoder().decode(AIResult.self, from: textData)
+        return try parseAIResult(from: text)
     }
     
     // MARK: - OpenAI Integration
@@ -144,10 +139,80 @@ final class AIManager: Sendable {
             throw NSError(domain: "AIManager", code: 500, userInfo: [NSLocalizedDescriptionKey: "Не удалось распарсить ответ OpenAI."])
         }
         
-        guard let textData = content.data(using: .utf8) else {
+        return try parseAIResult(from: content)
+    }
+    
+    // MARK: - Robust JSON Parser Helper
+    private func parseAIResult(from text: String) throws -> AIResult {
+        var cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Extract substring between the first '{' and the last '}' to strip any surrounding conversational text or markdown formatting
+        if let firstBrace = cleanText.firstIndex(of: "{"),
+           let lastBrace = cleanText.lastIndex(of: "}") {
+            cleanText = String(cleanText[firstBrace...lastBrace])
+        } else {
+            // Remove markdown block wraps if present (legacy fallback)
+            if cleanText.hasPrefix("```json") {
+                cleanText = String(cleanText.dropFirst("```json".count))
+            } else if cleanText.hasPrefix("```") {
+                cleanText = String(cleanText.dropFirst("```".count))
+            }
+            
+            if cleanText.hasSuffix("```") {
+                cleanText = String(cleanText.dropLast("```".count))
+            }
+            
+            cleanText = cleanText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        guard let textData = cleanText.data(using: .utf8) else {
             throw NSError(domain: "AIManager", code: 500, userInfo: [NSLocalizedDescriptionKey: "Ошибка кодирования ответа."])
         }
         
-        return try JSONDecoder().decode(AIResult.self, from: textData)
+        // 1. Try direct decoding first
+        do {
+            return try JSONDecoder().decode(AIResult.self, from: textData)
+        } catch {
+            // 2. If it fails, parse manually via JSONSerialization to extract case-insensitive or partial keys
+            guard let json = try? JSONSerialization.jsonObject(with: textData) as? [String: Any] else {
+                throw error
+            }
+            
+            // Look for title
+            let titleKeys = ["title", "Title", "TITLE", "name", "Name", "header", "Header"]
+            var title = ""
+            for key in titleKeys {
+                if let val = json[key] {
+                    title = "\(val)".trimmingCharacters(in: .whitespacesAndNewlines)
+                    break
+                }
+            }
+            
+            // Look for description
+            let descKeys = ["description", "Description", "DESCRIPTION", "desc", "Desc", "summary", "Summary"]
+            var description = ""
+            for key in descKeys {
+                if let val = json[key] {
+                    description = "\(val)".trimmingCharacters(in: .whitespacesAndNewlines)
+                    break
+                }
+            }
+            
+            // Look for keywords
+            let keywordKeys = ["keywords", "Keywords", "KEYWORDS", "tags", "Tags", "TAGS", "tag", "Tag"]
+            var keywords: [String] = []
+            for key in keywordKeys {
+                if let val = json[key] as? [String] {
+                    keywords = val.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    break
+                } else if let val = json[key] {
+                    let valStr = "\(val)"
+                    keywords = valStr.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                    break
+                }
+            }
+            
+            return AIResult(title: title, description: description, keywords: keywords)
+        }
     }
 }

@@ -66,6 +66,46 @@ struct StockPlatform: Identifiable, Codable, Sendable {
         case id, name, defaultHost, host, username, isEnabled
     }
     
+    init(id: String, name: String, defaultHost: String, host: String, username: String, passwordHash: String = "", isEnabled: Bool) {
+        self.id = id
+        self.name = name
+        self.defaultHost = defaultHost
+        self.host = host
+        self.username = username
+        self.passwordHash = passwordHash
+        self.isEnabled = isEnabled
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedId = (try? container.decode(String.self, forKey: .id)) ?? ""
+        self.id = decodedId
+        
+        // Find default platform matching this ID to use as fallback values
+        let defaultPlatform = StockPlatform.defaults.first(where: { $0.id == decodedId })
+        
+        self.name = (try? container.decode(String.self, forKey: .name)) ?? defaultPlatform?.name ?? ""
+        let defHost = (try? container.decode(String.self, forKey: .defaultHost)) ?? defaultPlatform?.defaultHost ?? ""
+        self.defaultHost = defHost
+        
+        let loadedHost = (try? container.decode(String.self, forKey: .host)) ?? ""
+        self.host = loadedHost.isEmpty ? (defaultPlatform?.host ?? defHost) : loadedHost
+        
+        self.username = (try? container.decode(String.self, forKey: .username)) ?? ""
+        self.passwordHash = ""
+        self.isEnabled = (try? container.decode(Bool.self, forKey: .isEnabled)) ?? false
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(defaultHost, forKey: .defaultHost)
+        try container.encode(host, forKey: .host)
+        try container.encode(username, forKey: .username)
+        try container.encode(isEnabled, forKey: .isEnabled)
+    }
+    
     static var defaults: [StockPlatform] {
         [
             StockPlatform(id: "adobe", name: "Adobe Stock", defaultHost: "sftp.contributor.adobestock.com", host: "sftp.contributor.adobestock.com", username: "", passwordHash: "", isEnabled: false),
