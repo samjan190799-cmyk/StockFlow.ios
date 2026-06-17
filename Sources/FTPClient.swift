@@ -17,27 +17,33 @@ class FTPClient {
         func readLine(timeout: TimeInterval = 10) async throws -> String {
             try await withThrowingTaskGroup(of: String.self) { group in
                 group.addTask {
-                    while true {
-                        if let newlineIndex = self.buffer.firstIndex(of: 10) { // 10 is '\n'
-                            let lineData = self.buffer.subdata(in: 0..<newlineIndex + 1)
-                            self.buffer.removeSubrange(0..<newlineIndex + 1)
-                            if let str = String(data: lineData, encoding: .utf8) {
-                                return str
-                            }
-                        }
-                        
-                        let chunk = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
-                            self.connection.receive(minimumIncompleteLength: 1, maximumLength: 1) { data, _, _, error in
-                                if let error = error {
-                                    continuation.resume(throwing: error)
-                                } else if let data = data {
-                                    continuation.resume(returning: data)
-                                } else {
-                                    continuation.resume(throwing: NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Соединение закрыто сервером"]))
+                    try await withTaskCancellationHandler {
+                        while true {
+                            try Task.checkCancellation()
+                            
+                            if let newlineIndex = self.buffer.firstIndex(of: 10) { // 10 is '\n'
+                                let lineData = self.buffer.subdata(in: 0..<newlineIndex + 1)
+                                self.buffer.removeSubrange(0..<newlineIndex + 1)
+                                if let str = String(data: lineData, encoding: .utf8) {
+                                    return str
                                 }
                             }
+                            
+                            let chunk = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+                                self.connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, error in
+                                    if let error = error {
+                                        continuation.resume(throwing: error)
+                                    } else if let data = data {
+                                        continuation.resume(returning: data)
+                                    } else {
+                                        continuation.resume(throwing: NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Соединение закрыто сервером"]))
+                                    }
+                                }
+                            }
+                            self.buffer.append(chunk)
                         }
-                        self.buffer.append(chunk)
+                    } onCancel: {
+                        self.connection.cancel()
                     }
                 }
                 
@@ -239,41 +245,46 @@ class FTPClient {
             let dataPort = p1 * 256 + p2
             
             // 8. Connect Data Channel (всегда plain TCP, так как мы отправили PROT C)
-            let dataConnection = NWConnection(
-                host: NWEndpoint.Host(dataIp),
-                port: NWEndpoint.Port(rawValue: UInt16(dataPort))!,
-                using: .tcp
-            )
-            dataConnection.start(queue: DispatchQueue.global())
-            try await waitForReady(connection: dataConnection)
-            
-            // 9. Send STOR on Control Channel
-            try await sendCommand(connection: controlConnection, cmd: "STOR \(filename)\r\n")
-            let storResp = try await reader.readLine()
-            guard storResp.hasPrefix("150") || storResp.hasPrefix("125") else {
-                dataConnection.cancel()
+            var dataConnection: NWConnection? = nil
+            do {
+                let conn = NWConnection(
+                    host: NWEndpoint.Host(dataIp),
+                    port: NWEndpoint.Port(rawValue: UInt16(dataPort))!,
+                    using: .tcp
+                )
+                dataConnection = conn
+                conn.start(queue: DispatchQueue.global())
+                try await waitForReady(connection: conn)
+                
+                // 9. Send STOR on Control Channel
+                try await sendCommand(connection: controlConnection, cmd: "STOR \(filename)\r\n")
+                let storResp = try await reader.readLine()
+                guard storResp.hasPrefix("150") || storResp.hasPrefix("125") else {
+                    conn.cancel()
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка начала передачи STOR: \(storResp)")
+                }
+                
+                // 10. Send bytes on Data Channel and Close it
+                try await send(connection: conn, data: data)
+                conn.cancel()
+                dataConnection = nil
+                
+                // 11. Read Transfer Complete on Control Channel
+                let completeResp = try await reader.readLine()
+                guard completeResp.hasPrefix("226") else {
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка завершения передачи: \(completeResp)")
+                }
+                
+                // 12. Send QUIT
+                try await sendCommand(connection: controlConnection, cmd: "QUIT\r\n")
                 controlConnection.cancel()
-                throw ftpError("Ошибка начала передачи STOR: \(storResp)")
-            }
-            
-            // 10. Send bytes on Data Channel and Close it
-            try await send(connection: dataConnection, data: data)
-            dataConnection.cancel()
-            
-            // 11. Read Transfer Complete on Control Channel
-            let completeResp = try await reader.readLine()
-            guard completeResp.hasPrefix("226") else {
+            } catch {
+                dataConnection?.cancel()
                 controlConnection.cancel()
-                throw ftpError("Ошибка завершения передачи: \(completeResp)")
+                throw error
             }
-            
-            // 12. Send QUIT
-            try await sendCommand(connection: controlConnection, cmd: "QUIT\r\n")
-            controlConnection.cancel()
-        } catch {
-            controlConnection.cancel()
-            throw error
-        }
     }
     
     // MARK: - Private Helpers
@@ -320,22 +331,38 @@ class FTPClient {
     private static func waitForReady(connection: NWConnection, timeout: TimeInterval = 10) async throws {
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                    connection.stateUpdateHandler = { state in
-                        switch state {
-                        case .ready:
-                            connection.stateUpdateHandler = nil
+                try await withTaskCancellationHandler {
+                    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                        let state = connection.state
+                        if state == .ready {
                             continuation.resume()
-                        case .failed(let error):
-                            connection.stateUpdateHandler = nil
+                            return
+                        } else if case .failed(let error) = state {
                             continuation.resume(throwing: error)
-                        case .cancelled:
-                            connection.stateUpdateHandler = nil
+                            return
+                        } else if state == .cancelled {
                             continuation.resume(throwing: ftpError("Соединение отменено"))
-                        default:
-                            break
+                            return
+                        }
+                        
+                        connection.stateUpdateHandler = { newState in
+                            switch newState {
+                            case .ready:
+                                connection.stateUpdateHandler = nil
+                                continuation.resume()
+                            case .failed(let error):
+                                connection.stateUpdateHandler = nil
+                                continuation.resume(throwing: error)
+                            case .cancelled:
+                                connection.stateUpdateHandler = nil
+                                continuation.resume(throwing: ftpError("Соединение отменено"))
+                            default:
+                                break
+                            }
                         }
                     }
+                } onCancel: {
+                    connection.cancel()
                 }
             }
             
