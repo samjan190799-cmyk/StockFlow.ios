@@ -27,7 +27,7 @@ class FTPClient {
                         }
                         
                         let chunk = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
-                            self.connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, error in
+                            self.connection.receive(minimumIncompleteLength: 1, maximumLength: 1) { data, _, _, error in
                                 if let error = error {
                                     continuation.resume(throwing: error)
                                 } else if let data = data {
