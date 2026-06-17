@@ -53,6 +53,11 @@ class FTPClient {
                     group.cancelAll()
                     return result
                 } catch {
+                    throw error
+                }
+                                                             }
+        }
+    }
           // MARK: - Test Connection
     static func testConnection(
         host: String,
