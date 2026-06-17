@@ -239,19 +239,13 @@ class QueueViewModel: ObservableObject {
                 continue
             }
             
-            // Re-map SFTP hostnames to plain FTP hostnames if possible, since FTPClient is plain FTP
-            var ftpHost = platform.host
-            if ftpHost.contains("sftp") {
-                ftpHost = ftpHost.replacingOccurrences(of: "sftp", with: "ftp")
-            } else if ftpHost.contains("ftps") {
-                ftpHost = ftpHost.replacingOccurrences(of: "ftps", with: "ftp")
-            }
-            
+            // FTPClient теперь сам определяет протокол по хосту (ftp/ftps/sftp)
+            // Передаём оригинальный host как есть
             do {
                 try await FTPClient.upload(
                     data: preparedData,
                     filename: photo.filename,
-                    host: ftpHost,
+                    host: platform.host,
                     port: 21,
                     username: platform.username,
                     password: password
@@ -777,3 +771,4 @@ struct FilterChip: View {
         }
     }
 }
+

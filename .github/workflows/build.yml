@@ -1,4 +1,4 @@
-name: Build SmartStock iOS App
+name: Build SmartStock iOS IPA
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Compile & Package Unsigned IPA
+    name: Build Unsigned IPA for AltStore
     runs-on: macos-14
 
     steps:
@@ -32,19 +32,21 @@ jobs:
           brew update
           brew install xcodegen
 
-      - name: Select Xcode Version
+      - name: Select Latest Xcode
         run: |
           LATEST_XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -n 1)
-          echo "Selecting $LATEST_XCODE"
+          echo "Using: $LATEST_XCODE"
           sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+          xcodebuild -version
 
       - name: Generate Xcode Project
         run: |
           xcodegen generate
 
-      - name: Build Application for Device
+      - name: Build for iOS Device (unsigned)
         run: |
-          xcodebuild -project SmartStock.xcodeproj \
+          xcodebuild \
+            -project SmartStock.xcodeproj \
             -scheme SmartStock \
             -destination 'generic/platform=iOS' \
             -configuration Release \
@@ -54,19 +56,49 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             VALIDATE_PRODUCT=NO \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
-            build
+            SWIFT_OPTIMIZATION_LEVEL="-O" \
+            build 2>&1 | xcpretty || true
+
+          # Verify .app was built
+          ls build/Build/Products/Release-iphoneos/
 
       - name: Package as IPA
         run: |
           mkdir -p build/Payload
-          cp -r build/Build/Products/Release-iphoneos/SmartStock.app build/Payload/
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -name "*.app" | head -1)
+          echo "App path: $APP_PATH"
+          cp -r "$APP_PATH" build/Payload/SmartStock.app
           cd build
-          zip -r SmartStock.ipa Payload
+          zip -r SmartStock.ipa Payload/
+          echo "IPA size: $(du -h SmartStock.ipa | cut -f1)"
 
-      - name: Upload Unsigned IPA Artifact
+      - name: Upload IPA as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SmartStock-Unsigned
+          name: SmartStock-Unsigned-IPA
           path: build/SmartStock.ipa
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "SmartStock v1.6 (Build ${{ github.run_number }})"
+          body: |
+            ## SmartStock iOS IPA
+
+            **Как установить через AltStore:**
+            1. Скачай `SmartStock.ipa` ниже
+            2. Открой AltStore на iPhone → "My Apps" → "+" → выбери IPA
+            3. Готово!
+
+            **Изменения:**
+            - Исправлена ошибка NWError 53 при загрузке на Shutterstock
+            - FTPClient переписан на URLSession (стабильнее, с retry)
+          files: build/SmartStock.ipa
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
