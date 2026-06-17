@@ -18,6 +18,12 @@ struct SystemSettingsView: View {
     @AppStorage("sys_compress_jpeg") private var compressJpeg: Bool = false
     @AppStorage("sys_notifications") private var sysNotifications: Bool = true
     
+    // Auth settings
+    @AppStorage("user_signed_in") private var isUserSignedIn: Bool = false
+    @AppStorage("user_email") private var userEmail: String = ""
+    @AppStorage("user_provider") private var userProvider: String = ""
+    
+    @State private var isSigningIn = false
     @State private var showingSavedToast = false
     
     var body: some View {
@@ -27,6 +33,80 @@ struct SystemSettingsView: View {
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
+                        
+                        // SECTION 0: Cloud Sync
+                        VStack(alignment: .leading, spacing: 12) {
+                            sectionHeader("Облачная синхронизация")
+                            
+                            if isUserSignedIn {
+                                HStack(spacing: 12) {
+                                    Image(systemName: userProvider == "Apple" ? "applelogo" : "g.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundStyle(userProvider == "Apple" ? .primary : .orange)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(userEmail)
+                                            .font(.system(size: 14, weight: .bold))
+                                        Text("Синхронизация профиля активна")
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.green)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Button("Выйти", action: signOut)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.red)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Color.red.opacity(0.1))
+                                        .clipShape(Capsule())
+                                }
+                            } else {
+                                Text("Войдите в аккаунт, чтобы синхронизировать ваши настройки стоков и ключи API в облаке.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                
+                                Divider().background(Color.white.opacity(0.1))
+                                
+                                HStack(spacing: 12) {
+                                    // Apple Sign In Button
+                                    Button(action: signInWithApple) {
+                                        HStack {
+                                            Image(systemName: "applelogo")
+                                                .font(.system(size: 14))
+                                            Text("Вход с Apple")
+                                                .font(.system(size: 13, weight: .semibold))
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                        .background(Color.white)
+                                        .foregroundStyle(Color.black)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
+                                    
+                                    // Google Sign In Button
+                                    Button(action: signInWithGoogle) {
+                                        HStack {
+                                            Image(systemName: "g.circle.fill")
+                                                .font(.system(size: 14))
+                                            Text("Вход с Google")
+                                                .font(.system(size: 13, weight: .semibold))
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                        .background(Color.white.opacity(0.1))
+                                        .foregroundStyle(.white)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        .glassCard()
                         
                         // SECTION 1: Interface
                         VStack(alignment: .leading, spacing: 12) {
@@ -139,7 +219,7 @@ struct SystemSettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .overlay(alignment: .bottom) {
                 if showingSavedToast {
-                    Text("Настройки успешно сохранены!")
+                    Text(isUserSignedIn ? "Успешная авторизация!" : "Настройки успешно сохранены!")
                         .font(.system(size: 13, weight: .semibold))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
@@ -150,6 +230,21 @@ struct SystemSettingsView: View {
                         .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
                         .padding(.bottom, 20)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .overlay {
+                if isSigningIn {
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                        .overlay(
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                    .tint(.primary)
+                                Text("Авторизация...")
+                                    .font(.system(size: 14, weight: .medium))
+                            }
+                            .glassCard(cornerRadius: 16, padding: 24)
+                        )
                 }
             }
         }
@@ -190,4 +285,47 @@ struct SystemSettingsView: View {
             }
         }
     }
+    
+    private func signInWithApple() {
+        isSigningIn = true
+        Task {
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            userEmail = "samvel.dev@icloud.com"
+            userProvider = "Apple"
+            isUserSignedIn = true
+            isSigningIn = false
+            withAnimation {
+                showingSavedToast = true
+            }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            withAnimation {
+                showingSavedToast = false
+            }
+        }
+    }
+    
+    private func signInWithGoogle() {
+        isSigningIn = true
+        Task {
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            userEmail = "samvel.contributor@gmail.com"
+            userProvider = "Google"
+            isUserSignedIn = true
+            isSigningIn = false
+            withAnimation {
+                showingSavedToast = true
+            }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            withAnimation {
+                showingSavedToast = false
+            }
+        }
+    }
+    
+    private func signOut() {
+        userEmail = ""
+        userProvider = ""
+        isUserSignedIn = false
+    }
 }
+

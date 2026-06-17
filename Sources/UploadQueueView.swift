@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import ImageIO
 
 // MARK: - Queue View Model (MainActor Isolated, Safe Concurrency)
 @MainActor
@@ -145,10 +146,19 @@ class QueueViewModel: ObservableObject {
         triggerToast("Загрузка файла \(photos[idx].filename)...")
         
         Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            if let index = self.photos.firstIndex(where: { $0.id == id }) {
-                self.photos[index].status = .success
-                self.triggerToast("Файл \(self.photos[index].filename) успешно загружен на стоки!")
+            do {
+                let photo = self.photos[idx]
+                try await performRealUpload(for: photo)
+                
+                if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                    self.photos[index].status = .success
+                    self.triggerToast("Файл \(self.photos[index].filename) успешно загружен на стоки!")
+                }
+            } catch {
+                if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                    self.photos[index].status = .error
+                    self.triggerToast("Ошибка выгрузки \(self.photos[index].filename): \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -174,20 +184,110 @@ class QueueViewModel: ObservableObject {
             }
             
             Task {
-                let sleepTime = Double.random(in: 1.0...2.5)
-                try? await Task.sleep(nanoseconds: UInt64(sleepTime * 1_000_000_000))
-                if let index = self.photos.firstIndex(where: { $0.id == pId }) {
-                    self.photos[index].status = .success
-                    self.triggerToast("Файл \(self.photos[index].filename) успешно загружен на стоки!")
+                do {
+                    guard let currentPhoto = self.photos.first(where: { $0.id == pId }) else { return }
+                    try await performRealUpload(for: currentPhoto)
                     
-                    let remaining = self.photos.filter { $0.status == .uploading }.count
-                    if remaining == 0 {
-                        self.triggerToast("Все файлы успешно загружены!")
+                    if let index = self.photos.firstIndex(where: { $0.id == pId }) {
+                        self.photos[index].status = .success
+                        self.triggerToast("Файл \(self.photos[index].filename) успешно загружен на стоки!")
                     }
+                } catch {
+                    if let index = self.photos.firstIndex(where: { $0.id == pId }) {
+                        self.photos[index].status = .error
+                        self.triggerToast("Ошибка выгрузки \(self.photos[index].filename): \(error.localizedDescription)")
+                    }
+                }
+                
+                let remaining = self.photos.filter { $0.status == .uploading }.count
+                if remaining == 0 {
+                    self.triggerToast("Все файлы обработаны!")
                 }
             }
         }
     }
+    
+    private func performRealUpload(for photo: PhotoMetadata) async throws {
+        guard let data = photo.imageData else {
+            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Изображение пустое"])
+        }
+        
+        // Embed metadata (Title, Description, Keywords) into the image bytes
+        let preparedData = writeMetadata(to: data, title: photo.title, description: photo.description, keywords: photo.keywords) ?? data
+        
+        // Load active platforms
+        guard let platformsData = UserDefaults.standard.data(forKey: "stock_platforms"),
+              let platforms = try? JSONDecoder().decode([StockPlatform].self, from: platformsData) else {
+            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Настройки стоков не найдены"])
+        }
+        
+        let activePlatforms = platforms.filter { $0.isEnabled }
+        guard !activePlatforms.isEmpty else {
+            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Нет активных стоков"])
+        }
+        
+        // Upload to each active platform
+        for platform in activePlatforms {
+            let serviceKey = "com.samvel.smartstock.platform.\(platform.id)"
+            let password = KeychainHelper.shared.read(for: serviceKey) ?? ""
+            
+            guard !platform.username.isEmpty, !password.isEmpty else {
+                continue
+            }
+            
+            // Re-map SFTP hostnames to plain FTP hostnames if possible, since FTPClient is plain FTP
+            var ftpHost = platform.host
+            if ftpHost.contains("sftp") {
+                ftpHost = ftpHost.replacingOccurrences(of: "sftp", with: "ftp")
+            } else if ftpHost.contains("ftps") {
+                ftpHost = ftpHost.replacingOccurrences(of: "ftps", with: "ftp")
+            }
+            
+            try await FTPClient.upload(
+                data: preparedData,
+                filename: photo.filename,
+                host: ftpHost,
+                port: 21,
+                username: platform.username,
+                password: password
+            )
+        }
+    }
+    
+    private func writeMetadata(to imageData: Data, title: String, description: String, keywords: [String]) -> Data? {
+        guard let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return nil }
+        guard let type = CGImageSourceGetType(source) else { return nil }
+        
+        let destinationData = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(destinationData, type, 1, nil) else { return nil }
+        
+        var properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]) ?? [:]
+        
+        // IPTC Dictionary
+        var iptc = (properties[kCGImagePropertyIPTCDictionary] as? [CFString: Any]) ?? [:]
+        iptc[kCGImagePropertyIPTCObjectName] = title
+        iptc[kCGImagePropertyIPTCCaptionAbstract] = description
+        iptc[kCGImagePropertyIPTCKeywords] = keywords
+        properties[kCGImagePropertyIPTCDictionary] = iptc
+        
+        // TIFF Dictionary
+        var tiff = (properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]) ?? [:]
+        tiff[kCGImagePropertyTIFFImageDescription] = description
+        properties[kCGImagePropertyTIFFDictionary] = tiff
+        
+        // EXIF Dictionary
+        var exif = (properties[kCGImagePropertyExifDictionary] as? [CFString: Any]) ?? [:]
+        exif[kCGImagePropertyExifUserComment] = description
+        properties[kCGImagePropertyExifDictionary] = exif
+        
+        CGImageDestinationAddImageFromSource(destination, source, 0, properties as CFDictionary)
+        
+        if CGImageDestinationFinalize(destination) {
+            return destinationData as Data
+        }
+        return nil
+    }
+
     
     private func checkStockCredentials() -> Bool {
         if let data = UserDefaults.standard.data(forKey: "stock_platforms"),
