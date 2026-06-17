@@ -130,9 +130,8 @@ struct UploadQueueView: View {
                     if filteredPhotos.isEmpty {
                         Spacer()
                         VStack(spacing: 14) {
-                            Image(systemName: "photo.on.rectangle.angled")
-                                .font(.system(size: 44))
-                                .foregroundStyle(.secondary)
+                            SmartStockLogoView(size: 76)
+                                .padding(.bottom, 6)
                             Text("Очередь пуста")
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(.primary)

@@ -26,6 +26,7 @@ targets:
       base:
         SWIFT_VERSION: "5.9"
         PRODUCT_NAME: SmartStock
+        ASSETCATALOG_COMPILER_PRIMARY_APPICON_SET_NAME: AppIcon
         DEVELOPMENT_TEAM: ""
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_REQUIRED: "NO"
