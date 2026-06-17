@@ -261,24 +261,27 @@ class QueueViewModel: ObservableObject {
         let destinationData = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(destinationData, type, 1, nil) else { return nil }
         
-        var properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]) ?? [:]
+        var properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]) ?? [:]
         
         // IPTC Dictionary
-        var iptc = (properties[kCGImagePropertyIPTCDictionary] as? [CFString: Any]) ?? [:]
-        iptc[kCGImagePropertyIPTCObjectName] = title
-        iptc[kCGImagePropertyIPTCCaptionAbstract] = description
-        iptc[kCGImagePropertyIPTCKeywords] = keywords
-        properties[kCGImagePropertyIPTCDictionary] = iptc
+        let iptcKey = kCGImagePropertyIPTCDictionary as String
+        var iptc = (properties[iptcKey] as? [String: Any]) ?? [:]
+        iptc[kCGImagePropertyIPTCObjectName as String] = title
+        iptc[kCGImagePropertyIPTCCaptionAbstract as String] = description
+        iptc[kCGImagePropertyIPTCKeywords as String] = keywords
+        properties[iptcKey] = iptc
         
         // TIFF Dictionary
-        var tiff = (properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]) ?? [:]
-        tiff[kCGImagePropertyTIFFImageDescription] = description
-        properties[kCGImagePropertyTIFFDictionary] = tiff
+        let tiffKey = kCGImagePropertyTIFFDictionary as String
+        var tiff = (properties[tiffKey] as? [String: Any]) ?? [:]
+        tiff[kCGImagePropertyTIFFImageDescription as String] = description
+        properties[tiffKey] = tiff
         
         // EXIF Dictionary
-        var exif = (properties[kCGImagePropertyExifDictionary] as? [CFString: Any]) ?? [:]
-        exif[kCGImagePropertyExifUserComment] = description
-        properties[kCGImagePropertyExifDictionary] = exif
+        let exifKey = kCGImagePropertyExifDictionary as String
+        var exif = (properties[exifKey] as? [String: Any]) ?? [:]
+        exif[kCGImagePropertyExifUserComment as String] = description
+        properties[exifKey] = exif
         
         CGImageDestinationAddImageFromSource(destination, source, 0, properties as CFDictionary)
         

@@ -37,7 +37,7 @@ class FTPClient {
     }
     
     static func upload(data: Data, filename: String, host: String, port: Int = 21, username: String, password: String) async throws {
-        let controlConnection = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: UInt16(port))!, using: .tcp)
+        let controlConnection = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: UInt16(port)), using: .tcp)
         controlConnection.start(queue: .global())
         
         try await waitForReady(connection: controlConnection)
@@ -93,7 +93,7 @@ class FTPClient {
             throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Не удалось распарсить ответ PASV: \(pasvResp)"])
         }
         
-        let components = pasvResp[range].components(separatedBy: ",")
+        let components = String(pasvResp[range]).components(separatedBy: ",")
         guard components.count == 6 else {
             controlConnection.cancel()
             throw NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Некорректный формат адреса PASV"])
@@ -107,7 +107,7 @@ class FTPClient {
         let dataPort = p1 * 256 + p2
         
         // 6. Connect Data Channel
-        let dataConnection = NWConnection(host: NWEndpoint.Host(dataIp), port: NWEndpoint.Port(rawValue: UInt16(dataPort))!, using: .tcp)
+        let dataConnection = NWConnection(host: NWEndpoint.Host(dataIp), port: NWEndpoint.Port(rawValue: UInt16(dataPort)), using: .tcp)
         dataConnection.start(queue: .global())
         try await waitForReady(connection: dataConnection)
         
