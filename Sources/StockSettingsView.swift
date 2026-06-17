@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct StockSettingsView: View {
     @State private var platforms: [StockPlatform] = []
     @State private var selectedPlatformId: String? = nil
@@ -249,7 +250,8 @@ struct StockSettingsView: View {
         }
         
         isVerifying = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
             isVerifying = false
             alertMessage = "Успешное соединение с сервером \(platform.host)! Аутентификация пройдена."
             showingAlert = true
@@ -258,7 +260,7 @@ struct StockSettingsView: View {
 }
 
 // MARK: - Helper Models for Sheet Presentation
-struct ActiveSheetPlatform: Identifiable {
+struct ActiveSheetPlatform: Identifiable, Sendable {
     let id: String
     let platform: StockPlatform
 }

@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 // MARK: - AI metadata screen
+@MainActor
 struct AIMetadataView: View {
     @State private var photos: [PhotoMetadata]
     @State private var currentIndex: Int
@@ -257,44 +258,37 @@ struct AIMetadataView: View {
         }
         
         isRegenerating = true
+        let curIdx = currentIndex
         
         guard !apiKey.trimmingCharacters(in: .whitespaces).isEmpty else {
             // Mock fallback
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                photos[currentIndex].title = "Драматичное закатное небо над горой Арарат (Демо)"
-                photos[currentIndex].keywords = ["Арарат", "гора", "закат", "Армения", "пейзаж", "природа", "демо"]
-                photos[currentIndex].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
-                isRegenerating = false
+            Task {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                self.photos[curIdx].title = "Драматичное закатное небо над горой Арарат (Демо)"
+                self.photos[curIdx].keywords = ["Арарат", "гора", "закат", "Армения", "пейзаж", "природа", "демо"]
+                self.photos[curIdx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
+                self.isRegenerating = false
             }
             return
         }
         
-        let sendablePhotos = SendableBinding(binding: $photos)
-        let curIdx = currentIndex
+        let data = photos[curIdx].imageData ?? Data()
         
         Task {
             do {
-                let data = await MainActor.run { sendablePhotos.binding.wrappedValue[curIdx].imageData ?? Data() }
                 let result = try await AIManager.shared.analyzePhoto(
                     imageData: data,
                     customPrompt: customPrompt,
                     provider: provider,
                     apiKey: apiKey
                 )
-                await MainActor.run {
-                    let binding = sendablePhotos.binding
-                    binding.wrappedValue[curIdx].title = result.title
-                    binding.wrappedValue[curIdx].description = result.description
-                    binding.wrappedValue[curIdx].keywords = result.keywords
-                    isRegenerating = false
-                }
+                self.photos[curIdx].title = result.title
+                self.photos[curIdx].description = result.description
+                self.photos[curIdx].keywords = result.keywords
+                self.isRegenerating = false
             } catch {
-                let errString = error.localizedDescription
-                await MainActor.run {
-                    let binding = sendablePhotos.binding
-                    binding.wrappedValue[curIdx].description = "Ошибка: \(errString)"
-                    isRegenerating = false
-                }
+                self.photos[curIdx].description = "Ошибка: \(error.localizedDescription)"
+                self.isRegenerating = false
             }
         }
     }

@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 // MARK: - Photo Status
-enum PhotoStatus: String, Codable, CaseIterable {
+enum PhotoStatus: String, Codable, CaseIterable, Sendable {
     case new = "Новый"
     case aiAnalyzing = "ИИ Анализ"
     case ready = "Готов к отправке"
@@ -24,7 +24,7 @@ enum PhotoStatus: String, Codable, CaseIterable {
 }
 
 // MARK: - Photo Metadata Model
-struct PhotoMetadata: Identifiable {
+struct PhotoMetadata: Identifiable, Sendable {
     let id = UUID()
     var filename: String
     var fileSize: String
@@ -44,7 +44,7 @@ struct PhotoMetadata: Identifiable {
 }
 
 // MARK: - AI Provider
-enum AIProvider: String, CaseIterable, Identifiable {
+enum AIProvider: String, CaseIterable, Identifiable, Sendable {
     case gemini = "Gemini AI (Рекомендуется, быстрый/экономичный)"
     case openai = "OpenAI API"
     case claude = "Claude (Anthropic)"
@@ -53,7 +53,7 @@ enum AIProvider: String, CaseIterable, Identifiable {
 }
 
 // MARK: - Photostock Definition
-struct StockPlatform: Identifiable, Codable {
+struct StockPlatform: Identifiable, Codable, Sendable {
     let id: String
     let name: String
     let defaultHost: String

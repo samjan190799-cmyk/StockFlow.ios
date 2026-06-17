@@ -7,7 +7,7 @@ struct AIResult: Codable {
     var keywords: [String]
 }
 
-class AIManager {
+final class AIManager: Sendable {
     static let shared = AIManager()
     private init() {}
     

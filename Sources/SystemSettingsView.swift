@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct SystemSettingsView: View {
     // Left Column settings
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
@@ -182,7 +183,8 @@ struct SystemSettingsView: View {
         withAnimation {
             showingSavedToast = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             withAnimation {
                 showingSavedToast = false
             }

@@ -30,7 +30,8 @@ class QueueViewModel: ObservableObject {
             photos[idx].status = .aiAnalyzing
             triggerToast("Запущен демо-анализ (ключ API не введен)")
             
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            Task {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
                 if self.photos.count > idx {
                     self.photos[idx].title = "Драматичный закат в горах (Демо)"
                     self.photos[idx].keywords = ["закат", "облака", "небо", "горы", "пейзаж", "демо"]
@@ -143,7 +144,8 @@ class QueueViewModel: ObservableObject {
         photos[idx].status = .uploading
         triggerToast("Загрузка файла \(photos[idx].filename)...")
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
             if self.photos.count > idx {
                 self.photos[idx].status = .success
                 self.triggerToast("Файл \(self.photos[idx].filename) успешно загружен на стоки!")
@@ -168,7 +170,9 @@ class QueueViewModel: ObservableObject {
             if photos[i].status == .ready {
                 photos[i].status = .uploading
                 let idx = i
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double.random(in: 1.0...2.5)) {
+                Task {
+                    let sleepTime = Double.random(in: 1.0...2.5)
+                    try? await Task.sleep(nanoseconds: UInt64(sleepTime * 1_000_000_000))
                     if self.photos.count > idx {
                         self.photos[idx].status = .success
                         if idx == self.photos.count - 1 || i == self.photos.count - 1 {
@@ -197,12 +201,17 @@ class QueueViewModel: ObservableObject {
         photos.remove(atOffsets: offsets)
     }
     
+    func addPhoto(_ photo: PhotoMetadata) {
+        photos.append(photo)
+    }
+    
     func triggerToast(_ message: String) {
         toastMessage = message
         withAnimation {
             showToast = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+        Task {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             if self.toastMessage == message {
                 withAnimation {
                     self.showToast = false
@@ -213,12 +222,13 @@ class QueueViewModel: ObservableObject {
 }
 
 // MARK: - Upload Queue View
+@MainActor
 struct UploadQueueView: View {
     @ObservedObject var viewModel: QueueViewModel
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var searchText = ""
     @State private var selectedFilter: PhotoStatus? = nil
-    @State private var editingPhotoId: UUID? = nil
+    @State private var editingPhoto: ActiveSheetPhoto? = nil
     
     var filteredPhotos: [PhotoMetadata] {
         viewModel.photos.filter { photo in
@@ -331,7 +341,11 @@ struct UploadQueueView: View {
                                     photoRow(photo)
                                         .glassCard(cornerRadius: 12, padding: 10)
                                         .onTapGesture {
-                                            editingPhotoId = photo.id
+                                            editingPhoto = ActiveSheetPhoto(
+                                                id: photo.id,
+                                                photos: viewModel.photos,
+                                                index: viewModel.photos.firstIndex(where: { $0.id == photo.id }) ?? 0
+                                            )
                                         }
                                 }
                             }
@@ -409,30 +423,20 @@ struct UploadQueueView: View {
             }
             .navigationTitle("SmartStock")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(item: Binding(
-                get: { 
-                    if let id = editingPhotoId, let index = viewModel.photos.firstIndex(where: { $0.id == id }) {
-                        return ActiveSheetPhoto(id: id, photos: viewModel.photos, index: index)
-                    }
-                    return nil
-                },
-                set: { value in
-                    editingPhotoId = value?.id
-                }
-            )) { wrapper in
+            .sheet(item: $editingPhoto) { wrapper in
                 NavigationStack {
-                    AIMetadataView(photos: wrapper.photos, currentIndex: wrapper.index) { updatedPhotos in
+                    AIMetadataView(photos: wrapper.photos, currentIndex: wrapper.index) { @MainActor updatedPhotos in
                         for updated in updatedPhotos {
                             if let idx = viewModel.photos.firstIndex(where: { $0.id == updated.id }) {
                                 viewModel.photos[idx] = updated
                             }
                         }
-                        editingPhotoId = nil
+                        editingPhoto = nil
                     }
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
                             Button("Закрыть") {
-                                editingPhotoId = nil
+                                editingPhoto = nil
                             }
                         }
                     }
@@ -570,6 +574,7 @@ struct UploadQueueView: View {
     
     // MARK: - Load Photos Logic
     private func loadSelectedPhotos(from items: [PhotosPickerItem]) {
+        let vm = viewModel
         for item in items {
             item.loadTransferable(type: Data.self) { result in
                 switch result {
@@ -590,8 +595,8 @@ struct UploadQueueView: View {
                             imageData: data
                         )
                         
-                        DispatchQueue.main.async {
-                            self.viewModel.photos.append(newPhoto)
+                        Task {
+                            await vm.addPhoto(newPhoto)
                         }
                     }
                 case .failure(let error):
@@ -601,4 +606,11 @@ struct UploadQueueView: View {
         }
         selectedItems = []
     }
+}
+
+// MARK: - Helper Models for Sheet Presentation
+struct ActiveSheetPhoto: Identifiable, Sendable {
+    let id: UUID
+    let photos: [PhotoMetadata]
+    let index: Int
 }
