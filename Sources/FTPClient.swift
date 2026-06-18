@@ -547,34 +547,6 @@ class FTPESFramer: NWProtocolFramerImplementation {
     static let label = "FTPESFramer"
     static let definition = NWProtocolFramer.Definition(implementation: FTPESFramer.self)
     
-    required init(framer: NWProtocolFramer.Instance) {}
-    
-    func start(framer: NWProtocolFramer.Instance) -> NWProtocolFramer.StartResult {
-        return .ready
-    }
-    
-    func handleInput(framer: NWProtocolFramer.Instance) -> Int {
-        while true {
-            var parsedData: Data? = nil
-            let success = framer.parseInput(minimumIncompleteLength: 1, maximumLength: 65536) { buffer, _ in
-                guard let buffer = buffer, buffer.count > 0 else { return 0 }
-                parsedData = Data(buffer)
-                return buffer.count
-            }
-            guard success, let data = parsedData else {
-                return 1
-            }
-            
-            let message = NWProtocolFramer.Message(definition: FTPESFramer.definition)
-            _ = framer.deliverInput(data: data, message: message, isComplete: true)
-        }
-    }
-    
-// MARK: - FTPES (Explicit TLS) Framer
-class FTPESFramer: NWProtocolFramerImplementation {
-    static let label = "FTPESFramer"
-    static let definition = NWProtocolFramer.Definition(implementation: FTPESFramer.self)
-    
     enum State {
         case waitingForBanner
         case waitingForAuthTLS
