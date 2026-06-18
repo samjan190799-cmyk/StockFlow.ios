@@ -622,7 +622,7 @@ class FTPESFramer: NWProtocolFramerImplementation {
         if message["upgradeTLS"] as? Bool == true {
             let tlsOptions = NWProtocolTLS.Options()
             if let peerName = message["peerName"] as? String {
-                sec_protocol_options_set_peer_name(tlsOptions.securityProtocolOptions, peerName)
+                sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, peerName)
             }
             sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
                 completionHandler(true)
