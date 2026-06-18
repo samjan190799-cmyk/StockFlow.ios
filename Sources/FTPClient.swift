@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import Security
+
 // MARK: - FTPClient
 // Реализация нативного FTP/FTPS-клиента через сокеты NWConnection.
 // Решает проблему неработающего URLSession FTP на iOS 16+.
@@ -53,9 +54,10 @@ class FTPClient {
                     group.cancelAll()
                     return result
                 } catch {
+                    group.cancelAll()
                     throw error
                 }
-                                                             }
+            }
         }
     }
           // MARK: - Test Connection
@@ -274,14 +276,14 @@ class FTPClient {
                 throw ftpError("Ошибка авторизации: \(userResp)")
             }
             
-            // 5. Send PBSZ and PROT (устанавливаем PROT C — незашифрованный канал данных)
-            // Это решает проблему отсутствия TLS Session Resumption в NWConnection (ошибка NWError 53)
+            // 5. Send PBSZ and PROT (устанавливаем PROT P — защищенный канал данных)
+            // Требуется большинством стоков (включая Shutterstock) для безопасной передачи файлов
             if isTLS {
                 do {
                     try await sendCommand(connection: controlConnection, cmd: "PBSZ 0\r\n")
                     _ = try await reader.readLine()
                     
-                    try await sendCommand(connection: controlConnection, cmd: "PROT C\r\n")
+                    try await sendCommand(connection: controlConnection, cmd: "PROT P\r\n")
                     _ = try await reader.readLine()
                 } catch {
                     throw ftpError("Ошибка при настройке параметров защиты (PBSZ/PROT): \(error.localizedDescription)")
@@ -346,11 +348,26 @@ class FTPClient {
             }
             let dataPort = p1 * 256 + p2
             
-            // 8. Connect Data Channel (всегда plain TCP, так как мы отправили PROT C)
+            // 8. Connect Data Channel (используем TLS, если соединение защищено)
+            let dataParameters: NWParameters
+            if isTLS {
+                let tlsOptions = NWProtocolTLS.Options()
+                sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
+                    completionHandler(true)
+                }, DispatchQueue.global())
+                
+                // Включаем возобновление TLS-сессий для обхода ошибок TLS Session Resumption, если сервер требует
+                sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
+                
+                dataParameters = NWParameters(tls: tlsOptions)
+            } else {
+                dataParameters = .tcp
+            }
+            
             let conn = NWConnection(
                 host: NWEndpoint.Host(dataIp),
                 port: NWEndpoint.Port(rawValue: UInt16(dataPort))!,
-                using: .tcp
+                using: dataParameters
             )
             dataConnection = conn
             conn.start(queue: DispatchQueue.global())
