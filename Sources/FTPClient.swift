@@ -613,12 +613,13 @@ class FTPESFramer: NWProtocolFramerImplementation {
                 parsedCount = buffer.count
                 return buffer.count
             }
-            guard success && parsedCount > 0 else { break }
+            guard success && parsedCount > 0 else {
+                return 1
+            }
             
             let message = NWProtocolFramer.Message(definition: FTPESFramer.definition)
             _ = framer.deliverInputNoCopy(length: parsedCount, message: message, isComplete: true)
         }
-        return 0
     }
     
     func handleOutput(framer: NWProtocolFramer.Instance, message: NWProtocolFramer.Message, messageLength: Int, isComplete: Bool) {
