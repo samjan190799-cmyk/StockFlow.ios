@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+
 
 // MARK: - Premium Color Palette
 struct AppleTheme {
@@ -42,9 +44,12 @@ extension Color {
     }
 }
 
-// MARK: - Liquid Ambient Background (Fixed Layout)
+// MARK: - Liquid Ambient Background (Fixed Layout with Drifting Blobs)
 struct LiquidBackgroundView: View {
     @State private var animateGlow = false
+    @State private var driftOffset1 = CGSize.zero
+    @State private var driftOffset2 = CGSize.zero
+    @State private var driftOffset3 = CGSize.zero
     
     var body: some View {
         ZStack {
@@ -59,7 +64,7 @@ struct LiquidBackgroundView: View {
                     .frame(width: 300, height: 300)
                     .scaleEffect(animateGlow ? 1.2 : 0.85)
                     .blur(radius: 80)
-                    .offset(x: -80, y: -120)
+                    .offset(x: -80 + driftOffset1.width, y: -120 + driftOffset1.height)
                 
                 // Blue blob center-right
                 Circle()
@@ -67,7 +72,7 @@ struct LiquidBackgroundView: View {
                     .frame(width: 320, height: 320)
                     .scaleEffect(animateGlow ? 0.85 : 1.2)
                     .blur(radius: 90)
-                    .offset(x: 100, y: -20)
+                    .offset(x: 100 + driftOffset2.width, y: -20 + driftOffset2.height)
                 
                 // Pink blob bottom-left
                 Circle()
@@ -75,7 +80,7 @@ struct LiquidBackgroundView: View {
                     .frame(width: 290, height: 290)
                     .scaleEffect(animateGlow ? 1.15 : 0.9)
                     .blur(radius: 85)
-                    .offset(x: -60, y: 160)
+                    .offset(x: -60 + driftOffset3.width, y: 160 + driftOffset3.height)
             }
             .allowsHitTesting(false)
             .frame(maxWidth: .infinity, maxHeight: .infinity) // Lock to screen bounds
@@ -85,9 +90,19 @@ struct LiquidBackgroundView: View {
             withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) {
                 animateGlow.toggle()
             }
+            withAnimation(.easeInOut(duration: 14).repeatForever(autoreverses: true)) {
+                driftOffset1 = CGSize(width: 35, height: -25)
+            }
+            withAnimation(.easeInOut(duration: 17).repeatForever(autoreverses: true)) {
+                driftOffset2 = CGSize(width: -45, height: 35)
+            }
+            withAnimation(.easeInOut(duration: 12).repeatForever(autoreverses: true)) {
+                driftOffset3 = CGSize(width: 25, height: -35)
+            }
         }
     }
 }
+
 
 // MARK: - Glassmorphism View Modifier
 struct GlassModifier: ViewModifier {
@@ -178,3 +193,35 @@ struct SmartStockLogoView: View {
 struct SendableBinding<Value>: @unchecked Sendable {
     let binding: Binding<Value>
 }
+
+// MARK: - Premium Tactile Haptic Helper
+public struct HapticHelper {
+    public static func trigger(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        let generator = UIImpactFeedbackGenerator(style: style)
+        generator.prepare()
+        generator.impactOccurred()
+    }
+    
+    public static func selection() {
+        let generator = UISelectionFeedbackGenerator()
+        generator.prepare()
+        generator.selectionChanged()
+    }
+    
+    public static func notification(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(type)
+    }
+}
+
+// MARK: - Elastic Premium Button Style
+public struct PremiumButtonStyle: ButtonStyle {
+    public init() {}
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+

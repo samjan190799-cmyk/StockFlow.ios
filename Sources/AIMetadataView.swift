@@ -55,7 +55,10 @@ struct AIMetadataView: View {
 
     private var photoNavigator: some View {
         HStack(spacing: 12) {
-            Button(action: goToPrevious) {
+            Button(action: {
+                HapticHelper.trigger(.light)
+                goToPrevious()
+            }) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.primary)
@@ -64,6 +67,7 @@ struct AIMetadataView: View {
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
             }
+            .buttonStyle(PremiumButtonStyle())
             .disabled(currentIndex == 0)
             .opacity(currentIndex == 0 ? 0.3 : 1.0)
 
@@ -96,7 +100,10 @@ struct AIMetadataView: View {
 
             Spacer()
 
-            Button(action: goToNext) {
+            Button(action: {
+                HapticHelper.trigger(.light)
+                goToNext()
+            }) {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.primary)
@@ -105,6 +112,7 @@ struct AIMetadataView: View {
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
             }
+            .buttonStyle(PremiumButtonStyle())
             .disabled(currentIndex == photos.count - 1)
             .opacity(currentIndex == photos.count - 1 ? 0.3 : 1.0)
         }
@@ -118,17 +126,19 @@ struct AIMetadataView: View {
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                 Spacer()
-                Button(action: regenerate) {
+                Button(action: {
+                    HapticHelper.trigger(.medium)
+                    regenerate()
+                }) {
                     HStack(spacing: 4) {
-                        if isRegenerating {
-                            ProgressView().scaleEffect(0.6).tint(.purple)
-                        } else {
-                            Image(systemName: "arrow.clockwise").font(.system(size: 11))
-                        }
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11))
+                            .symbolEffect(.pulse, options: .repeating, value: isRegenerating)
                         Text("Заново").font(.system(size: 12, weight: .bold))
                     }
                     .foregroundStyle(Color(hex: "7C3AED"))
                 }
+                .buttonStyle(PremiumButtonStyle())
                 .disabled(isRegenerating)
             }
             
@@ -171,14 +181,18 @@ struct AIMetadataView: View {
                     )
                     .onSubmit(addKeyword)
                 
-                Button("Добавить", action: addKeyword)
-                    .font(.system(size: 13, weight: .bold))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(AppleTheme.primaryGradient)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .disabled(newKeyword.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button("Добавить", action: {
+                    HapticHelper.trigger(.light)
+                    addKeyword()
+                })
+                .font(.system(size: 13, weight: .bold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(AppleTheme.primaryGradient)
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .buttonStyle(PremiumButtonStyle())
+                .disabled(newKeyword.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
     }
@@ -206,7 +220,10 @@ struct AIMetadataView: View {
     }
 
     private var continueButton: some View {
-        Button(action: { onContinue?(photos) }) {
+        Button(action: {
+            HapticHelper.trigger(.medium)
+            onContinue?(photos)
+        }) {
             Text("Сохранить изменения")
                 .font(.system(size: 14, weight: .bold))
                 .frame(maxWidth: .infinity)
@@ -216,6 +233,7 @@ struct AIMetadataView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .shadow(color: AppleTheme.glowStart.opacity(0.3), radius: 8, x: 0, y: 4)
         }
+        .buttonStyle(PremiumButtonStyle())
     }
 
     // MARK: Helpers
@@ -305,11 +323,15 @@ private struct KeywordChip: View {
             Text(text)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.primary)
-            Button(action: onRemove) {
+            Button(action: {
+                HapticHelper.trigger(.light)
+                onRemove()
+            }) {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
             }
+            .buttonStyle(PremiumButtonStyle())
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)

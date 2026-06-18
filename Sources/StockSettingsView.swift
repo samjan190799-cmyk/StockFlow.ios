@@ -51,6 +51,7 @@ struct StockSettingsView: View {
                                     Toggle("", isOn: Binding(
                                         get: { platform.isEnabled },
                                         set: { value in
+                                            HapticHelper.trigger(.light)
                                             togglePlatform(platform.id, isEnabled: value)
                                         }
                                     ))
@@ -60,6 +61,7 @@ struct StockSettingsView: View {
                                 .glassCard(cornerRadius: 14, padding: 12)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
+                                    HapticHelper.selection()
                                     selectedPlatformId = platform.id
                                 }
                             }
@@ -267,7 +269,10 @@ struct PlatformDetailSheet: View {
                         }
                         .glassCard()
                         
-                        Button(action: { testConnection(platform) }) {
+                        Button(action: {
+                            HapticHelper.trigger(.medium)
+                            testConnection(platform)
+                        }) {
                             Text("Проверить соединение")
                                 .font(.system(size: 14, weight: .bold))
                                 .frame(maxWidth: .infinity)
@@ -280,6 +285,7 @@ struct PlatformDetailSheet: View {
                                         .stroke(Color.white.opacity(0.18), lineWidth: 1)
                                 )
                         }
+                        .buttonStyle(PremiumButtonStyle())
                     }
                     .padding()
                 }
@@ -289,6 +295,7 @@ struct PlatformDetailSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Готово") {
+                        HapticHelper.trigger(.light)
                         onSave()
                         dismiss()
                     }

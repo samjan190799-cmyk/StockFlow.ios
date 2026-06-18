@@ -409,7 +409,11 @@ struct UploadQueueView: View {
                         .glassCard(cornerRadius: 12, padding: 12)
                     }
                     .padding(.horizontal)
+                    .buttonStyle(PremiumButtonStyle())
                     .onChange(of: selectedItems) { newItems in
+                        if !newItems.isEmpty {
+                            HapticHelper.trigger(.medium)
+                        }
                         loadSelectedPhotos(from: newItems)
                     }
                     
@@ -465,11 +469,17 @@ struct UploadQueueView: View {
                                     photoRow(photo)
                                         .glassCard(cornerRadius: 12, padding: 10)
                                         .onTapGesture {
+                                            HapticHelper.selection()
                                             editingPhoto = ActiveSheetPhoto(
                                                 id: photo.id,
                                                 photos: viewModel.photos,
                                                 index: viewModel.photos.firstIndex(where: { $0.id == photo.id }) ?? 0
                                             )
+                                        }
+                                        .scrollTransition { content, phase in
+                                            content
+                                                .opacity(phase.isIdentity ? 1.0 : 0.8)
+                                                .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
                                         }
                                 }
                             }
@@ -484,13 +494,13 @@ struct UploadQueueView: View {
                     VStack {
                         Spacer()
                         HStack(spacing: 12) {
-                            Button(action: { viewModel.runAIForAll() }) {
+                            Button(action: {
+                                HapticHelper.trigger(.medium)
+                                viewModel.runAIForAll()
+                            }) {
                                 HStack {
-                                    if viewModel.isAnalyzingAll {
-                                        ProgressView().scaleEffect(0.8).tint(.white)
-                                    } else {
-                                        Image(systemName: "sparkles")
-                                    }
+                                    Image(systemName: "sparkles")
+                                        .symbolEffect(.pulse, options: .repeating, value: viewModel.isAnalyzingAll)
                                     Text("Заполнить все ИИ")
                                 }
                                 .font(.system(size: 13, weight: .bold))
@@ -501,9 +511,13 @@ struct UploadQueueView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .shadow(color: AppleTheme.glowStart.opacity(0.25), radius: 6, x: 0, y: 3)
                             }
+                            .buttonStyle(PremiumButtonStyle())
                             .disabled(viewModel.isAnalyzingAll)
                             
-                            Button(action: { viewModel.uploadAllReady() }) {
+                            Button(action: {
+                                HapticHelper.trigger(.medium)
+                                viewModel.uploadAllReady()
+                            }) {
                                 HStack {
                                     Image(systemName: "paperplane.fill")
                                     Text("Отправить")
@@ -519,6 +533,7 @@ struct UploadQueueView: View {
                                         .stroke(Color.white.opacity(0.15), lineWidth: 1)
                                 )
                             }
+                            .buttonStyle(PremiumButtonStyle())
                         }
                         .padding(10)
                         .glassCard(cornerRadius: 16, padding: 8)
@@ -644,7 +659,10 @@ struct UploadQueueView: View {
             // Action Menu
             VStack(spacing: 8) {
                 HStack(spacing: 6) {
-                    Button(action: { viewModel.runAIForPhoto(photo.id) }) {
+                    Button(action: {
+                        HapticHelper.trigger(.light)
+                        viewModel.runAIForPhoto(photo.id)
+                    }) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.white)
@@ -652,8 +670,12 @@ struct UploadQueueView: View {
                             .background(AppleTheme.primaryGradient)
                             .clipShape(Circle())
                     }
+                    .buttonStyle(PremiumButtonStyle())
                     
-                    Button(action: { viewModel.uploadPhoto(photo.id) }) {
+                    Button(action: {
+                        HapticHelper.trigger(.light)
+                        viewModel.uploadPhoto(photo.id)
+                    }) {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 10))
                             .foregroundStyle(.primary)
@@ -662,13 +684,18 @@ struct UploadQueueView: View {
                             .clipShape(Circle())
                             .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
                     }
+                    .buttonStyle(PremiumButtonStyle())
                 }
                 
-                Button(action: { viewModel.removePhoto(photo.id) }) {
+                Button(action: {
+                    HapticHelper.trigger(.medium)
+                    viewModel.removePhoto(photo.id)
+                }) {
                     Image(systemName: "trash")
                         .font(.system(size: 10))
                         .foregroundStyle(.red.opacity(0.7))
                 }
+                .buttonStyle(PremiumButtonStyle())
             }
         }
     }
@@ -747,7 +774,10 @@ struct FilterChip: View {
     let action: () -> Void
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            HapticHelper.selection()
+            action()
+        }) {
             Text(text)
                 .font(.system(size: 11, weight: isSelected ? .bold : .medium))
                 .padding(.horizontal, 12)
@@ -769,6 +799,7 @@ struct FilterChip: View {
                         )
                 )
         }
+        .buttonStyle(PremiumButtonStyle())
     }
 }
 

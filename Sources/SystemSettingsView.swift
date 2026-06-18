@@ -102,7 +102,10 @@ struct SystemSettingsView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
                                     
                                     // Google Sign In Button
-                                    Button(action: signInWithGoogle) {
+                                    Button(action: {
+                                        HapticHelper.trigger(.medium)
+                                        signInWithGoogle()
+                                    }) {
                                         HStack {
                                             Image(systemName: "g.circle.fill")
                                                 .font(.system(size: 14))
@@ -119,6 +122,7 @@ struct SystemSettingsView: View {
                                                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
                                         )
                                     }
+                                    .buttonStyle(PremiumButtonStyle())
                                 }
                             }
                         }
@@ -217,7 +221,10 @@ struct SystemSettingsView: View {
                         .glassCard()
                         
                         // Save Button
-                        Button(action: saveSettings) {
+                        Button(action: {
+                            HapticHelper.trigger(.medium)
+                            saveSettings()
+                        }) {
                             Text("Сохранить все настройки")
                                 .font(.system(size: 14, weight: .bold))
                                 .frame(maxWidth: .infinity)
@@ -227,6 +234,7 @@ struct SystemSettingsView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .shadow(color: AppleTheme.glowStart.opacity(0.3), radius: 8, x: 0, y: 4)
                         }
+                        .buttonStyle(PremiumButtonStyle())
                     }
                     .padding()
                 }
@@ -248,6 +256,17 @@ struct SystemSettingsView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+            .onChange(of: bgScheduler) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: autoUpscale) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: retryOnFail) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: compressJpeg) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: sysNotifications) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: sysTheme) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: sysLanguage) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: sysFps) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: parallelStreams) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: upscaleThreshold) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: upscaleFactor) { _ in HapticHelper.trigger(.light) }
             .overlay {
                 if isSigningIn {
                     Color.black.opacity(0.4)
