@@ -55,6 +55,7 @@ class FTPClient {
                     return result
                 } catch {
                     group.cancelAll()
+                    self.connection.cancel()
                     throw error
                 }
             }
@@ -352,6 +353,8 @@ class FTPClient {
             let dataParameters: NWParameters
             if isTLS {
                 let tlsOptions = NWProtocolTLS.Options()
+                sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+                sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
                 sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
                     completionHandler(true)
                 }, DispatchQueue.global())
@@ -621,6 +624,8 @@ class FTPESFramer: NWProtocolFramerImplementation {
     func handleOutput(framer: NWProtocolFramer.Instance, message: NWProtocolFramer.Message, messageLength: Int, isComplete: Bool) {
         if message["upgradeTLS"] as? Bool == true {
             let tlsOptions = NWProtocolTLS.Options()
+            sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+            sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
             if let peerName = message["peerName"] as? String {
                 sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, peerName)
             }
