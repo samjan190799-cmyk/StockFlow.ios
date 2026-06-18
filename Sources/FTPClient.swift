@@ -30,11 +30,13 @@ class FTPClient {
                         }
                         
                         let chunk = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
-                            self.connection.receiveMessage { data, _, _, error in
+                            self.connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, isComplete, error in
                                 if let error = error {
                                     continuation.resume(throwing: error)
-                                } else if let data = data {
+                                } else if let data = data, !data.isEmpty {
                                     continuation.resume(returning: data)
+                                } else if isComplete {
+                                    continuation.resume(throwing: NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Соединение закрыто сервером"]))
                                 } else {
                                     continuation.resume(throwing: NSError(domain: "FTPClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Соединение закрыто сервером"]))
                                 }
