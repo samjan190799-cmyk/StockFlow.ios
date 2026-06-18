@@ -356,8 +356,9 @@ class FTPClient {
                 sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
                 sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
                 sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
+                    print("FTPClient (Data): Блок верификации TLS вызван")
                     completionHandler(true)
-                }, DispatchQueue.global())
+                }, DispatchQueue.main)
                 
                 // Включаем возобновление TLS-сессий для обхода ошибок TLS Session Resumption, если сервер требует
                 sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
@@ -579,7 +580,7 @@ class FTPClient {
     }
 
     private static func cleanedHost(_ host: String) -> String {
-        var h = host
+        var h = host.trimmingCharacters(in: .whitespacesAndNewlines)
         for prefix in ["sftp://", "ftps://", "ftp://"] {
             if h.lowercased().hasPrefix(prefix) {
                 h = String(h.dropFirst(prefix.count))
@@ -624,24 +625,33 @@ class FTPESFramer: NWProtocolFramerImplementation {
     
     func handleOutput(framer: NWProtocolFramer.Instance, message: NWProtocolFramer.Message, messageLength: Int, isComplete: Bool) {
         if message["upgradeTLS"] as? Bool == true {
+            print("FTPESFramer: Запуск обновления до TLS...")
             let tlsOptions = NWProtocolTLS.Options()
             sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
             sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-            if let peerName = message["peerName"] as? String {
-                sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, peerName)
-            }
+            
+            // Временно не отправляем SNI для предотвращения ошибок сброса соединения на некоторых FTP-серверах
+            // if let peerName = message["peerName"] as? String {
+            //     sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, peerName)
+            // }
+            
             sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
+                print("FTPESFramer (Control): Блок верификации TLS вызван")
                 completionHandler(true)
-            }, DispatchQueue.global())
+            }, DispatchQueue.main)
             
             do {
+                print("FTPESFramer: Препендим TLS протокол...")
                 try framer.prependApplicationProtocol(options: tlsOptions)
+                print("FTPESFramer: TLS протокол успешно добавлен.")
             } catch {
+                print("FTPESFramer: Ошибка при prependApplicationProtocol: \(error.localizedDescription)")
                 framer.markFailed(error: NWError.posix(.ECONNABORTED))
                 return
             }
             
             // Переводим фреймер в режим прозрачной передачи, чтобы TLS работал напрямую с TCP
+            print("FTPESFramer: Перевод в режим pass-through")
             framer.passThroughInput()
             framer.passThroughOutput()
             return
