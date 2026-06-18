@@ -187,10 +187,16 @@ struct AIAssistantView: View {
                         .fill(color.opacity(0.12))
                         .frame(width: 44, height: 44)
                     
-                    Image(systemName: iconName)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(color)
-                        .symbolEffect(.bounce, value: selectedProvider)
+                    if #available(iOS 17.0, *) {
+                        Image(systemName: iconName)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(color)
+                            .symbolEffect(.bounce, value: selectedProvider)
+                    } else {
+                        Image(systemName: iconName)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(color)
+                    }
                 }
                 .shadow(color: color.opacity(isSelected ? 0.35 : 0.0), radius: 6)
                 

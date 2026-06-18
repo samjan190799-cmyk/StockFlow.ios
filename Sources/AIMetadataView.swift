@@ -131,9 +131,14 @@ struct AIMetadataView: View {
                     regenerate()
                 }) {
                     HStack(spacing: 4) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 11))
-                            .symbolEffect(.pulse, options: .repeating, value: isRegenerating)
+                        if #available(iOS 17.0, *) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11))
+                                .symbolEffect(.pulse, options: .repeating, value: isRegenerating)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11))
+                        }
                         Text("Заново").font(.system(size: 12, weight: .bold))
                     }
                     .foregroundStyle(Color(hex: "7C3AED"))

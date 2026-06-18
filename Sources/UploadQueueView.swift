@@ -476,11 +476,7 @@ struct UploadQueueView: View {
                                                 index: viewModel.photos.firstIndex(where: { $0.id == photo.id }) ?? 0
                                             )
                                         }
-                                        .scrollTransition { content, phase in
-                                            content
-                                                .opacity(phase.isIdentity ? 1.0 : 0.8)
-                                                .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
-                                        }
+                                        .applyScrollTransitionIfAvailable()
                                 }
                             }
                             .padding(.horizontal)
@@ -499,8 +495,12 @@ struct UploadQueueView: View {
                                 viewModel.runAIForAll()
                             }) {
                                 HStack {
-                                    Image(systemName: "sparkles")
-                                        .symbolEffect(.pulse, options: .repeating, value: viewModel.isAnalyzingAll)
+                                    if #available(iOS 17.0, *) {
+                                        Image(systemName: "sparkles")
+                                            .symbolEffect(.pulse, options: .repeating, value: viewModel.isAnalyzingAll)
+                                    } else {
+                                        Image(systemName: "sparkles")
+                                    }
                                     Text("Заполнить все ИИ")
                                 }
                                 .font(.system(size: 13, weight: .bold))

@@ -225,3 +225,20 @@ public struct PremiumButtonStyle: ButtonStyle {
     }
 }
 
+// MARK: - iOS Compatibility View Modifiers
+extension View {
+    @ViewBuilder
+    public func applyScrollTransitionIfAvailable() -> some View {
+        if #available(iOS 17.0, *) {
+            self.scrollTransition { content, phase in
+                content
+                    .opacity(phase.isIdentity ? 1.0 : 0.8)
+                    .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
+            }
+        } else {
+            self
+        }
+    }
+}
+
+
