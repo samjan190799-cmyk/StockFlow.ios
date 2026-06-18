@@ -882,42 +882,6 @@ struct DashboardProgressRing: View {
         .frame(width: 68, height: 68)
     }
 }
-    
-    // MARK: - Load Photos Logic
-    private func loadSelectedPhotos(from items: [PhotosPickerItem]) {
-        let vm = viewModel
-        for item in items {
-            item.loadTransferable(type: Data.self) { result in
-                switch result {
-                case .success(let data):
-                    if let data = data {
-                        let randomNum = Int.random(in: 1000...9999)
-                        let filename = "IMG_\(randomNum).JPG"
-                        let sizeMB = Double(data.count) / (1024.0 * 1024.0)
-                        let fileSizeStr = String(format: "%.2f МБ", sizeMB)
-                        
-                        let newPhoto = PhotoMetadata(
-                            filename: filename,
-                            fileSize: fileSizeStr,
-                            title: "",
-                            keywords: [],
-                            description: "",
-                            status: .new,
-                            imageData: data
-                        )
-                        
-                        Task {
-                            await vm.addPhoto(newPhoto)
-                        }
-                    }
-                case .failure(let error):
-                    print("Error loading image: \(error.localizedDescription)")
-                }
-            }
-        }
-        selectedItems = []
-    }
-}
 
 // MARK: - Helper Models for Sheet Presentation
 struct ActiveSheetPhoto: Identifiable, Sendable {
