@@ -284,7 +284,7 @@ class FTPClient {
             sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
                 print("FTPClient (Data): Блок верификации TLS вызван")
                 completionHandler(true)
-            }, DispatchQueue.main)
+            }, DispatchQueue.global())
             
             // Включаем возобновление TLS-сессий для обхода ошибок TLS Session Resumption, если сервер требует
             sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
@@ -581,7 +581,7 @@ class FTPESFramer: NWProtocolFramerImplementation {
                     sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
                         print("FTPESFramer (Control): Блок верификации TLS вызван")
                         completionHandler(true)
-                    }, DispatchQueue.main)
+                    }, DispatchQueue.global())
                     
                     do {
                         try framer.prependApplicationProtocol(options: tlsOptions)
