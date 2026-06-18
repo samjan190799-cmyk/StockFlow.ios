@@ -155,3 +155,27 @@ class RussianReminderAgent(Agent):
         )
         return response.text
 
+class NetworkDebuggerAgent(Agent):
+    """
+    Агент-Сетевой Диагност (Network Debugger Agent): Выполняет анализ
+    подключения к серверам FTP/FTPS/SFTP и генерирует отчет о сетевых проблемах.
+    """
+    def diagnose(self, host: str, port: int, error_message: str) -> str:
+        prompt = f"""
+        Пользователь столкнулся с ошибкой подключения к серверу {host}:{port}.
+        Сообщение об ошибке: "{error_message}"
+        
+        Твоя задача:
+        1. Проанализировать ошибку (например, таймаут чтения баннера, ошибка сокета, сбой TLS).
+        2. Объяснить на русском языке простыми словами возможные причины (блокировка провайдером, настройки фаервола на iOS, некорректная обработка буфера сокета).
+        3. Предложить пошаговые рекомендации по решению проблемы на клиенте (в коде Swift) и на сервере/сети.
+        
+        Напиши подробный отчет в формате Markdown на русском языке.
+        """
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt
+        )
+        return response.text
+
+

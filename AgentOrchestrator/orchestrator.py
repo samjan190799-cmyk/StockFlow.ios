@@ -39,7 +39,7 @@ except ImportError:
 # Загружаем переменные среды
 load_dotenv()
 
-from agents import DesignerAgent, PlannerAgent, CoderAgent, VerifierAgent, RussianReminderAgent
+from agents import DesignerAgent, PlannerAgent, CoderAgent, VerifierAgent, RussianReminderAgent, NetworkDebuggerAgent
 
 console = Console()
 
@@ -146,6 +146,7 @@ def main():
     coder = CoderAgent(client)
     verifier = VerifierAgent(client)
     reminder_agent = RussianReminderAgent(client)
+    network_debugger = NetworkDebuggerAgent(client)
     
     # Запускаем Агента-Русификатора для напоминания
     with console.status("[bold red]Агент-Русификатор проверяет языковые настройки...[/bold red]"):
@@ -158,6 +159,24 @@ def main():
     if not task:
         console.print("[red]Задача не может быть пустой. Выход.[/red]")
         sys.exit(0)
+        
+    # Проверяем, не хочет ли пользователь сетевую диагностику
+    if any(keyword in task.lower() for keyword in ["диагностика", "debug", "ftp", "соединение", "подключение"]):
+        run_debug = Confirm.ask("Обнаружен запрос, связанный с сетевым подключением. Запустить Агента Сетевой Диагностики?")
+        if run_debug:
+            host = Prompt.ask("Введите хост для проверки (например, ftp.shutterstock.com)", default="ftp.shutterstock.com")
+            port = int(Prompt.ask("Введите порт", default="21"))
+            err_msg = Prompt.ask("Введите текст ошибки (если есть)", default="Таймаут ожидания ответа от сервера (10.0 сек)")
+            
+            with console.status("[bold blue]Агент-Диагност анализирует проблему и строит отчет...[/bold blue]"):
+                report = network_debugger.diagnose(host, port, err_msg)
+            
+            console.print(Panel(Markdown(report), title="Отчет Агента Сетевой Диагностики", border_style="cyan"))
+            # Сохраняем в файл для истории
+            with open(os.path.join(project_root, "network_diagnostics_report.md"), "w", encoding="utf-8") as f:
+                f.write(report)
+            console.print("[green]Отчет сохранен в network_diagnostics_report.md[/green]\n")
+            sys.exit(0)
         
     # 4. Проверяем, нужен ли Агент-Дизайнер
     run_designer = Confirm.ask("Хотите запустить Агента-Дизайнера для разработки UI/UX стиля?")
