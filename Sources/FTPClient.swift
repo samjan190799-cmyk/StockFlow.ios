@@ -93,18 +93,6 @@ class FTPClient {
             try await waitForReady(connection: controlConnection)
             let reader = ConnectionReader(connection: controlConnection)
             
-            // 1. Read Banner
-            let banner: String
-            do {
-                banner = try await reader.readLine()
-            } catch {
-                throw ftpError("Ошибка при чтении приветствия сервера (Banner): \(error.localizedDescription)")
-            }
-            guard banner.hasPrefix("220") else {
-                controlConnection.cancel()
-                throw ftpError("Ошибка FTP (неверное приветствие): \(banner)")
-            }
-            
             // 3. Send USER
             do {
                 try await sendCommand(connection: controlConnection, cmd: "USER \(username)\r\n")
@@ -182,18 +170,6 @@ class FTPClient {
         do {
             try await waitForReady(connection: controlConnection)
             let reader = ConnectionReader(connection: controlConnection)
-            
-            // 1. Read Banner
-            let banner: String
-            do {
-                banner = try await reader.readLine()
-            } catch {
-                throw ftpError("Ошибка при чтении приветствия сервера (Banner): \(error.localizedDescription)")
-            }
-            guard banner.hasPrefix("220") else {
-                controlConnection.cancel()
-                throw ftpError("Ошибка FTP (неверное приветствие): \(banner)")
-            }
             
             // 3. Send USER
             do {
