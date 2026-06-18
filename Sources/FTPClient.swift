@@ -607,18 +607,18 @@ class FTPESFramer: NWProtocolFramerImplementation {
     
     func handleInput(framer: NWProtocolFramer.Instance) -> Int {
         while true {
-            var parsedCount = 0
+            var parsedData: Data? = nil
             let success = framer.parseInput(minimumIncompleteLength: 1, maximumLength: 65536) { buffer, _ in
-                guard let buffer = buffer else { return 0 }
-                parsedCount = buffer.count
+                guard let buffer = buffer, buffer.count > 0 else { return 0 }
+                parsedData = Data(buffer)
                 return buffer.count
             }
-            guard success && parsedCount > 0 else {
+            guard success, let data = parsedData else {
                 return 1
             }
             
             let message = NWProtocolFramer.Message(definition: FTPESFramer.definition)
-            _ = framer.deliverInputNoCopy(length: parsedCount, message: message, isComplete: true)
+            _ = framer.deliverInput(data: data, message: message, isComplete: true)
         }
     }
     

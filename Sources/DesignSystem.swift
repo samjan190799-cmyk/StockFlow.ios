@@ -44,67 +44,91 @@ extension Color {
     }
 }
 
-// MARK: - Liquid Ambient Background (Fixed Layout with Drifting Blobs)
+// MARK: - Liquid Ambient Background (Fixed Layout with Drifting Blobs & Grid Texture)
 struct LiquidBackgroundView: View {
     @State private var animateGlow = false
     @State private var driftOffset1 = CGSize.zero
     @State private var driftOffset2 = CGSize.zero
     @State private var driftOffset3 = CGSize.zero
+    @State private var driftOffset4 = CGSize.zero
     
     var body: some View {
         ZStack {
             // Dark elegant base
             Color(.systemBackground)
             
-            // Dynamic liquid-like animated blobs - Fixed sizes and bounds to prevent parent container layout shifts
+            // Dynamic liquid-like animated blobs
             ZStack {
                 // Violet blob top-left
                 Circle()
-                    .fill(Color(hex: "7C3AED").opacity(0.15))
-                    .frame(width: 300, height: 300)
-                    .scaleEffect(animateGlow ? 1.2 : 0.85)
+                    .fill(Color(hex: "7C3AED").opacity(0.16))
+                    .frame(width: 320, height: 320)
+                    .scaleEffect(animateGlow ? 1.25 : 0.85)
                     .blur(radius: 80)
-                    .offset(x: -80 + driftOffset1.width, y: -120 + driftOffset1.height)
+                    .offset(x: -90 + driftOffset1.width, y: -130 + driftOffset1.height)
                 
                 // Blue blob center-right
                 Circle()
-                    .fill(Color(hex: "2563EB").opacity(0.15))
-                    .frame(width: 320, height: 320)
+                    .fill(Color(hex: "2563EB").opacity(0.16))
+                    .frame(width: 340, height: 340)
                     .scaleEffect(animateGlow ? 0.85 : 1.2)
                     .blur(radius: 90)
-                    .offset(x: 100 + driftOffset2.width, y: -20 + driftOffset2.height)
+                    .offset(x: 110 + driftOffset2.width, y: -30 + driftOffset2.height)
                 
                 // Pink blob bottom-left
                 Circle()
-                    .fill(Color(hex: "DB2777").opacity(0.12))
-                    .frame(width: 290, height: 290)
+                    .fill(Color(hex: "DB2777").opacity(0.14))
+                    .frame(width: 300, height: 300)
                     .scaleEffect(animateGlow ? 1.15 : 0.9)
                     .blur(radius: 85)
-                    .offset(x: -60 + driftOffset3.width, y: 160 + driftOffset3.height)
+                    .offset(x: -70 + driftOffset3.width, y: 170 + driftOffset3.height)
+                
+                // Amber blob bottom-right (New 4th blob for richer ambient)
+                Circle()
+                    .fill(Color(hex: "F59E0B").opacity(0.09))
+                    .frame(width: 280, height: 280)
+                    .scaleEffect(animateGlow ? 0.9 : 1.15)
+                    .blur(radius: 75)
+                    .offset(x: 80 + driftOffset4.width, y: 200 + driftOffset4.height)
             }
             .allowsHitTesting(false)
-            .frame(maxWidth: .infinity, maxHeight: .infinity) // Lock to screen bounds
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            
+            // Retro dot-grid texture overlay for premium cinematic feel
+            Canvas { context, size in
+                let dotSize: CGFloat = 1.2
+                let spacing: CGFloat = 18.0
+                for x in stride(from: 0, to: size.width, by: spacing) {
+                    for y in stride(from: 0, to: size.height, by: spacing) {
+                        context.fill(Path(CGRect(x: x, y: y, width: dotSize, height: dotSize)), with: .color(.white.opacity(0.035)))
+                    }
+                }
+            }
+            .allowsHitTesting(false)
         }
         .ignoresSafeArea()
         .onAppear {
-            withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 9).repeatForever(autoreverses: true)) {
                 animateGlow.toggle()
             }
-            withAnimation(.easeInOut(duration: 14).repeatForever(autoreverses: true)) {
-                driftOffset1 = CGSize(width: 35, height: -25)
+            withAnimation(.easeInOut(duration: 15).repeatForever(autoreverses: true)) {
+                driftOffset1 = CGSize(width: 40, height: -30)
             }
-            withAnimation(.easeInOut(duration: 17).repeatForever(autoreverses: true)) {
-                driftOffset2 = CGSize(width: -45, height: 35)
+            withAnimation(.easeInOut(duration: 18).repeatForever(autoreverses: true)) {
+                driftOffset2 = CGSize(width: -50, height: 40)
             }
-            withAnimation(.easeInOut(duration: 12).repeatForever(autoreverses: true)) {
-                driftOffset3 = CGSize(width: 25, height: -35)
+            withAnimation(.easeInOut(duration: 13).repeatForever(autoreverses: true)) {
+                driftOffset3 = CGSize(width: 30, height: -40)
+            }
+            withAnimation(.easeInOut(duration: 16).repeatForever(autoreverses: true)) {
+                driftOffset4 = CGSize(width: -35, height: -25)
             }
         }
     }
 }
 
 
-// MARK: - Glassmorphism View Modifier
+// MARK: - Glassmorphism 2.0 View Modifier
 struct GlassModifier: ViewModifier {
     var cornerRadius: CGFloat
     var paddingValue: CGFloat
@@ -112,25 +136,32 @@ struct GlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(paddingValue)
-            .background(.ultraThinMaterial)
+            .background(
+                ZStack {
+                    // Soft dark glass tint base
+                    Color.black.opacity(0.22)
+                    // System frosted blur
+                    Rectangle().fill(.ultraThinMaterial)
+                }
+            )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.24),
-                                Color.white.opacity(0.04),
-                                Color.black.opacity(0.02),
-                                Color.white.opacity(0.12)
+                                Color.white.opacity(0.28),
+                                Color.white.opacity(0.06),
+                                Color.black.opacity(0.04),
+                                Color.white.opacity(0.16)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: 1
+                        lineWidth: 1.2
                     )
             )
-            .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
+            .shadow(color: Color.black.opacity(0.12), radius: 14, x: 0, y: 7)
     }
 }
 
@@ -138,22 +169,30 @@ extension View {
     func glassCard(cornerRadius: CGFloat = 16, padding: CGFloat = 16) -> some View {
         self.modifier(GlassModifier(cornerRadius: cornerRadius, paddingValue: padding))
     }
+    
+    // Custom Multi-layered Neon Shadow for 3D glow effect
+    func neonShadow(color: Color, radius: CGFloat = 8, x: CGFloat = 0, y: CGFloat = 4) -> some View {
+        self
+            .shadow(color: color.opacity(0.22), radius: radius, x: x, y: y)
+            .shadow(color: color.opacity(0.12), radius: radius / 2, x: x, y: y / 2)
+    }
 }
 
-// MARK: - SwiftUI Vector Liquid Glass Logo
+// MARK: - SwiftUI Vector 3D Glass Logo
 struct SmartStockLogoView: View {
     var size: CGFloat = 72
+    @State private var rotateLogo = false
     
     var body: some View {
         ZStack {
             // Background glow matching app theme
             Circle()
                 .fill(AppleTheme.primaryGradient)
-                .frame(width: size, height: size)
-                .blur(radius: size * 0.15)
-                .opacity(0.55)
+                .frame(width: size * 1.1, height: size * 1.1)
+                .blur(radius: size * 0.2)
+                .opacity(0.45)
             
-            // Glass base panel
+            // Glass base panel with double-layered frosted borders
             RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .frame(width: size, height: size)
@@ -162,10 +201,10 @@ struct SmartStockLogoView: View {
                         .stroke(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.4),
-                                    Color.white.opacity(0.1),
-                                    Color.black.opacity(0.1),
-                                    Color.white.opacity(0.15)
+                                    Color.white.opacity(0.45),
+                                    Color.white.opacity(0.12),
+                                    Color.black.opacity(0.15),
+                                    Color.white.opacity(0.22)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -173,18 +212,38 @@ struct SmartStockLogoView: View {
                             lineWidth: 1.5
                         )
                 )
-                .shadow(color: Color.black.opacity(0.12), radius: size * 0.08, x: 0, y: size * 0.04)
+                .shadow(color: Color.black.opacity(0.18), radius: size * 0.1, x: 0, y: size * 0.05)
             
-            // Aperture blades & Lens symbol
+            // Aperture blades & Lens symbol with soft shadow
             Image(systemName: "camera.aperture")
-                .font(.system(size: size * 0.46, weight: .light))
-                .foregroundStyle(.white.opacity(0.85))
+                .font(.system(size: size * 0.48, weight: .light))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.white, .white.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .rotationEffect(Angle(degrees: rotateLogo ? 360 : 0))
+                .shadow(color: Color.black.opacity(0.25), radius: 2, x: 0, y: 1)
             
             // Central glass reflex / Sparkle
             Image(systemName: "sparkles")
-                .font(.system(size: size * 0.22, weight: .semibold))
-                .foregroundStyle(.white)
-                .offset(x: size * 0.15, y: -size * 0.15)
+                .font(.system(size: size * 0.24, weight: .semibold))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color(hex: "F59E0B"), .white],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .neonShadow(color: Color(hex: "F59E0B"), radius: 4)
+                .offset(x: size * 0.16, y: -size * 0.16)
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 25).repeatForever(false)) {
+                rotateLogo = true
+            }
         }
     }
 }

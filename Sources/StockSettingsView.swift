@@ -23,19 +23,25 @@ struct StockSettingsView: View {
                             .textCase(.uppercase)
                             .padding(.leading, 4)
                         
-                        LazyVStack(spacing: 10) {
+                        LazyVStack(spacing: 12) {
                             ForEach(platforms) { platform in
-                                HStack(spacing: 12) {
-                                    // Mini brand icon / initials circle
+                                HStack(spacing: 14) {
+                                    // 3D Brand Logo initials circle
                                     Circle()
-                                        .fill(colorForPlatform(platform.id))
-                                        .frame(width: 38, height: 38)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [colorForPlatform(platform.id), colorForPlatform(platform.id).opacity(0.65)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 42, height: 42)
                                         .overlay(
                                             Text(String(platform.name.prefix(2)))
-                                                .font(.system(size: 13, weight: .bold))
+                                                .font(.system(size: 14, weight: .black))
                                                 .foregroundStyle(.white)
                                         )
-                                        .shadow(color: colorForPlatform(platform.id).opacity(0.3), radius: 4)
+                                        .shadow(color: colorForPlatform(platform.id).opacity(0.35), radius: 5)
                                     
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(platform.name)
@@ -56,9 +62,23 @@ struct StockSettingsView: View {
                                         }
                                     ))
                                     .labelsHidden()
-                                    .tint(Color(hex: "7C3AED")) // Premium purple tint
+                                    .tint(Color(hex: "7C3AED"))
                                 }
-                                .glassCard(cornerRadius: 14, padding: 12)
+                                .padding(12)
+                                .background(
+                                    ZStack {
+                                        // Soft brand gradient overlay
+                                        gradientForPlatform(platform.id)
+                                        Color.black.opacity(0.12)
+                                        Rectangle().fill(.ultraThinMaterial)
+                                    }
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(LinearGradient(colors: [Color.white.opacity(0.12), Color.white.opacity(0.04)], startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                                )
+                                .shadow(color: colorForPlatform(platform.id).opacity(platform.isEnabled ? 0.08 : 0.0), radius: 8, x: 0, y: 4)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     HapticHelper.selection()
@@ -87,6 +107,7 @@ struct StockSettingsView: View {
                 if let index = platforms.firstIndex(where: { $0.id == wrapper.id }) {
                     PlatformDetailSheet(
                         platform: $platforms[index],
+                        isVerifying: isVerifying,
                         onSave: {
                             savePlatforms()
                         },
@@ -124,7 +145,7 @@ struct StockSettingsView: View {
         switch id {
         case "adobe": return Color(hex: "FF0000") // Adobe Red
         case "shutterstock": return Color(hex: "FF6600") // Shutterstock Orange
-        case "istock": return Color(hex: "1F2937") // Dark Charcoal
+        case "istock": return Color(hex: "3B82F6") // Brand Blue
         case "freepik": return Color(hex: "0066FF") // Freepik Blue
         case "depositphotos": return Color(hex: "10B981") // Mint Green
         case "alamy": return Color(hex: "6B7280") // Gray
@@ -135,7 +156,14 @@ struct StockSettingsView: View {
         }
     }
     
-
+    private func gradientForPlatform(_ id: String) -> LinearGradient {
+        let color = colorForPlatform(id)
+        return LinearGradient(
+            colors: [color.opacity(0.08), color.opacity(0.01)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
     
     // MARK: - Data Storage
     private func loadPlatforms() {
@@ -211,6 +239,7 @@ struct ActiveSheetPlatformId: Identifiable, Sendable {
 // MARK: - Platform Detail Sheet
 struct PlatformDetailSheet: View {
     @Binding var platform: StockPlatform
+    var isVerifying: Bool
     var onSave: () -> Void
     var testConnection: (StockPlatform) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -267,25 +296,34 @@ struct PlatformDetailSheet: View {
                             .foregroundStyle(.secondary)
                             .tint(.secondary)
                         }
-                        .glassCard()
+                        .glassCard(cornerRadius: 20, padding: 16)
                         
                         Button(action: {
                             HapticHelper.trigger(.medium)
                             testConnection(platform)
                         }) {
-                            Text("Проверить соединение")
-                                .font(.system(size: 14, weight: .bold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(.ultraThinMaterial)
-                                .foregroundStyle(.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                                )
+                            HStack(spacing: 8) {
+                                if isVerifying {
+                                    ProgressView()
+                                        .tint(.primary)
+                                    Text("Проверка...")
+                                } else {
+                                    Text("Проверить соединение")
+                                }
+                            }
+                            .font(.system(size: 14, weight: .bold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(.ultraThinMaterial)
+                            .foregroundStyle(.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.white.opacity(0.18), lineWidth: 1.2)
+                            )
                         }
                         .buttonStyle(PremiumButtonStyle())
+                        .disabled(isVerifying)
                     }
                     .padding()
                 }
@@ -326,15 +364,14 @@ struct PlatformDetailSheet: View {
             }
             .textFieldStyle(.plain)
             .font(.system(size: 13))
-            .padding(10)
-            .background(Color.white.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(12)
+            .background(Color.black.opacity(0.18))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
             )
             .textInputAutocapitalization(.never)
-            .disableAutocorrection(true)
         }
     }
 }

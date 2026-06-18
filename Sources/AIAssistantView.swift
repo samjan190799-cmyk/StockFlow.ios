@@ -122,14 +122,15 @@ struct AIAssistantView: View {
                 Text("Интеллектуальный Помощник")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.primary)
-                Text("Используйте ИИ для автоматического распознавания образов, генерации названий и подбора ключевых слов.")
+                Text("Настройте ИИ для мгновенной индексации ваших кадров. Генерация коммерческих названий и SEO-тегов.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: 16, padding: 14)
+        .glassCard(cornerRadius: 18, padding: 14)
+        .neonShadow(color: Color(hex: "7C3AED").opacity(0.12), radius: 8)
     }
     
     private var providerCards: some View {
@@ -184,21 +185,22 @@ struct AIAssistantView: View {
             VStack(alignment: .center, spacing: 10) {
                 ZStack {
                     Circle()
-                        .fill(color.opacity(0.12))
-                        .frame(width: 44, height: 44)
+                        .fill(isSelected ? color.opacity(0.25) : color.opacity(0.08))
+                        .frame(width: 46, height: 46)
                     
                     if #available(iOS 17.0, *) {
                         Image(systemName: iconName)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(color)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(isSelected ? .white : color)
                             .symbolEffect(.bounce, value: selectedProvider)
+                            .shadow(color: color.opacity(isSelected ? 0.8 : 0.0), radius: 4)
                     } else {
                         Image(systemName: iconName)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(color)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(isSelected ? .white : color)
+                            .shadow(color: color.opacity(isSelected ? 0.8 : 0.0), radius: 4)
                     }
                 }
-                .shadow(color: color.opacity(isSelected ? 0.35 : 0.0), radius: 6)
                 
                 VStack(spacing: 2) {
                     Text(name)
@@ -211,17 +213,22 @@ struct AIAssistantView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(
+                ZStack {
+                    Color.black.opacity(isSelected ? 0.28 : 0.16)
+                    Rectangle().fill(.ultraThinMaterial)
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(
-                        isSelected ? LinearGradient(colors: [color, glowColor], startPoint: .topLeading, endPoint: .bottomTrailing) : LinearGradient(colors: [Color.white.opacity(0.12)], startPoint: .top, endPoint: .bottom),
-                        lineWidth: isSelected ? 2.0 : 1.0
+                        isSelected ? LinearGradient(colors: [color, glowColor], startPoint: .topLeading, endPoint: .bottomTrailing) : LinearGradient(colors: [Color.white.opacity(0.1)], startPoint: .top, endPoint: .bottom),
+                        lineWidth: isSelected ? 2.2 : 1.0
                     )
             )
-            .scaleEffect(isSelected ? 1.05 : 0.98)
-            .shadow(color: color.opacity(isSelected ? 0.15 : 0.0), radius: 10, x: 0, y: 5)
+            .scaleEffect(isSelected ? 1.05 : 0.96)
+            .neonShadow(color: color, radius: isSelected ? 12 : 0, y: isSelected ? 5 : 0)
         }
         .buttonStyle(PremiumButtonStyle())
     }
@@ -235,49 +242,59 @@ struct AIAssistantView: View {
                 .padding(.leading, 4)
             
             VStack(alignment: .leading, spacing: 12) {
+                let hasKey = !activeKey.wrappedValue.isEmpty
+                
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(activeProviderName)
                             .font(.system(size: 15, weight: .bold))
-                        Text("Введите ваш личный API токен")
+                        Text("Введите личный токен аутентификации API")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                     
-                    // Status Badge
+                    // Status Badge (Glassmorphic)
                     HStack(spacing: 5) {
                         Circle()
-                            .fill(activeKey.wrappedValue.isEmpty ? Color.red : Color.green)
-                            .frame(width: 6, height: 6)
+                            .fill(hasKey ? Color.green : Color.red)
+                            .frame(width: 5, height: 5)
                         
-                        Text(activeKey.wrappedValue.isEmpty ? "Не настроен" : "Активен")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(activeKey.wrappedValue.isEmpty ? Color.red : Color.green)
+                        Text(hasKey ? "Настроен" : "Не настроен")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(hasKey ? Color.green : Color.red)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(activeKey.wrappedValue.isEmpty ? Color.red.opacity(0.1) : Color.green.opacity(0.1))
+                    .background(hasKey ? Color.green.opacity(0.12) : Color.red.opacity(0.12))
                     .clipShape(Capsule())
                     .overlay(
                         Capsule()
-                            .stroke(activeKey.wrappedValue.isEmpty ? Color.red.opacity(0.25) : Color.green.opacity(0.25), lineWidth: 1)
+                            .stroke(hasKey ? Color.green.opacity(0.3) : Color.red.opacity(0.3), lineWidth: 1)
                     )
                 }
                 
-                HStack(spacing: 8) {
-                    SecureField("Вставьте ключ API здесь...", text: activeKey)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13, design: .monospaced))
-                        .padding(12)
-                        .background(Color.white.opacity(0.04))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                        )
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
+                HStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        // Dynamic padlock state icon
+                        Image(systemName: hasKey ? "lock.fill" : "lock.open.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(hasKey ? .green : .red)
+                            .animation(.default, value: hasKey)
+                        
+                        SecureField("Вставьте ключ API...", text: activeKey)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 13, design: .monospaced))
+                    }
+                    .padding(12)
+                    .background(Color.black.opacity(0.2))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+                    )
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
                     
                     Button(action: {
                         HapticHelper.trigger(.medium)
@@ -288,13 +305,13 @@ struct AIAssistantView: View {
                             .foregroundStyle(.white)
                             .padding(12)
                             .background(AppleTheme.primaryGradient)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .shadow(color: AppleTheme.glowStart.opacity(0.3), radius: 4)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .neonShadow(color: Color(hex: "7C3AED"), radius: 5)
                     }
                     .buttonStyle(PremiumButtonStyle())
                 }
             }
-            .glassCard()
+            .glassCard(cornerRadius: 20, padding: 14)
         }
     }
     
@@ -306,7 +323,7 @@ struct AIAssistantView: View {
                 .textCase(.uppercase)
                 .padding(.leading, 4)
             
-            // Templates scroll
+            // Templates scroll (Glass Tag Ribbon)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(templates) { template in
@@ -319,18 +336,18 @@ struct AIAssistantView: View {
                         }) {
                             HStack(spacing: 6) {
                                 Image(systemName: template.icon)
-                                    .font(.system(size: 10))
+                                    .font(.system(size: 11))
                                 Text(template.name)
-                                    .font(.system(size: 11, weight: .bold))
+                                    .font(.system(size: 11, weight: .black))
                             }
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 14)
                             .padding(.vertical, 8)
-                            .background(isSelected ? AppleTheme.primaryGradient : LinearGradient(colors: [Color.white.opacity(0.06)], startPoint: .top, endPoint: .bottom))
-                            .foregroundStyle(isSelected ? .white : .primary.opacity(0.8))
+                            .background(isSelected ? AppleTheme.primaryGradient : LinearGradient(colors: [Color.white.opacity(0.08)], startPoint: .top, endPoint: .bottom))
+                            .foregroundStyle(isSelected ? .white : .primary.opacity(0.85))
                             .clipShape(Capsule())
                             .overlay(
                                 Capsule()
-                                    .stroke(isSelected ? Color.clear : Color.white.opacity(0.12), lineWidth: 1)
+                                    .stroke(isSelected ? Color.clear : Color.white.opacity(0.15), lineWidth: 1.2)
                             )
                         }
                         .buttonStyle(PremiumButtonStyle())
@@ -339,26 +356,26 @@ struct AIAssistantView: View {
                 .padding(.horizontal, 2)
             }
             
-            // TextEditor Card
-            VStack(alignment: .leading, spacing: 8) {
+            // TextEditor Card (Glass container)
+            VStack(alignment: .leading, spacing: 10) {
                 TextEditor(text: $customPrompt)
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(.system(size: 12, design: .monospaced))
                     .scrollContentBackground(.hidden)
                     .padding(8)
-                    .frame(height: 150)
-                    .background(Color.white.opacity(0.03))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .frame(height: 140)
+                    .background(Color.black.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
                     )
                 
-                Text("Редактируйте промпт для получения заголовка и ключевых слов в нужном формате. ИИ возвращает JSON.")
+                Text("Промпт определяет формат возвращаемого JSON-файла с заголовком и ключевыми словами.")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 2)
             }
-            .glassCard()
+            .glassCard(cornerRadius: 20, padding: 14)
         }
     }
     

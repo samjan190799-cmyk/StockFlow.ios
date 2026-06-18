@@ -22,23 +22,26 @@ struct AIMetadataView: View {
             LiquidBackgroundView()
             
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 18) {
                     
                     // Photo Navigator Panel
                     photoNavigator
-                        .glassCard(cornerRadius: 14, padding: 12)
+                        .glassCard(cornerRadius: 16, padding: 12)
+                    
+                    // Large Premium Image Preview Header
+                    imagePreviewHeader
                     
                     // Title Panel
                     titleField
-                        .glassCard(cornerRadius: 14, padding: 14)
+                        .glassCard(cornerRadius: 18, padding: 14)
                     
                     // Keywords Panel
                     keywordsField
-                        .glassCard(cornerRadius: 14, padding: 14)
+                        .glassCard(cornerRadius: 18, padding: 14)
                     
                     // Description Panel
                     descriptionField
-                        .glassCard(cornerRadius: 14, padding: 14)
+                        .glassCard(cornerRadius: 18, padding: 14)
                     
                     // Continue Button
                     continueButton
@@ -53,17 +56,49 @@ struct AIMetadataView: View {
 
     // MARK: Sections
 
+    private var imagePreviewHeader: some View {
+        Group {
+            if let uiImage = photos[currentIndex].uiImage {
+                ZStack {
+                    // Soft blurred shadow projection
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 150)
+                        .blur(radius: 24)
+                        .opacity(0.35)
+                        .scaleEffect(0.94)
+                    
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 150)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(LinearGradient(colors: [Color.white.opacity(0.3), Color.white.opacity(0.08)], startPoint: .top, endPoint: .bottom), lineWidth: 1.2)
+                        )
+                        .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 4)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
     private var photoNavigator: some View {
         HStack(spacing: 12) {
             Button(action: {
                 HapticHelper.trigger(.light)
-                goToPrevious()
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    goToPrevious()
+                }
             }) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.primary)
                     .padding(8)
-                    .background(.white.opacity(0.1))
+                    .background(.white.opacity(0.08))
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
             }
@@ -71,27 +106,11 @@ struct AIMetadataView: View {
             .disabled(currentIndex == 0)
             .opacity(currentIndex == 0 ? 0.3 : 1.0)
 
-            // Image Preview (if present) or Placeholder
-            Group {
-                if let uiImage = photos[currentIndex].uiImage {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    ZStack {
-                        Color.white.opacity(0.05)
-                        Image(systemName: "photo")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .frame(width: 52, height: 52)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.white.opacity(0.12), lineWidth: 1))
+            Spacer()
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(spacing: 2) {
                 Text("Фото \(currentIndex + 1) из \(photos.count)")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 13, weight: .black))
                 Text(photos[currentIndex].filename)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
@@ -102,13 +121,15 @@ struct AIMetadataView: View {
 
             Button(action: {
                 HapticHelper.trigger(.light)
-                goToNext()
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    goToNext()
+                }
             }) {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.primary)
                     .padding(8)
-                    .background(.white.opacity(0.1))
+                    .background(.white.opacity(0.08))
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
             }
@@ -150,12 +171,12 @@ struct AIMetadataView: View {
             TextField("Заголовок фото", text: binding(\.title))
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
-                .padding(10)
-                .background(Color.white.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(12)
+                .background(Color.black.opacity(0.18))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
                 )
         }
     }
@@ -177,12 +198,12 @@ struct AIMetadataView: View {
                 TextField("Добавить слово", text: $newKeyword)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
-                    .padding(8)
-                    .background(Color.white.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(10)
+                    .background(Color.black.opacity(0.18))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
                     )
                     .onSubmit(addKeyword)
                 
@@ -191,13 +212,14 @@ struct AIMetadataView: View {
                     addKeyword()
                 })
                 .font(.system(size: 13, weight: .bold))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
                 .background(AppleTheme.primaryGradient)
                 .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
                 .buttonStyle(PremiumButtonStyle())
                 .disabled(newKeyword.trimmingCharacters(in: .whitespaces).isEmpty)
+                .neonShadow(color: Color(hex: "7C3AED"), radius: 4)
             }
         }
     }
@@ -215,11 +237,11 @@ struct AIMetadataView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 6)
                 .frame(height: 90)
-                .background(Color.white.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .background(Color.black.opacity(0.18))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
                 )
         }
     }
@@ -230,13 +252,13 @@ struct AIMetadataView: View {
             onContinue?(photos)
         }) {
             Text("Сохранить изменения")
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 14, weight: .black))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(AppleTheme.primaryGradient)
                 .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: AppleTheme.glowStart.opacity(0.3), radius: 8, x: 0, y: 4)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .neonShadow(color: Color(hex: "7C3AED"), radius: 6)
         }
         .buttonStyle(PremiumButtonStyle())
     }
@@ -326,7 +348,7 @@ private struct KeywordChip: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(text)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.primary)
             Button(action: {
                 HapticHelper.trigger(.light)
@@ -338,13 +360,13 @@ private struct KeywordChip: View {
             }
             .buttonStyle(PremiumButtonStyle())
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color.white.opacity(0.08))
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                .stroke(Color.white.opacity(0.16), lineWidth: 1)
         )
     }
 }

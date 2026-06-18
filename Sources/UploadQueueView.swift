@@ -372,41 +372,52 @@ struct UploadQueueView: View {
                 LiquidBackgroundView()
                 
                 VStack(spacing: 14) {
-                    // Header Dashboard Summary
-                    HStack(spacing: 12) {
-                        summaryCard(title: "В очереди", count: viewModel.photos.count, icon: "tray.fill", color: .blue)
-                        summaryCard(title: "Готовы", count: viewModel.photos.filter({ $0.status == .ready }).count, icon: "checkmark.circle.fill", color: .green)
-                        summaryCard(title: "Загружены", count: viewModel.photos.filter({ $0.status == .success }).count, icon: "paperplane.fill", color: .purple)
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 14)
+                    // Unified Premium Dashboard
+                    unifiedDashboardCard
+                        .padding(.horizontal)
+                        .padding(.top, 10)
                     
-                    // Drag & Drop / Selection Zone
+                    // Interactive dashed "Drop Zone" for adding photos
                     PhotosPicker(
                         selection: $selectedItems,
                         maxSelectionCount: 50,
                         matching: .images,
                         photoLibrary: .shared()
                     ) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(AppleTheme.primaryGradient)
+                        VStack(spacing: 8) {
+                            ZStack {
+                                Circle()
+                                    .fill(AppleTheme.primaryGradient.opacity(0.12))
+                                    .frame(width: 44, height: 44)
+                                
+                                Image(systemName: "photo.badge.plus")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundStyle(AppleTheme.primaryGradient)
+                            }
+                            .neonShadow(color: Color(hex: "7C3AED"), radius: 5)
                             
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(spacing: 2) {
                                 Text("Добавить фотографии")
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundStyle(.primary)
-                                Text("Выберите JPEG, PNG или HEIC")
+                                Text("Коснитесь, чтобы выбрать JPEG, PNG или HEIC")
                                     .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.secondary)
                         }
-                        .glassCard(cornerRadius: 12, padding: 12)
+                        .frame(maxWidth: .infinity)
+                        .glassCard(cornerRadius: 16, padding: 14)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [Color(hex: "7C3AED").opacity(0.4), Color(hex: "EC4899").opacity(0.2)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 4])
+                                )
+                        )
                     }
                     .padding(.horizontal)
                     .buttonStyle(PremiumButtonStyle())
@@ -417,16 +428,18 @@ struct UploadQueueView: View {
                         loadSelectedPhotos(from: newItems)
                     }
                     
-                    // Search Bar
+                    // Glass Search Bar
                     HStack {
-                        Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(.secondary)
-                        TextField("Поиск...", text: $searchText)
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        TextField("Поиск по названию или тегам...", text: $searchText)
                             .font(.system(size: 13))
                     }
-                    .glassCard(cornerRadius: 10, padding: 8)
+                    .glassCard(cornerRadius: 12, padding: 10)
                     .padding(.horizontal)
                     
-                    // Filter chips
+                    // Filter Chips Scroll
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             FilterChip(text: "Все (\(viewModel.photos.count))", isSelected: selectedFilter == nil) {
@@ -442,6 +455,7 @@ struct UploadQueueView: View {
                         }
                         .padding(.horizontal)
                     }
+                    .frame(height: 32)
                     
                     // Photo Queue List
                     if filteredPhotos.isEmpty {
@@ -452,22 +466,22 @@ struct UploadQueueView: View {
                             Text("Очередь пуста")
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundStyle(.primary)
-                            Text("Добавьте новые фото для обработки и автозаполнения ИИ")
+                            Text("Выберите снимки, чтобы запустить ИИ-подбор метаданных и отправить их на микростоки.")
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 24)
                         }
                         .frame(maxWidth: .infinity)
-                        .glassCard(cornerRadius: 16, padding: 28)
+                        .glassCard(cornerRadius: 20, padding: 24)
                         .padding(.horizontal)
                         Spacer()
                     } else {
                         ScrollView {
-                            LazyVStack(spacing: 8) {
+                            LazyVStack(spacing: 10) {
                                 ForEach(filteredPhotos) { photo in
                                     photoRow(photo)
-                                        .glassCard(cornerRadius: 12, padding: 10)
+                                        .glassCard(cornerRadius: 16, padding: 12)
                                         .onTapGesture {
                                             HapticHelper.selection()
                                             editingPhoto = ActiveSheetPhoto(
@@ -476,11 +490,30 @@ struct UploadQueueView: View {
                                                 index: viewModel.photos.firstIndex(where: { $0.id == photo.id }) ?? 0
                                             )
                                         }
+                                        .contextMenu {
+                                            Button {
+                                                viewModel.runAIForPhoto(photo.id)
+                                            } label: {
+                                                Label("Запустить ИИ-анализ", systemImage: "sparkles")
+                                            }
+                                            
+                                            Button {
+                                                viewModel.uploadPhoto(photo.id)
+                                            } label: {
+                                                Label("Выгрузить на стоки", systemImage: "paperplane")
+                                            }
+                                            
+                                            Button(role: .destructive) {
+                                                viewModel.removePhoto(photo.id)
+                                            } label: {
+                                                Label("Удалить", systemImage: "trash")
+                                            }
+                                        }
                                         .applyScrollTransitionIfAvailable()
                                 }
                             }
                             .padding(.horizontal)
-                            .padding(.bottom, 80)
+                            .padding(.bottom, 90)
                         }
                     }
                 }
@@ -489,12 +522,12 @@ struct UploadQueueView: View {
                 if !viewModel.photos.isEmpty {
                     VStack {
                         Spacer()
-                        HStack(spacing: 12) {
+                        HStack(spacing: 14) {
                             Button(action: {
                                 HapticHelper.trigger(.medium)
                                 viewModel.runAIForAll()
                             }) {
-                                HStack {
+                                HStack(spacing: 6) {
                                     if #available(iOS 17.0, *) {
                                         Image(systemName: "sparkles")
                                             .symbolEffect(.pulse, options: .repeating, value: viewModel.isAnalyzingAll)
@@ -503,13 +536,13 @@ struct UploadQueueView: View {
                                     }
                                     Text("Заполнить все ИИ")
                                 }
-                                .font(.system(size: 13, weight: .bold))
+                                .font(.system(size: 13, weight: .black))
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 14)
                                 .background(AppleTheme.primaryGradient)
                                 .foregroundStyle(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .shadow(color: AppleTheme.glowStart.opacity(0.25), radius: 6, x: 0, y: 3)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .neonShadow(color: Color(hex: "7C3AED"), radius: 6)
                             }
                             .buttonStyle(PremiumButtonStyle())
                             .disabled(viewModel.isAnalyzingAll)
@@ -518,27 +551,28 @@ struct UploadQueueView: View {
                                 HapticHelper.trigger(.medium)
                                 viewModel.uploadAllReady()
                             }) {
-                                HStack {
+                                HStack(spacing: 6) {
                                     Image(systemName: "paperplane.fill")
                                     Text("Отправить")
                                 }
-                                .font(.system(size: 13, weight: .bold))
+                                .font(.system(size: 13, weight: .black))
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 14)
                                 .background(.ultraThinMaterial)
                                 .foregroundStyle(.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color.white.opacity(0.18), lineWidth: 1.2)
                                 )
                             }
                             .buttonStyle(PremiumButtonStyle())
                         }
                         .padding(10)
-                        .glassCard(cornerRadius: 16, padding: 8)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 14)
+                        .glassCard(cornerRadius: 20, padding: 8)
+                        .neonShadow(color: Color(hex: "7C3AED"), radius: 12)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
                     }
                 }
                 
@@ -548,19 +582,26 @@ struct UploadQueueView: View {
                         Spacer()
                         Text(viewModel.toastMessage)
                             .font(.system(size: 12, weight: .semibold))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(.ultraThinMaterial)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 12)
+                            .background(
+                                ZStack {
+                                    Color.black.opacity(0.4)
+                                    Rectangle().fill(.ultraThinMaterial)
+                                }
+                            )
                             .foregroundStyle(.primary)
                             .clipShape(Capsule())
-                            .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
-                            .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
-                            .padding(.bottom, 90)
+                            .overlay(Capsule().stroke(LinearGradient(colors: [Color.white.opacity(0.35), Color.white.opacity(0.08)], startPoint: .top, endPoint: .bottom), lineWidth: 1.2))
+                            .neonShadow(color: .black, radius: 10)
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 94)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .navigationTitle("SmartStock")
+            .navigationTitle("StockFlow")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $editingPhoto) { wrapper in
                 NavigationStack {
@@ -577,6 +618,7 @@ struct UploadQueueView: View {
                             Button("Закрыть") {
                                 editingPhoto = nil
                             }
+                            .font(.system(size: 14, weight: .semibold))
                         }
                     }
                 }
@@ -584,9 +626,58 @@ struct UploadQueueView: View {
         }
     }
     
+    // MARK: - Dashboard Card
+    private var unifiedDashboardCard: some View {
+        HStack(spacing: 18) {
+            let total = viewModel.photos.count
+            let ready = viewModel.photos.filter { $0.status == .ready }.count
+            let success = viewModel.photos.filter { $0.status == .success }.count
+            let errors = viewModel.photos.filter { $0.status == .error }.count
+            
+            DashboardProgressRing(total: total, completed: success, ready: ready)
+                .neonShadow(color: Color(hex: "7C3AED"), radius: 5)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Состояние очереди")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                
+                HStack(spacing: 12) {
+                    statColumn(title: "Всего", count: total, color: .blue)
+                    statColumn(title: "Готово", count: ready, color: Color(hex: "EC4899"))
+                    statColumn(title: "Успех", count: success, color: Color(hex: "10B981"))
+                    if errors > 0 {
+                        statColumn(title: "Ошибка", count: errors, color: .red)
+                    }
+                }
+            }
+            Spacer()
+        }
+        .glassCard(cornerRadius: 16, padding: 14)
+    }
+    
+    private func statColumn(title: String, count: Int, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.secondary)
+            
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 5, height: 5)
+                Text("\(count)")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.primary)
+            }
+        }
+    }
+    
     // MARK: - Photo Row Component
     private func photoRow(_ photo: PhotoMetadata) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
+            // Larger rounded thumbnail
             Group {
                 if let uiImage = photo.uiImage {
                     Image(uiImage: uiImage)
@@ -596,20 +687,20 @@ struct UploadQueueView: View {
                     ZStack {
                         Color.white.opacity(0.04)
                         Image(systemName: "photo")
-                            .font(.system(size: 16))
+                            .font(.system(size: 18))
                             .foregroundStyle(.secondary)
                     }
                 }
             }
-            .frame(width: 56, height: 56)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
             )
-            .shadow(color: Color.black.opacity(0.05), radius: 2)
+            .shadow(color: Color.black.opacity(0.15), radius: 3)
             
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(photo.filename)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.primary)
@@ -618,16 +709,16 @@ struct UploadQueueView: View {
                 if !photo.title.isEmpty {
                     Text(photo.title)
                         .font(.system(size: 11))
-                        .foregroundStyle(.primary.opacity(0.8))
+                        .foregroundStyle(.primary.opacity(0.75))
                         .lineLimit(1)
                 } else {
-                    Text("Нет описания ИИ")
+                    Text("ИИ метаданные отсутствуют")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .italic()
                 }
                 
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Text(photo.fileSize)
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
@@ -640,23 +731,26 @@ struct UploadQueueView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                     
-                    Text("•")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+                    Spacer()
                     
-                    Circle()
-                        .fill(photo.status.color)
-                        .frame(width: 5, height: 5)
-                    
+                    // Status Badge Capsule (Glassmorphic)
                     Text(photo.status.rawValue)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(photo.status.color.opacity(0.12))
                         .foregroundStyle(photo.status.color)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(photo.status.color.opacity(0.3), lineWidth: 1)
+                        )
                 }
             }
             
             Spacer()
             
-            // Action Menu
+            // Inline Action Panel
             VStack(spacing: 8) {
                 HStack(spacing: 6) {
                     Button(action: {
@@ -666,9 +760,10 @@ struct UploadQueueView: View {
                         Image(systemName: "sparkles")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.white)
-                            .padding(6)
+                            .padding(7)
                             .background(AppleTheme.primaryGradient)
                             .clipShape(Circle())
+                            .neonShadow(color: Color(hex: "7C3AED"), radius: 4)
                     }
                     .buttonStyle(PremiumButtonStyle())
                     
@@ -679,10 +774,10 @@ struct UploadQueueView: View {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 10))
                             .foregroundStyle(.primary)
-                            .padding(6)
-                            .background(.white.opacity(0.1))
+                            .padding(7)
+                            .background(.white.opacity(0.08))
                             .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
+                            .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
                     }
                     .buttonStyle(PremiumButtonStyle())
                 }
@@ -692,36 +787,101 @@ struct UploadQueueView: View {
                     viewModel.removePhoto(photo.id)
                 }) {
                     Image(systemName: "trash")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.red.opacity(0.7))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.red.opacity(0.75))
                 }
                 .buttonStyle(PremiumButtonStyle())
             }
         }
     }
     
-    // MARK: - Dashboard Card
-    private func summaryCard(title: String, count: Int, icon: String, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 13))
-                .foregroundStyle(color)
-                .padding(6)
-                .background(color.opacity(0.1))
-                .clipShape(Circle())
-            
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Text("\(count)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.primary)
+    // MARK: - Load Photos Logic
+    private func loadSelectedPhotos(from items: [PhotosPickerItem]) {
+        let vm = viewModel
+        for item in items {
+            item.loadTransferable(type: Data.self) { result in
+                switch result {
+                case .success(let data):
+                    if let data = data {
+                        let randomNum = Int.random(in: 1000...9999)
+                        let filename = "IMG_\(randomNum).JPG"
+                        let sizeMB = Double(data.count) / (1024.0 * 1024.0)
+                        let fileSizeStr = String(format: "%.2f МБ", sizeMB)
+                        
+                        let newPhoto = PhotoMetadata(
+                            filename: filename,
+                            fileSize: fileSizeStr,
+                            title: "",
+                            keywords: [],
+                            description: "",
+                            status: .new,
+                            imageData: data
+                        )
+                        
+                        Task {
+                            await vm.addPhoto(newPhoto)
+                        }
+                    }
+                case .failure(let error):
+                    print("Error loading image: \(error.localizedDescription)")
+                }
             }
-            Spacer()
         }
-        .glassCard(cornerRadius: 10, padding: 8)
+        selectedItems = []
     }
+}
+
+// MARK: - Dashboard Progress Ring Component
+struct DashboardProgressRing: View {
+    var total: Int
+    var completed: Int
+    var ready: Int
+    
+    var percentCompleted: Double {
+        total > 0 ? Double(completed) / Double(total) : 0
+    }
+    
+    var percentReady: Double {
+        total > 0 ? Double(ready) / Double(total) : 0
+    }
+    
+    var body: some View {
+        ZStack {
+            // Track
+            Circle()
+                .stroke(Color.white.opacity(0.05), lineWidth: 6)
+                
+            // Ready Segment
+            Circle()
+                .trim(from: 0.0, to: CGFloat(percentReady + percentCompleted))
+                .stroke(
+                    LinearGradient(colors: [Color(hex: "7C3AED"), Color(hex: "EC4899")], startPoint: .top, endPoint: .bottom),
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                )
+                .rotationEffect(Angle(degrees: -90))
+                
+            // Completed Segment
+            Circle()
+                .trim(from: 0.0, to: CGFloat(percentCompleted))
+                .stroke(
+                    LinearGradient(colors: [Color(hex: "10B981"), Color(hex: "34D399")], startPoint: .top, endPoint: .bottom),
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                )
+                .rotationEffect(Angle(degrees: -90))
+            
+            // Text info
+            VStack(spacing: 0) {
+                Text(total > 0 ? "\(Int((percentCompleted + percentReady) * 100))%" : "0%")
+                    .font(.system(size: 13, weight: .black))
+                    .foregroundStyle(.primary)
+                Text("готовность")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 68, height: 68)
+    }
+}
     
     // MARK: - Load Photos Logic
     private func loadSelectedPhotos(from items: [PhotosPickerItem]) {
