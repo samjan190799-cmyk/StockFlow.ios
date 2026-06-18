@@ -61,7 +61,8 @@ class FTPClient {
             }
         }
     }
-          // MARK: - Test Connection
+    
+    // MARK: - Test Connection
     static func testConnection(
         host: String,
         port: Int = 21,
@@ -102,29 +103,6 @@ class FTPClient {
             guard banner.hasPrefix("220") else {
                 controlConnection.cancel()
                 throw ftpError("Ошибка FTP (неверное приветствие): \(banner)")
-            }
-            
-            // 2. Send AUTH TLS
-            do {
-                try await sendCommand(connection: controlConnection, cmd: "AUTH TLS\r\n")
-            } catch {
-                throw ftpError("Ошибка при отправке команды AUTH TLS: \(error.localizedDescription)")
-            }
-            
-            let authResp: String
-            do {
-                authResp = try await reader.readLine()
-            } catch {
-                throw ftpError("Ошибка при чтении ответа на AUTH TLS: \(error.localizedDescription)")
-            }
-            
-            let isTLS = authResp.hasPrefix("234")
-            if isTLS {
-                do {
-                    try await upgradeToTLS(connection: controlConnection, host: cleanHost)
-                } catch {
-                    throw ftpError("Ошибка при переходе на защищенное соединение (TLS upgrade): \(error.localizedDescription)")
-                }
             }
             
             // 3. Send USER
@@ -217,29 +195,6 @@ class FTPClient {
                 throw ftpError("Ошибка FTP (неверное приветствие): \(banner)")
             }
             
-            // 2. Send AUTH TLS
-            do {
-                try await sendCommand(connection: controlConnection, cmd: "AUTH TLS\r\n")
-            } catch {
-                throw ftpError("Ошибка при отправке команды AUTH TLS: \(error.localizedDescription)")
-            }
-            
-            let authResp: String
-            do {
-                authResp = try await reader.readLine()
-            } catch {
-                throw ftpError("Ошибка при чтении ответа на AUTH TLS: \(error.localizedDescription)")
-            }
-            
-            let isTLS = authResp.hasPrefix("234")
-            if isTLS {
-                do {
-                    try await upgradeToTLS(connection: controlConnection, host: cleanHost)
-                } catch {
-                    throw ftpError("Ошибка при переходе на защищенное соединение (TLS upgrade): \(error.localizedDescription)")
-                }
-            }
-            
             // 3. Send USER
             do {
                 try await sendCommand(connection: controlConnection, cmd: "USER \(username)\r\n")
@@ -278,17 +233,14 @@ class FTPClient {
             }
             
             // 5. Send PBSZ and PROT (устанавливаем PROT P — защищенный канал данных)
-            // Требуется большинством стоков (включая Shutterstock) для безопасной передачи файлов
-            if isTLS {
-                do {
-                    try await sendCommand(connection: controlConnection, cmd: "PBSZ 0\r\n")
-                    _ = try await reader.readLine()
-                    
-                    try await sendCommand(connection: controlConnection, cmd: "PROT P\r\n")
-                    _ = try await reader.readLine()
-                } catch {
-                    throw ftpError("Ошибка при настройке параметров защиты (PBSZ/PROT): \(error.localizedDescription)")
-                }
+            do {
+                try await sendCommand(connection: controlConnection, cmd: "PBSZ 0\r\n")
+                _ = try await reader.readLine()
+                
+                try await sendCommand(connection: controlConnection, cmd: "PROT P\r\n")
+                _ = try await reader.readLine()
+            } catch {
+                throw ftpError("Ошибка при настройке параметров защиты (PBSZ/PROT): \(error.localizedDescription)")
             }
             
             // 6. Send TYPE I (Binary Mode)
@@ -349,24 +301,19 @@ class FTPClient {
             }
             let dataPort = p1 * 256 + p2
             
-            // 8. Connect Data Channel (используем TLS, если соединение защищено)
-            let dataParameters: NWParameters
-            if isTLS {
-                let tlsOptions = NWProtocolTLS.Options()
-                sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-                sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-                sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
-                    print("FTPClient (Data): Блок верификации TLS вызван")
-                    completionHandler(true)
-                }, DispatchQueue.main)
-                
-                // Включаем возобновление TLS-сессий для обхода ошибок TLS Session Resumption, если сервер требует
-                sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
-                
-                dataParameters = NWParameters(tls: tlsOptions)
-            } else {
-                dataParameters = .tcp
-            }
+            // 8. Connect Data Channel (используем TLS)
+            let tlsOptions = NWProtocolTLS.Options()
+            sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+            sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+            sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
+                print("FTPClient (Data): Блок верификации TLS вызван")
+                completionHandler(true)
+            }, DispatchQueue.main)
+            
+            // Включаем возобновление TLS-сессий для обхода ошибок TLS Session Resumption, если сервер требует
+            sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
+            
+            let dataParameters = NWParameters(tls: tlsOptions)
             
             let conn = NWConnection(
                 host: NWEndpoint.Host(dataIp),
@@ -623,39 +570,102 @@ class FTPESFramer: NWProtocolFramerImplementation {
         }
     }
     
-    func handleOutput(framer: NWProtocolFramer.Instance, message: NWProtocolFramer.Message, messageLength: Int, isComplete: Bool) {
-        if message["upgradeTLS"] as? Bool == true {
-            print("FTPESFramer: Запуск обновления до TLS...")
-            let tlsOptions = NWProtocolTLS.Options()
-            sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-            sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+// MARK: - FTPES (Explicit TLS) Framer
+class FTPESFramer: NWProtocolFramerImplementation {
+    static let label = "FTPESFramer"
+    static let definition = NWProtocolFramer.Definition(implementation: FTPESFramer.self)
+    
+    enum State {
+        case waitingForBanner
+        case waitingForAuthTLS
+        case completed
+    }
+    
+    private var state = State.waitingForBanner
+    
+    required init(framer: NWProtocolFramer.Instance) {}
+    
+    func start(framer: NWProtocolFramer.Instance) -> NWProtocolFramer.StartResult {
+        print("FTPESFramer: start() вызвана, возвращаем .willMarkReady")
+        return .willMarkReady
+    }
+    
+    func handleInput(framer: NWProtocolFramer.Instance) -> Int {
+        while true {
+            var parsedLine: String? = nil
+            var lineLength = 0
             
-            // Временно не отправляем SNI для предотвращения ошибок сброса соединения на некоторых FTP-серверах
-            // if let peerName = message["peerName"] as? String {
-            //     sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, peerName)
-            // }
-            
-            sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
-                print("FTPESFramer (Control): Блок верификации TLS вызван")
-                completionHandler(true)
-            }, DispatchQueue.main)
-            
-            do {
-                print("FTPESFramer: Препендим TLS протокол...")
-                try framer.prependApplicationProtocol(options: tlsOptions)
-                print("FTPESFramer: TLS протокол успешно добавлен.")
-            } catch {
-                print("FTPESFramer: Ошибка при prependApplicationProtocol: \(error.localizedDescription)")
-                framer.markFailed(error: NWError.posix(.ECONNABORTED))
-                return
+            let success = framer.parseInput(minimumIncompleteLength: 1, maximumLength: 65536) { buffer, _ in
+                guard let buffer = buffer else { return 0 }
+                if let index = buffer.firstIndex(of: 10) { // 10 is '\n'
+                    let count = index + 1
+                    let lineData = Data(buffer[0..<count])
+                    parsedLine = String(data: lineData, encoding: .utf8)
+                    lineLength = count
+                    return count
+                }
+                return 0
             }
             
-            // Переводим фреймер в режим прозрачной передачи, чтобы TLS работал напрямую с TCP
-            print("FTPESFramer: Перевод в режим pass-through")
-            framer.passThroughInput()
-            framer.passThroughOutput()
-            return
+            guard success, let line = parsedLine else {
+                return 1 // Ждем еще данные
+            }
+            
+            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            print("FTPESFramer [Input]: \(trimmedLine)")
+            
+            switch state {
+            case .waitingForBanner:
+                if line.hasPrefix("220 ") {
+                    print("FTPESFramer: Получено приветствие 220, отправляем AUTH TLS...")
+                    if let authData = "AUTH TLS\r\n".data(using: .utf8) {
+                        framer.writeOutput(data: authData)
+                    }
+                    state = .waitingForAuthTLS
+                }
+            case .waitingForAuthTLS:
+                let code = line.prefix(3)
+                if code == "234" {
+                    print("FTPESFramer: Получен ответ 234. Выполняем переход на TLS...")
+                    let tlsOptions = NWProtocolTLS.Options()
+                    sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+                    sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+                    sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
+                        print("FTPESFramer (Control): Блок верификации TLS вызван")
+                        completionHandler(true)
+                    }, DispatchQueue.main)
+                    
+                    do {
+                        try framer.prependApplicationProtocol(options: tlsOptions)
+                        print("FTPESFramer: TLS протокол успешно добавлен.")
+                    } catch {
+                        print("FTPESFramer: Ошибка при prependApplicationProtocol: \(error.localizedDescription)")
+                        framer.markFailed(error: NWError.posix(.ECONNABORTED))
+                        return 0
+                    }
+                    
+                    state = .completed
+                    framer.passThroughInput()
+                    framer.passThroughOutput()
+                    framer.markReady()
+                    return 0
+                } else if code.count == 3 && code != "220" {
+                    print("FTPESFramer: Сервер отклонил TLS (код: \(code)). Продолжаем без шифрования.")
+                    state = .completed
+                    framer.passThroughInput()
+                    framer.passThroughOutput()
+                    framer.markReady()
+                    return 0
+                }
+            case .completed:
+                // Передаем данные наверх (этот кейс не должен вызываться после passThrough)
+                let message = NWProtocolFramer.Message(definition: FTPESFramer.definition)
+                _ = framer.deliverInput(data: line.data(using: .utf8) ?? Data(), message: message, isComplete: true)
+            }
         }
+    }
+    
+    func handleOutput(framer: NWProtocolFramer.Instance, message: NWProtocolFramer.Message, messageLength: Int, isComplete: Bool) {
         try? framer.writeOutputNoCopy(length: messageLength)
     }
     
