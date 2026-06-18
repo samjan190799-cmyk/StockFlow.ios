@@ -241,7 +241,7 @@ struct SmartStockLogoView: View {
                 .offset(x: size * 0.16, y: -size * 0.16)
         }
         .onAppear {
-            withAnimation(.linear(duration: 25).repeatForever(false)) {
+            withAnimation(.linear(duration: 25).repeatForever(autoreverses: false)) {
                 rotateLogo = true
             }
         }
