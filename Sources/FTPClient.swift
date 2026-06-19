@@ -276,7 +276,7 @@ class FTPClient {
                    let range = Range(match.range(at: 1), in: epsvResp),
                    let port = Int(epsvResp[range]) {
                     dataPort = port
-                    print("FTPClient: EPSV порт \(dataPort), хост \(dataIp)")
+                    await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] EPSV port: \(dataPort)") }
                 } else {
                     controlConnection.cancel()
                     throw ftpError("Ошибка разбора порта EPSV: \(epsvResp)")
@@ -332,8 +332,12 @@ class FTPClient {
                 if let endpoint = controlConnection.currentPath?.remoteEndpoint,
                    case .hostPort(let remoteHost, _) = endpoint {
                     dataHostEndpoint = remoteHost
-                    print("FTPClient: Извлечен физический IP control-канала: \(remoteHost)")
+                    await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Data IP from control channel: \(remoteHost)") }
+                } else {
+                    await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Data IP is cleanHost: \(cleanHost)") }
                 }
+            } else {
+                await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Data IP from PASV: \(dataIp)") }
             }
             
             let dataParameters: NWParameters
@@ -345,6 +349,9 @@ class FTPClient {
                     completionHandler(true)
                 }, DispatchQueue.global())
                 sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
+                // Обязательно указываем SNI (cleanHost), так как при прямом подключении по IP 
+                // балансировщики Shutterstock могут сбрасывать соединение без правильного SNI.
+                sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, cleanHost)
                 dataParameters = NWParameters(tls: tlsOptions)
             } else {
                 dataParameters = NWParameters.tcp
@@ -358,7 +365,7 @@ class FTPClient {
             dataConnection = conn
             conn.start(queue: DispatchQueue.global())
             do {
-                try await waitForReady(connection: conn, timeout: 20)
+                try await waitForReady(connection: conn, timeout: 30)
             } catch {
                 throw ftpError("Ошибка при открытии канала данных: \(error.localizedDescription)")
             }
