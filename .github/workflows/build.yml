@@ -43,14 +43,16 @@ jobs:
 
       - name: Generate Xcode Project
         run: |
+          cd Kinogo.ios
           xcodegen generate
 
       - name: Build for iOS Device (unsigned)
         run: |
           set -o pipefail
+          cd Kinogo.ios
           xcodebuild \
-            -project SmartStock.xcodeproj \
-            -scheme SmartStock \
+            -project KinogoVOD.xcodeproj \
+            -scheme KinogoVOD \
             -destination 'generic/platform=iOS' \
             -configuration Release \
             -derivedDataPath build \
@@ -63,23 +65,24 @@ jobs:
             build 2>&1 | xcpretty
 
           # Verify .app executable was built
-          ls -l build/Build/Products/Release-iphoneos/SmartStock.app/SmartStock
+          ls -l build/Build/Products/Release-iphoneos/KinogoVOD.app/KinogoVOD
 
       - name: Package as IPA
         run: |
+          cd Kinogo.ios
           mkdir -p build/Payload
           APP_PATH=$(find build/Build/Products/Release-iphoneos -name "*.app" | head -1)
           echo "App path: $APP_PATH"
-          cp -r "$APP_PATH" build/Payload/SmartStock.app
+          cp -r "$APP_PATH" build/Payload/KinogoVOD.app
           cd build
-          zip -r SmartStock.ipa Payload/
-          echo "IPA size: $(du -h SmartStock.ipa | cut -f1)"
+          zip -r KinogoVOD.ipa Payload/
+          echo "IPA size: $(du -h KinogoVOD.ipa | cut -f1)"
 
       - name: Upload IPA as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SmartStock-Unsigned-IPA
-          path: build/SmartStock.ipa
+          name: KinogoVOD-Unsigned-IPA
+          path: Kinogo.ios/build/KinogoVOD.ipa
           if-no-files-found: error
           retention-days: 30
 
@@ -88,19 +91,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: "SmartStock v1.6 (Build ${{ github.run_number }})"
+          name: "Kinogo VOD v1.0 (Build ${{ github.run_number }})"
           body: |
-            ## SmartStock iOS IPA
+            ## Kinogo VOD iOS IPA (Aesthetic 2026)
 
             **Как установить через AltStore:**
-            1. Скачай `SmartStock.ipa` ниже
+            1. Скачай `KinogoVOD.ipa` ниже
             2. Открой AltStore на iPhone → "My Apps" → "+" → выбери IPA
             3. Готово!
-
-            **Изменения:**
-            - FTPClient переведен на использование EPSV режима
-            - Увеличен таймаут соединения (data channel) до 20 сек для стабильной загрузки на Shutterstock
-          files: build/SmartStock.ipa
+          files: Kinogo.ios/build/KinogoVOD.ipa
           draft: false
           prerelease: false
         env:
