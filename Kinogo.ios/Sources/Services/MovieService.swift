@@ -4,9 +4,9 @@ import Foundation
 @MainActor
 public final class MovieService: ObservableObject {
     
-    @Published public private(set) as(Published) var movies: [Movie] = []
-    @Published public private(set) as(Published) var isLoading: Bool = false
-    @Published public private(set) as(Published) var errorMessage: String? = nil
+    @Published public private(set) var movies: [Movie] = []
+    @Published public private(set) var isLoading: Bool = false
+    @Published public private(set) var errorMessage: String? = nil
     
     public init() {
         // Загрузка начальных данных
