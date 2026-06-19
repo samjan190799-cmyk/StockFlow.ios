@@ -237,14 +237,12 @@ class QueueViewModel: ObservableObject {
         let preparedData = writeMetadata(to: data, title: photo.title, description: photo.description, keywords: photo.keywords) ?? data
         
         // Load active platforms
-        guard let platformsData = UserDefaults.standard.data(forKey: "stock_platforms"),
-              let platforms = try? JSONDecoder().decode([StockPlatform].self, from: platformsData) else {
-            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Настройки стоков не найдены"])
+        // Фильтруем только те стоки, которые включены в настройках И выбраны для конкретной фотографии
+        let activePlatforms = platforms.filter { platform in
+            platform.isEnabled && photo.selectedStocks.contains(platform.name)
         }
-        
-        let activePlatforms = platforms.filter { $0.isEnabled }
         guard !activePlatforms.isEmpty else {
-            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Нет активных стоков. Включите хотя бы один фотосток в настройках."])
+            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Нет активных стоков для отправки. Включите фотостоки в настройках и отметьте их для этого фото."])
         }
         
         var uploadErrors: [String] = []
@@ -351,6 +349,16 @@ class QueueViewModel: ObservableObject {
         photos.append(photo)
     }
     
+    func toggleStockForPhoto(_ photoId: UUID, stockName: String) {
+        if let idx = photos.firstIndex(where: { $0.id == photoId }) {
+            if photos[idx].selectedStocks.contains(stockName) {
+                photos[idx].selectedStocks.remove(stockName)
+            } else {
+                photos[idx].selectedStocks.insert(stockName)
+            }
+        }
+    }
+    
     func triggerToast(_ message: String) {
         toastMessage = message
         withAnimation {
@@ -376,6 +384,8 @@ struct UploadQueueView: View {
     @State private var selectedFilter: PhotoStatus? = nil
     @State private var editingPhoto: ActiveSheetPhoto? = nil
     @State private var showLogViewer = false
+    @State private var selectedErrorMsg: String? = nil
+    @State private var showingErrorAlert = false
     
     var filteredPhotos: [PhotoMetadata] {
         viewModel.photos.filter { photo in
@@ -660,6 +670,19 @@ struct UploadQueueView: View {
                     }
                 }
             }
+            .alert("Ошибка загрузки", isPresented: $showingErrorAlert) {
+                Button("Скопировать") {
+                    if let msg = selectedErrorMsg {
+                        UIPasteboard.general.string = msg
+                        HapticHelper.notification(.success)
+                    }
+                }
+                Button("ОК", role: .cancel) {}
+            } message: {
+                if let msg = selectedErrorMsg {
+                    Text(msg)
+                }
+            }
         }
     }
     
@@ -784,39 +807,127 @@ struct UploadQueueView: View {
                         )
                 }
                 
+                // Выбранные стоки для фото
+                if !photo.selectedStocks.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(Array(photo.selectedStocks).sorted(), id: \.self) { stock in
+                            Text(String(stock.prefix(2)).uppercased())
+                                .font(.system(size: 8, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Color.white.opacity(0.08))
+                                .foregroundStyle(.secondary)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 0.8)
+                                )
+                        }
+                    }
+                    .padding(.top, 2)
+                }
+                
                 if photo.status == .uploading {
-                    ProgressView(value: photo.uploadProgress)
-                        .progressViewStyle(.linear)
-                        .tint(photo.status.color)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Выгрузка...")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(Int(photo.uploadProgress * 100))%")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(photo.status.color)
+                        }
+                        
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.white.opacity(0.08))
+                                    .frame(height: 4)
+                                
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color(hex: "7C3AED"), Color(hex: "EC4899")],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(width: geo.size.width * CGFloat(photo.uploadProgress), height: 4)
+                                    .shadow(color: Color(hex: "7C3AED").opacity(0.5), radius: 2)
+                            }
+                        }
                         .frame(height: 4)
-                        .padding(.top, 4)
+                    }
+                    .padding(.top, 4)
                 }
                 
                 if photo.status == .error, let errorMsg = photo.errorMessage {
-                    Text(errorMsg)
-                        .font(.system(size: 9))
-                        .foregroundStyle(.red)
-                        .lineLimit(2)
-                        .padding(.top, 2)
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.octagon.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.red)
+                        Text(errorMsg)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.red)
+                            .lineLimit(2)
+                        Spacer()
+                        Button(action: {
+                            HapticHelper.trigger(.light)
+                            selectedErrorMsg = errorMsg
+                            showingErrorAlert = true
+                        }) {
+                            Text("Подробнее")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Color(hex: "7C3AED"))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color(hex: "7C3AED").opacity(0.1))
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    .padding(.top, 2)
                 }
             }
             
             Spacer()
             
-            // Inline Action Panel
+            // Inline Action Panel (Combined Send, Delete, and Stocks choice)
             Menu {
-                Button(action: {
-                    HapticHelper.trigger(.light)
-                    viewModel.runAIForPhoto(photo.id)
-                }) {
-                    Label("Заполнить ИИ", systemImage: "sparkles")
+                Section {
+                    Button(action: {
+                        HapticHelper.trigger(.light)
+                        viewModel.uploadPhoto(photo.id)
+                    }) {
+                        Label("Отправить на стоки", systemImage: "paperplane.fill")
+                    }
+                    
+                    Button(action: {
+                        HapticHelper.trigger(.light)
+                        viewModel.runAIForPhoto(photo.id)
+                    }) {
+                        Label("Заполнить ИИ", systemImage: "sparkles")
+                    }
                 }
                 
-                Button(action: {
-                    HapticHelper.trigger(.light)
-                    viewModel.uploadPhoto(photo.id)
-                }) {
-                    Label("Отправить", systemImage: "paperplane.fill")
+                Menu {
+                    ForEach(["Shutterstock", "Adobe Stock", "iStock / Getty", "Freepik", "Depositphotos", "Alamy", "Dreamstime", "123RF", "Pond5"], id: \.self) { stock in
+                        Button(action: {
+                            HapticHelper.selection()
+                            viewModel.toggleStockForPhoto(photo.id, stockName: stock)
+                        }) {
+                            HStack {
+                                Text(stock)
+                                if photo.selectedStocks.contains(stock) {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Выбрать стоки...", systemImage: "checklist")
                 }
                 
                 Divider()
@@ -825,7 +936,7 @@ struct UploadQueueView: View {
                     HapticHelper.trigger(.medium)
                     viewModel.removePhoto(photo.id)
                 }) {
-                    Label("Удалить", systemImage: "trash")
+                    Label("Удалить из очереди", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis.circle.fill")

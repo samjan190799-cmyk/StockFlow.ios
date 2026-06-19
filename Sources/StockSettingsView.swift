@@ -41,15 +41,27 @@ struct StockSettingsView: View {
                                                 .font(.system(size: 18, weight: .black))
                                                 .foregroundStyle(.white)
                                         )
-                                        .shadow(color: colorForPlatform(platform.id).opacity(0.35), radius: 5)
+                                        .shadow(color: colorForPlatform(platform.id).opacity(platform.isEnabled ? 0.45 : 0.15), radius: platform.isEnabled ? 8 : 4)
                                     
-                                    VStack(alignment: .leading, spacing: 2) {
+                                    VStack(alignment: .leading, spacing: 3) {
                                         Text(platform.name)
-                                            .font(.system(size: 17, weight: .bold))
-                                            .foregroundStyle(.primary)
+                                            .font(.system(size: 16, weight: .bold))
+                                            .foregroundStyle(platform.isEnabled ? .primary : .primary.opacity(0.6))
                                         Text(platform.host)
-                                            .font(.system(size: 12))
+                                            .font(.system(size: 11, design: .monospaced))
                                             .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                        
+                                        let isConfigured = !platform.username.isEmpty && !platform.passwordHash.isEmpty
+                                        HStack(spacing: 4) {
+                                            Circle()
+                                                .fill(isConfigured ? Color.green : Color.orange)
+                                                .frame(width: 5, height: 5)
+                                            Text(isConfigured ? "Настроен" : "Нужна настройка")
+                                                .font(.system(size: 10, weight: .semibold))
+                                                .foregroundStyle(isConfigured ? Color.green : Color.orange)
+                                        }
+                                        .padding(.top, 1)
                                     }
                                     
                                     Spacer()
@@ -67,8 +79,11 @@ struct StockSettingsView: View {
                                 .padding(16)
                                 .background(
                                     ZStack {
-                                        gradientForPlatform(platform.id)
-                                        Color.black.opacity(0.15)
+                                        if platform.isEnabled {
+                                            colorForPlatform(platform.id).opacity(0.08)
+                                        } else {
+                                            Color.black.opacity(0.12)
+                                        }
                                         Rectangle().fill(.ultraThinMaterial)
                                     }
                                 )
