@@ -322,6 +322,20 @@ class FTPClient {
             }
             
             // 8. Connect Data Channel
+            var dataHostEndpoint = NWEndpoint.Host(dataIp)
+            
+            // Если используется EPSV или PASV вернул внутренний IP (dataIp был заменен на cleanHost),
+            // мы извлекаем точный физический IP-адрес из control-канала.
+            // Это решает проблему с Round-Robin DNS и автоматически отключает SNI в TLS,
+            // так как Apple Network framework не шлет SNI при использовании чистого IP.
+            if dataIp == cleanHost {
+                if let endpoint = controlConnection.currentPath?.remoteEndpoint,
+                   case .hostPort(let remoteHost, _) = endpoint {
+                    dataHostEndpoint = remoteHost
+                    print("FTPClient: Извлечен физический IP control-канала: \(remoteHost)")
+                }
+            }
+            
             let dataParameters: NWParameters
             if useTlsOnDataChannel {
                 let tlsOptions = NWProtocolTLS.Options()
@@ -331,15 +345,13 @@ class FTPClient {
                     completionHandler(true)
                 }, DispatchQueue.global())
                 sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
-                // Отключаем SNI для канала данных (предотвращает сброс соединения серверами вроде Shutterstock)
-                sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, "")
                 dataParameters = NWParameters(tls: tlsOptions)
             } else {
                 dataParameters = NWParameters.tcp
             }
             
             let conn = NWConnection(
-                host: NWEndpoint.Host(dataIp),
+                host: dataHostEndpoint,
                 port: NWEndpoint.Port(rawValue: UInt16(dataPort))!,
                 using: dataParameters
             )
