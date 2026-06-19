@@ -25,6 +25,9 @@ class FTPClient {
                             let lineData = self.buffer.subdata(in: 0..<newlineIndex + 1)
                             self.buffer.removeSubrange(0..<newlineIndex + 1)
                             if let str = String(data: lineData, encoding: .utf8) {
+                                await MainActor.run {
+                                    FTPTranscriptLogger.shared.logResponse(str)
+                                }
                                 return str
                             }
                         }
@@ -328,6 +331,8 @@ class FTPClient {
                     completionHandler(true)
                 }, DispatchQueue.global())
                 sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
+                // Отключаем SNI для канала данных (предотвращает сброс соединения серверами вроде Shutterstock)
+                sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, "")
                 dataParameters = NWParameters(tls: tlsOptions)
             } else {
                 dataParameters = NWParameters.tcp
@@ -446,6 +451,9 @@ class FTPClient {
     }
     
     private static func sendCommand(connection: NWConnection, cmd: String) async throws {
+        await MainActor.run {
+            FTPTranscriptLogger.shared.logCommand(cmd)
+        }
         guard let data = cmd.data(using: .utf8) else {
             throw ftpError("Ошибка кодирования команды")
         }

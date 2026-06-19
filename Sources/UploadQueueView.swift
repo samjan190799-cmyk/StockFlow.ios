@@ -375,6 +375,7 @@ struct UploadQueueView: View {
     @State private var searchText = ""
     @State private var selectedFilter: PhotoStatus? = nil
     @State private var editingPhoto: ActiveSheetPhoto? = nil
+    @State private var showLogViewer = false
     
     var filteredPhotos: [PhotoMetadata] {
         viewModel.photos.filter { photo in
@@ -625,6 +626,20 @@ struct UploadQueueView: View {
             }
             .navigationTitle("StockFlow")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showLogViewer = true
+                    }) {
+                        Image(systemName: "doc.text.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Color(hex: "7C3AED"))
+                    }
+                }
+            }
+            .sheet(isPresented: $showLogViewer) {
+                LogViewer()
+            }
             .sheet(item: $editingPhoto) { wrapper in
                 NavigationStack {
                     AIMetadataView(photos: wrapper.photos, currentIndex: wrapper.index) { @MainActor updatedPhotos in
