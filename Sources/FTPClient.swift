@@ -210,13 +210,22 @@ class FTPClient {
                 throw ftpError("Ошибка авторизации: \(userResp)")
             }
             
-            // 5. Send PBSZ and PROT (устанавливаем PROT P — защищенный канал данных)
+            // 5. Send PBSZ and PROT (используем PROT C для обхода проблемы TLS Session Resumption)
+            var useTlsOnDataChannel = false
             do {
                 try await sendCommand(connection: controlConnection, cmd: "PBSZ 0\r\n")
                 _ = try await reader.readLine()
                 
-                try await sendCommand(connection: controlConnection, cmd: "PROT P\r\n")
-                _ = try await reader.readLine()
+                try await sendCommand(connection: controlConnection, cmd: "PROT C\r\n")
+                let protResp = try await reader.readLine()
+                if !protResp.hasPrefix("200") {
+                    print("FTPClient: PROT C отклонен (\(protResp)), используем PROT P")
+                    try await sendCommand(connection: controlConnection, cmd: "PROT P\r\n")
+                    _ = try await reader.readLine()
+                    useTlsOnDataChannel = true
+                } else {
+                    print("FTPClient: Успешно установлен PROT C (открытый канал данных)")
+                }
             } catch {
                 throw ftpError("Ошибка при настройке параметров защиты (PBSZ/PROT): \(error.localizedDescription)")
             }
@@ -239,97 +248,62 @@ class FTPClient {
                 throw ftpError("Ошибка установки бинарного режима: \(typeResp)")
             }
             
-            // 7. Send EPSV (Extended Passive Mode)
-            var dataPort: Int = 0
-            var dataIp: String = cleanHost
-            
+            // 7. Send PASV (Passive Mode)
             do {
-                try await sendCommand(connection: controlConnection, cmd: "EPSV\r\n")
+                try await sendCommand(connection: controlConnection, cmd: "PASV\r\n")
             } catch {
-                throw ftpError("Ошибка при отправке команды EPSV: \(error.localizedDescription)")
+                throw ftpError("Ошибка при отправке команды PASV: \(error.localizedDescription)")
             }
             
-            let epsvResp: String
+            let pasvResp: String
             do {
-                epsvResp = try await reader.readLine()
+                pasvResp = try await reader.readLine()
             } catch {
-                throw ftpError("Ошибка при чтении ответа на EPSV: \(error.localizedDescription)")
+                throw ftpError("Ошибка при чтении ответа на PASV: \(error.localizedDescription)")
+            }
+            guard pasvResp.hasPrefix("227") else {
+                controlConnection.cancel()
+                throw ftpError("Ошибка пассивного режима: \(pasvResp)")
             }
             
-            if epsvResp.hasPrefix("229") {
-                // Ожидаем ответ вида: 229 Entering Extended Passive Mode (|||55132|)
-                let pattern = "\\(\\|\\|\\|(\\d+)\\|\\)"
-                if let regex = try? NSRegularExpression(pattern: pattern),
-                   let match = regex.firstMatch(in: epsvResp, range: NSRange(epsvResp.startIndex..., in: epsvResp)),
-                   let range = Range(match.range(at: 1), in: epsvResp),
-                   let port = Int(String(epsvResp[range])) {
-                    dataPort = port
-                    print("FTPClient: Используем EPSV порт \(dataPort)")
-                } else {
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка разбора ответа EPSV: \(epsvResp)")
-                }
+            let pattern = "\\(([^)]+)\\)"
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: pasvResp, range: NSRange(pasvResp.startIndex..., in: pasvResp)),
+                  let range = Range(match.range(at: 1), in: pasvResp) else {
+                controlConnection.cancel()
+                throw ftpError("Ошибка разбора ответа PASV: \(pasvResp)")
+            }
+            
+            let components = String(pasvResp[range]).components(separatedBy: ",")
+            guard components.count == 6 else {
+                controlConnection.cancel()
+                throw ftpError("Ошибка формата ответа PASV")
+            }
+            
+            let parsedIp = components[0...3].joined(separator: ".")
+            let dataIp = parsedIp
+            print("FTPClient: PASV вернул IP \(dataIp)")
+            
+            guard let p1 = Int(components[4]), let p2 = Int(components[5]) else {
+                controlConnection.cancel()
+                throw ftpError("Ошибка разбора порта PASV")
+            }
+            let dataPort = p1 * 256 + p2
+            
+            // 8. Connect Data Channel
+            let dataParameters: NWParameters
+            if useTlsOnDataChannel {
+                let tlsOptions = NWProtocolTLS.Options()
+                sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+                sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+                sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
+                    completionHandler(true)
+                }, DispatchQueue.global())
+                sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
+                dataParameters = NWParameters(tls: tlsOptions)
             } else {
-                print("FTPClient: EPSV не поддерживается, пробуем PASV. Ответ: \(epsvResp)")
-                // Fallback to PASV
-                do {
-                    try await sendCommand(connection: controlConnection, cmd: "PASV\r\n")
-                } catch {
-                    throw ftpError("Ошибка при отправке команды PASV: \(error.localizedDescription)")
-                }
-                
-                let pasvResp: String
-                do {
-                    pasvResp = try await reader.readLine()
-                } catch {
-                    throw ftpError("Ошибка при чтении ответа на PASV: \(error.localizedDescription)")
-                }
-                guard pasvResp.hasPrefix("227") else {
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка пассивного режима: \(pasvResp)")
-                }
-                
-                let pattern = "\\(([^)]+)\\)"
-                guard let regex = try? NSRegularExpression(pattern: pattern),
-                      let match = regex.firstMatch(in: pasvResp, range: NSRange(pasvResp.startIndex..., in: pasvResp)),
-                      let range = Range(match.range(at: 1), in: pasvResp) else {
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка разбора ответа PASV: \(pasvResp)")
-                }
-                
-                let components = String(pasvResp[range]).components(separatedBy: ",")
-                guard components.count == 6 else {
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка формата ответа PASV")
-                }
-                
-                let parsedIp = components[0...3].joined(separator: ".")
-                // Shutterstock и другие балансировщики могут возвращать внутренний IP.
-                // Если возвращен IP, начинающийся с 10., 192.168. и т.д., лучше использовать изначальный хост.
-                // Для надежности используем оригинальный хост, если это возможно, либо спарсенный IP.
-                dataIp = parsedIp
-                print("FTPClient: PASV вернул IP \(dataIp)")
-                
-                guard let p1 = Int(components[4]), let p2 = Int(components[5]) else {
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка разбора порта PASV")
-                }
-                dataPort = p1 * 256 + p2
+                dataParameters = NWParameters.tcp
             }
-            
-            // 8. Connect Data Channel (используем TLS)
-            let tlsOptions = NWProtocolTLS.Options()
-            sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-            sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-            sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
-                print("FTPClient (Data): Блок верификации TLS вызван")
-                completionHandler(true)
-            }, DispatchQueue.global())
-            
-            // Включаем возобновление TLS-сессий для обхода ошибок TLS Session Resumption, если сервер требует
-            sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
-            
-            let dataParameters = NWParameters(tls: tlsOptions)
             
             let conn = NWConnection(
                 host: NWEndpoint.Host(dataIp),
