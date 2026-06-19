@@ -160,7 +160,7 @@ class FTPClient {
             while ptr != nil {
                 let info = ptr!.pointee
                 var hostname = [CChar](repeating: 0, count: 1025)
-                if getnameinfo(info.ai_addr, info.ai_addrlen, &hostname, socklen_t(hostname.count), nil, 0, 1) == 0 {
+                if getnameinfo(info.ai_addr, info.ai_addrlen, &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
                     let ipString = String(cString: hostname)
                     if info.ai_family == AF_INET { // Prefer IPv4
                         return ipString
@@ -170,7 +170,7 @@ class FTPClient {
             }
             if let info = res?.pointee {
                  var hostname = [CChar](repeating: 0, count: 1025)
-                 if getnameinfo(info.ai_addr, info.ai_addrlen, &hostname, socklen_t(hostname.count), nil, 0, 1) == 0 {
+                 if getnameinfo(info.ai_addr, info.ai_addrlen, &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
                      return String(cString: hostname)
                  }
             }
