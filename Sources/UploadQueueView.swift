@@ -237,6 +237,11 @@ class QueueViewModel: ObservableObject {
         let preparedData = writeMetadata(to: data, title: photo.title, description: photo.description, keywords: photo.keywords) ?? data
         
         // Load active platforms
+        guard let platformsData = UserDefaults.standard.data(forKey: "stock_platforms"),
+              let platforms = try? JSONDecoder().decode([StockPlatform].self, from: platformsData) else {
+            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Настройки стоков не найдены"])
+        }
+        
         // Фильтруем только те стоки, которые включены в настройках И выбраны для конкретной фотографии
         let activePlatforms = platforms.filter { platform in
             platform.isEnabled && photo.selectedStocks.contains(platform.name)
