@@ -98,8 +98,8 @@ jobs:
             3. Готово!
 
             **Изменения:**
-            - Исправлена ошибка NWError 53 при загрузке на Shutterstock
-            - FTPClient переписан на URLSession (стабильнее, с retry)
+            - FTPClient переведен на использование EPSV режима
+            - Увеличен таймаут соединения (data channel) до 20 сек для стабильной загрузки на Shutterstock
           files: build/SmartStock.ipa
           draft: false
           prerelease: false

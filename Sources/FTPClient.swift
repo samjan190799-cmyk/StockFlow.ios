@@ -239,45 +239,83 @@ class FTPClient {
                 throw ftpError("Ошибка установки бинарного режима: \(typeResp)")
             }
             
-            // 7. Send PASV
+            // 7. Send EPSV (Extended Passive Mode)
+            var dataPort: Int = 0
+            var dataIp: String = cleanHost
+            
             do {
-                try await sendCommand(connection: controlConnection, cmd: "PASV\r\n")
+                try await sendCommand(connection: controlConnection, cmd: "EPSV\r\n")
             } catch {
-                throw ftpError("Ошибка при отправке команды PASV: \(error.localizedDescription)")
+                throw ftpError("Ошибка при отправке команды EPSV: \(error.localizedDescription)")
             }
             
-            let pasvResp: String
+            let epsvResp: String
             do {
-                pasvResp = try await reader.readLine()
+                epsvResp = try await reader.readLine()
             } catch {
-                throw ftpError("Ошибка при чтении ответа на PASV: \(error.localizedDescription)")
-            }
-            guard pasvResp.hasPrefix("227") else {
-                controlConnection.cancel()
-                throw ftpError("Ошибка пассивного режима: \(pasvResp)")
+                throw ftpError("Ошибка при чтении ответа на EPSV: \(error.localizedDescription)")
             }
             
-            // Parse IP and Port from 227 Entering Passive Mode (192,168,1,10,192,10)
-            let pattern = "\\(([^)]+)\\)"
-            guard let regex = try? NSRegularExpression(pattern: pattern),
-                  let match = regex.firstMatch(in: pasvResp, range: NSRange(pasvResp.startIndex..., in: pasvResp)),
-                  let range = Range(match.range(at: 1), in: pasvResp) else {
-                controlConnection.cancel()
-                throw ftpError("Ошибка разбора ответа PASV: \(pasvResp)")
+            if epsvResp.hasPrefix("229") {
+                // Ожидаем ответ вида: 229 Entering Extended Passive Mode (|||55132|)
+                let pattern = "\\(\\|\\|\\|(\\d+)\\|\\)"
+                if let regex = try? NSRegularExpression(pattern: pattern),
+                   let match = regex.firstMatch(in: epsvResp, range: NSRange(epsvResp.startIndex..., in: epsvResp)),
+                   let range = Range(match.range(at: 1), in: epsvResp),
+                   let port = Int(String(epsvResp[range])) {
+                    dataPort = port
+                    print("FTPClient: Используем EPSV порт \(dataPort)")
+                } else {
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка разбора ответа EPSV: \(epsvResp)")
+                }
+            } else {
+                print("FTPClient: EPSV не поддерживается, пробуем PASV. Ответ: \(epsvResp)")
+                // Fallback to PASV
+                do {
+                    try await sendCommand(connection: controlConnection, cmd: "PASV\r\n")
+                } catch {
+                    throw ftpError("Ошибка при отправке команды PASV: \(error.localizedDescription)")
+                }
+                
+                let pasvResp: String
+                do {
+                    pasvResp = try await reader.readLine()
+                } catch {
+                    throw ftpError("Ошибка при чтении ответа на PASV: \(error.localizedDescription)")
+                }
+                guard pasvResp.hasPrefix("227") else {
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка пассивного режима: \(pasvResp)")
+                }
+                
+                let pattern = "\\(([^)]+)\\)"
+                guard let regex = try? NSRegularExpression(pattern: pattern),
+                      let match = regex.firstMatch(in: pasvResp, range: NSRange(pasvResp.startIndex..., in: pasvResp)),
+                      let range = Range(match.range(at: 1), in: pasvResp) else {
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка разбора ответа PASV: \(pasvResp)")
+                }
+                
+                let components = String(pasvResp[range]).components(separatedBy: ",")
+                guard components.count == 6 else {
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка формата ответа PASV")
+                }
+                
+                let parsedIp = components[0...3].joined(separator: ".")
+                // Shutterstock и другие балансировщики могут возвращать внутренний IP.
+                // Если возвращен IP, начинающийся с 10., 192.168. и т.д., лучше использовать изначальный хост.
+                // Для надежности используем оригинальный хост, если это возможно, либо спарсенный IP.
+                dataIp = parsedIp
+                print("FTPClient: PASV вернул IP \(dataIp)")
+                
+                guard let p1 = Int(components[4]), let p2 = Int(components[5]) else {
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка разбора порта PASV")
+                }
+                dataPort = p1 * 256 + p2
             }
-            
-            let components = String(pasvResp[range]).components(separatedBy: ",")
-            guard components.count == 6 else {
-                controlConnection.cancel()
-                throw ftpError("Ошибка формата ответа PASV")
-            }
-            
-            let dataIp = components[0...3].joined(separator: ".")
-            guard let p1 = Int(components[4]), let p2 = Int(components[5]) else {
-                controlConnection.cancel()
-                throw ftpError("Ошибка разбора порта PASV")
-            }
-            let dataPort = p1 * 256 + p2
             
             // 8. Connect Data Channel (используем TLS)
             let tlsOptions = NWProtocolTLS.Options()
@@ -301,7 +339,7 @@ class FTPClient {
             dataConnection = conn
             conn.start(queue: DispatchQueue.global())
             do {
-                try await waitForReady(connection: conn)
+                try await waitForReady(connection: conn, timeout: 20)
             } catch {
                 throw ftpError("Ошибка при открытии канала данных: \(error.localizedDescription)")
             }
