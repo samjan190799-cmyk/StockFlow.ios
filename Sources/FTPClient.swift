@@ -150,29 +150,21 @@ class FTPClient {
     
     // MARK: - DNS Resolver
     private static func resolveHost(_ host: String) -> String? {
-        var hints = addrinfo()
-        hints.ai_family = AF_UNSPEC
-        hints.ai_socktype = SOCK_STREAM
-        var res: UnsafeMutablePointer<addrinfo>?
-        if getaddrinfo(host, nil, &hints, &res) == 0 {
-            defer { freeaddrinfo(res) }
-            var ptr = res
-            while ptr != nil {
-                let info = ptr!.pointee
-                var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                if getnameinfo(info.ai_addr, info.ai_addrlen, &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
-                    let ipString = String(cString: hostname)
-                    if info.ai_family == AF_INET { // Prefer IPv4
-                        return ipString
+        let hostRef = CFHostCreateWithName(nil, host as CFString).takeRetainedValue()
+        var success: DarwinBoolean = false
+        if CFHostStartInfoResolution(hostRef, .addresses, nil) {
+            if let addresses = CFHostGetAddressing(hostRef, &success)?.takeUnretainedValue() as NSArray? {
+                for case let data as Data in addresses {
+                    var hostname = [CChar](repeating: 0, count: 1025) // 1025 is NI_MAXHOST
+                    let parsed = data.withUnsafeBytes { ptr -> Bool in
+                        guard let sockaddr = ptr.baseAddress?.assumingMemoryBound(to: sockaddr.self) else { return false }
+                        // 1 is NI_NUMERICHOST
+                        return getnameinfo(sockaddr, socklen_t(data.count), &hostname, socklen_t(hostname.count), nil, 0, 1) == 0
+                    }
+                    if parsed {
+                        return String(cString: hostname)
                     }
                 }
-                ptr = info.ai_next
-            }
-            if let info = res?.pointee {
-                 var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                 if getnameinfo(info.ai_addr, info.ai_addrlen, &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
-                     return String(cString: hostname)
-                 }
             }
         }
         return nil
