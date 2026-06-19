@@ -83,12 +83,15 @@ class FTPClient {
             return
         }
         
+        let resolvedIp = resolveHost(cleanHost) ?? cleanHost
+        await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Resolved IP for Control/Data channels: \(resolvedIp)") }
+        
         let parameters = NWParameters.tcp
         let customFramerOptions = NWProtocolFramer.Options(definition: FTPESFramer.definition)
         parameters.defaultProtocolStack.applicationProtocols.insert(customFramerOptions, at: 0)
         
         let controlConnection = NWConnection(
-            host: NWEndpoint.Host(cleanHost),
+            host: NWEndpoint.Host(resolvedIp),
             port: NWEndpoint.Port(rawValue: UInt16(port))!,
             using: parameters
         )
@@ -142,6 +145,36 @@ class FTPClient {
             controlConnection.cancel()
             throw error
         }
+    }
+    
+    // MARK: - DNS Resolver
+    private static func resolveHost(_ host: String) -> String? {
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_STREAM
+        var res: UnsafeMutablePointer<addrinfo>?
+        if getaddrinfo(host, nil, &hints, &res) == 0 {
+            defer { freeaddrinfo(res) }
+            var ptr = res
+            while ptr != nil {
+                let info = ptr!.pointee
+                var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                if getnameinfo(info.ai_addr, info.ai_addrlen, &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
+                    let ipString = String(cString: hostname)
+                    if info.ai_family == AF_INET { // Prefer IPv4
+                        return ipString
+                    }
+                }
+                ptr = info.ai_next
+            }
+            if let info = res?.pointee {
+                 var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                 if getnameinfo(info.ai_addr, info.ai_addrlen, &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
+                     return String(cString: hostname)
+                 }
+            }
+        }
+        return nil
     }
     
     // MARK: - Upload
@@ -324,18 +357,9 @@ class FTPClient {
             // 8. Connect Data Channel
             var dataHostEndpoint = NWEndpoint.Host(dataIp)
             
-            // Если используется EPSV или PASV вернул внутренний IP (dataIp был заменен на cleanHost),
-            // мы извлекаем точный физический IP-адрес из control-канала.
-            // Это решает проблему с Round-Robin DNS и автоматически отключает SNI в TLS,
-            // так как Apple Network framework не шлет SNI при использовании чистого IP.
-            if dataIp == cleanHost {
-                if let endpoint = controlConnection.currentPath?.remoteEndpoint,
-                   case .hostPort(let remoteHost, _) = endpoint {
-                    dataHostEndpoint = remoteHost
-                    await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Data IP from control channel: \(remoteHost)") }
-                } else {
-                    await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Data IP is cleanHost: \(cleanHost)") }
-                }
+            if dataIp == cleanHost || dataIp == resolvedIp {
+                dataHostEndpoint = NWEndpoint.Host(resolvedIp)
+                await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Data IP mapped to resolvedIp: \(resolvedIp)") }
             } else {
                 await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Data IP from PASV: \(dataIp)") }
             }
