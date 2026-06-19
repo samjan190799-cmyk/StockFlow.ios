@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import Security
+import Darwin
 
 // MARK: - FTPClient
 // Реализация нативного FTP/FTPS-клиента через сокеты NWConnection.
