@@ -249,52 +249,74 @@ class FTPClient {
                 throw ftpError("Ошибка установки бинарного режима: \(typeResp)")
             }
             
-            // 7. Send PASV (Passive Mode)
+            // 7. Send EPSV (Extended Passive Mode) first, fallback to PASV
+            var dataPort: Int = 0
+            var dataIp: String = cleanHost
+            
             do {
-                try await sendCommand(connection: controlConnection, cmd: "PASV\r\n")
+                try await sendCommand(connection: controlConnection, cmd: "EPSV\r\n")
             } catch {
-                throw ftpError("Ошибка при отправке команды PASV: \(error.localizedDescription)")
+                throw ftpError("Ошибка при отправке команды EPSV: \(error.localizedDescription)")
             }
             
-            let pasvResp: String
+            let epsvResp: String
             do {
-                pasvResp = try await reader.readLine()
+                epsvResp = try await reader.readLine()
             } catch {
-                throw ftpError("Ошибка при чтении ответа на PASV: \(error.localizedDescription)")
-            }
-            guard pasvResp.hasPrefix("227") else {
-                controlConnection.cancel()
-                throw ftpError("Ошибка пассивного режима: \(pasvResp)")
+                throw ftpError("Ошибка при чтении ответа на EPSV: \(error.localizedDescription)")
             }
             
-            let pattern = "\\(([^)]+)\\)"
-            guard let regex = try? NSRegularExpression(pattern: pattern),
-                  let match = regex.firstMatch(in: pasvResp, range: NSRange(pasvResp.startIndex..., in: pasvResp)),
-                  let range = Range(match.range(at: 1), in: pasvResp) else {
-                controlConnection.cancel()
-                throw ftpError("Ошибка разбора ответа PASV: \(pasvResp)")
-            }
-            
-            let components = String(pasvResp[range]).components(separatedBy: ",")
-            guard components.count == 6 else {
-                controlConnection.cancel()
-                throw ftpError("Ошибка формата ответа PASV")
-            }
-            
-            let parsedIp = components[0...3].joined(separator: ".")
-            var dataIp = parsedIp
-            if dataIp.hasPrefix("10.") || dataIp.hasPrefix("192.168.") || dataIp.hasPrefix("172.") {
-                print("FTPClient: PASV вернул внутренний IP \(dataIp), заменяем на хост \(cleanHost)")
-                dataIp = cleanHost
+            if epsvResp.hasPrefix("229") {
+                let pattern = "\\(\\|\\|\\|(\\d+)\\|\\)"
+                if let regex = try? NSRegularExpression(pattern: pattern),
+                   let match = regex.firstMatch(in: epsvResp, range: NSRange(epsvResp.startIndex..., in: epsvResp)),
+                   let range = Range(match.range(at: 1), in: epsvResp),
+                   let port = Int(epsvResp[range]) {
+                    dataPort = port
+                    print("FTPClient: EPSV порт \(dataPort), хост \(dataIp)")
+                } else {
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка разбора порта EPSV: \(epsvResp)")
+                }
             } else {
-                print("FTPClient: PASV вернул IP \(dataIp)")
+                print("FTPClient: EPSV отклонен (\(epsvResp)), пробуем PASV...")
+                try await sendCommand(connection: controlConnection, cmd: "PASV\r\n")
+                let pasvResp = try await reader.readLine()
+                
+                guard pasvResp.hasPrefix("227") else {
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка пассивного режима: \(pasvResp)")
+                }
+                
+                let pattern = "\\(([^)]+)\\)"
+                guard let regex = try? NSRegularExpression(pattern: pattern),
+                      let match = regex.firstMatch(in: pasvResp, range: NSRange(pasvResp.startIndex..., in: pasvResp)),
+                      let range = Range(match.range(at: 1), in: pasvResp) else {
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка разбора ответа PASV: \(pasvResp)")
+                }
+                
+                let components = String(pasvResp[range]).components(separatedBy: ",")
+                guard components.count == 6 else {
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка формата ответа PASV")
+                }
+                
+                let parsedIp = components[0...3].joined(separator: ".")
+                dataIp = parsedIp
+                if dataIp.hasPrefix("10.") || dataIp.hasPrefix("192.168.") || dataIp.hasPrefix("172.") {
+                    print("FTPClient: PASV вернул внутренний IP \(dataIp), заменяем на хост \(cleanHost)")
+                    dataIp = cleanHost
+                } else {
+                    print("FTPClient: PASV вернул IP \(dataIp)")
+                }
+                
+                guard let p1 = Int(components[4]), let p2 = Int(components[5]) else {
+                    controlConnection.cancel()
+                    throw ftpError("Ошибка разбора порта PASV")
+                }
+                dataPort = p1 * 256 + p2
             }
-            
-            guard let p1 = Int(components[4]), let p2 = Int(components[5]) else {
-                controlConnection.cancel()
-                throw ftpError("Ошибка разбора порта PASV")
-            }
-            let dataPort = p1 * 256 + p2
             
             // 8. Connect Data Channel
             let dataParameters: NWParameters
