@@ -152,7 +152,7 @@ class QueueViewModel: ObservableObject {
             do {
                 let photo = self.photos[idx]
                 try await performRealUpload(for: photo) { progress in
-                    Task { @MainActor in
+                    _ = Task { @MainActor in
                         if let index = self.photos.firstIndex(where: { $0.id == id }) {
                             self.photos[index].uploadProgress = progress
                         }
@@ -200,7 +200,7 @@ class QueueViewModel: ObservableObject {
                 do {
                     guard let currentPhoto = self.photos.first(where: { $0.id == pId }) else { return }
                     try await performRealUpload(for: currentPhoto) { progress in
-                        Task { @MainActor in
+                        _ = Task { @MainActor in
                             if let index = self.photos.firstIndex(where: { $0.id == pId }) {
                                 self.photos[index].uploadProgress = progress
                             }
@@ -657,7 +657,7 @@ struct UploadQueueView: View {
             }
             .sheet(item: $editingPhoto) { wrapper in
                 NavigationStack {
-                    AIMetadataView(photos: wrapper.photos, currentIndex: wrapper.index) { @MainActor updatedPhotos in
+                    AIMetadataView(photos: wrapper.photos, currentIndex: wrapper.index) { updatedPhotos in
                         for updated in updatedPhotos {
                             if let idx = viewModel.photos.firstIndex(where: { $0.id == updated.id }) {
                                 viewModel.photos[idx] = updated
