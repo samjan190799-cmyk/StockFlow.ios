@@ -148,7 +148,8 @@ class FTPClient {
         host: String,
         port: Int = 21,
         username: String,
-        password: String
+        password: String,
+        progress: ((Double) -> Void)? = nil
     ) async throws {
         let cleanHost = cleanedHost(host)
         let scheme = schemeFor(host: host)
@@ -281,8 +282,13 @@ class FTPClient {
             }
             
             let parsedIp = components[0...3].joined(separator: ".")
-            let dataIp = parsedIp
-            print("FTPClient: PASV вернул IP \(dataIp)")
+            var dataIp = parsedIp
+            if dataIp.hasPrefix("10.") || dataIp.hasPrefix("192.168.") || dataIp.hasPrefix("172.") {
+                print("FTPClient: PASV вернул внутренний IP \(dataIp), заменяем на хост \(cleanHost)")
+                dataIp = cleanHost
+            } else {
+                print("FTPClient: PASV вернул IP \(dataIp)")
+            }
             
             guard let p1 = Int(components[4]), let p2 = Int(components[5]) else {
                 controlConnection.cancel()
@@ -339,7 +345,7 @@ class FTPClient {
             
             // 10. Send bytes on Data Channel and Close it
             do {
-                try await send(connection: conn, data: data)
+                try await send(connection: conn, data: data, progress: progress)
             } catch {
                 throw ftpError("Ошибка при передаче данных файла: \(error.localizedDescription)")
             }
@@ -391,15 +397,29 @@ class FTPClient {
         }
     }
     
-    private static func send(connection: NWConnection, data: Data) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            connection.send(content: data, completion: .contentProcessed({ error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
-            }))
+    private static func send(connection: NWConnection, data: Data, progress: ((Double) -> Void)? = nil) async throws {
+        let chunkSize = 65536
+        var offset = 0
+        let total = data.count
+        
+        while offset < total {
+            let end = min(offset + chunkSize, total)
+            let chunk = data.subdata(in: offset..<end)
+            
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                connection.send(content: chunk, completion: .contentProcessed({ error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }))
+            }
+            
+            offset = end
+            if total > 0 {
+                progress?(Double(offset) / Double(total))
+            }
         }
     }
     

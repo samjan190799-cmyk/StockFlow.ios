@@ -307,17 +307,28 @@ struct SystemSettingsView: View {
     }
     
     private func pickerRow(_ label: String, selection: Binding<String>, options: [String]) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 14))
-                .foregroundStyle(.primary)
-            Spacer()
+        Menu {
             Picker("", selection: selection) {
                 ForEach(options, id: \.self) { option in
                     Text(option).tag(option)
                 }
             }
-            .pickerStyle(.menu)
+        } label: {
+            HStack(alignment: .center, spacing: 8) {
+                Text(label)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.primary)
+                    .layoutPriority(1)
+                Spacer()
+                Text(selection.wrappedValue)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.trailing)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
     

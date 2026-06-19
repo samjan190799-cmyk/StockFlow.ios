@@ -65,6 +65,7 @@ class QueueViewModel: ObservableObject {
             } catch {
                 self.photos[idx].description = "Ошибка: \(error.localizedDescription)"
                 self.photos[idx].status = .error
+                self.photos[idx].errorMessage = error.localizedDescription
                 self.triggerToast("Ошибка ИИ: \(error.localizedDescription)")
             }
         }
@@ -143,20 +144,30 @@ class QueueViewModel: ObservableObject {
         }
         
         photos[idx].status = .uploading
+        photos[idx].uploadProgress = 0.0
+        photos[idx].errorMessage = nil
         triggerToast("Загрузка файла \(photos[idx].filename)...")
         
         Task {
             do {
                 let photo = self.photos[idx]
-                try await performRealUpload(for: photo)
+                try await performRealUpload(for: photo) { progress in
+                    Task { @MainActor in
+                        if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                            self.photos[index].uploadProgress = progress
+                        }
+                    }
+                }
                 
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].status = .success
+                    self.photos[index].uploadProgress = 1.0
                     self.triggerToast("Файл \(self.photos[index].filename) успешно загружен на стоки!")
                 }
             } catch {
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].status = .error
+                    self.photos[index].errorMessage = error.localizedDescription
                     self.triggerToast("Ошибка выгрузки \(self.photos[index].filename): \(error.localizedDescription)")
                 }
             }
@@ -181,20 +192,30 @@ class QueueViewModel: ObservableObject {
             let pId = photo.id
             if let idx = self.photos.firstIndex(where: { $0.id == pId }) {
                 self.photos[idx].status = .uploading
+                self.photos[idx].uploadProgress = 0.0
+                self.photos[idx].errorMessage = nil
             }
             
             Task {
                 do {
                     guard let currentPhoto = self.photos.first(where: { $0.id == pId }) else { return }
-                    try await performRealUpload(for: currentPhoto)
+                    try await performRealUpload(for: currentPhoto) { progress in
+                        Task { @MainActor in
+                            if let index = self.photos.firstIndex(where: { $0.id == pId }) {
+                                self.photos[index].uploadProgress = progress
+                            }
+                        }
+                    }
                     
                     if let index = self.photos.firstIndex(where: { $0.id == pId }) {
                         self.photos[index].status = .success
+                        self.photos[index].uploadProgress = 1.0
                         self.triggerToast("Файл \(self.photos[index].filename) успешно загружен на стоки!")
                     }
                 } catch {
                     if let index = self.photos.firstIndex(where: { $0.id == pId }) {
                         self.photos[index].status = .error
+                        self.photos[index].errorMessage = error.localizedDescription
                         self.triggerToast("Ошибка выгрузки \(self.photos[index].filename): \(error.localizedDescription)")
                     }
                 }
@@ -207,7 +228,7 @@ class QueueViewModel: ObservableObject {
         }
     }
     
-    private func performRealUpload(for photo: PhotoMetadata) async throws {
+    private func performRealUpload(for photo: PhotoMetadata, progress: ((Double) -> Void)? = nil) async throws {
         guard let data = photo.imageData else {
             throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Изображение пустое"])
         }
@@ -248,7 +269,8 @@ class QueueViewModel: ObservableObject {
                     host: platform.host,
                     port: 21,
                     username: platform.username,
-                    password: password
+                    password: password,
+                    progress: progress
                 )
                 successCount += 1
             } catch {
@@ -536,9 +558,9 @@ struct UploadQueueView: View {
                                     }
                                     Text("Заполнить все ИИ")
                                 }
-                                .font(.system(size: 13, weight: .black))
+                                .font(.system(size: 12, weight: .black))
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
+                                .padding(.vertical, 10)
                                 .background(AppleTheme.primaryGradient)
                                 .foregroundStyle(.white)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -555,9 +577,9 @@ struct UploadQueueView: View {
                                     Image(systemName: "paperplane.fill")
                                     Text("Отправить")
                                 }
-                                .font(.system(size: 13, weight: .black))
+                                .font(.system(size: 12, weight: .black))
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
+                                .padding(.vertical, 10)
                                 .background(.ultraThinMaterial)
                                 .foregroundStyle(.primary)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -746,51 +768,56 @@ struct UploadQueueView: View {
                                 .stroke(photo.status.color.opacity(0.3), lineWidth: 1)
                         )
                 }
+                
+                if photo.status == .uploading {
+                    ProgressView(value: photo.uploadProgress)
+                        .progressViewStyle(.linear)
+                        .tint(photo.status.color)
+                        .frame(height: 4)
+                        .padding(.top, 4)
+                }
+                
+                if photo.status == .error, let errorMsg = photo.errorMessage {
+                    Text(errorMsg)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.red)
+                        .lineLimit(2)
+                        .padding(.top, 2)
+                }
             }
             
             Spacer()
             
             // Inline Action Panel
-            VStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    Button(action: {
-                        HapticHelper.trigger(.light)
-                        viewModel.runAIForPhoto(photo.id)
-                    }) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(7)
-                            .background(AppleTheme.primaryGradient)
-                            .clipShape(Circle())
-                            .neonShadow(color: Color(hex: "7C3AED"), radius: 4)
-                    }
-                    .buttonStyle(PremiumButtonStyle())
-                    
-                    Button(action: {
-                        HapticHelper.trigger(.light)
-                        viewModel.uploadPhoto(photo.id)
-                    }) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.primary)
-                            .padding(7)
-                            .background(.white.opacity(0.08))
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
-                    }
-                    .buttonStyle(PremiumButtonStyle())
+            Menu {
+                Button(action: {
+                    HapticHelper.trigger(.light)
+                    viewModel.runAIForPhoto(photo.id)
+                }) {
+                    Label("Заполнить ИИ", systemImage: "sparkles")
                 }
                 
                 Button(action: {
+                    HapticHelper.trigger(.light)
+                    viewModel.uploadPhoto(photo.id)
+                }) {
+                    Label("Отправить", systemImage: "paperplane.fill")
+                }
+                
+                Divider()
+                
+                Button(role: .destructive, action: {
                     HapticHelper.trigger(.medium)
                     viewModel.removePhoto(photo.id)
                 }) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.red.opacity(0.75))
+                    Label("Удалить", systemImage: "trash")
                 }
-                .buttonStyle(PremiumButtonStyle())
+            } label: {
+                Image(systemName: "ellipsis.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundStyle(.secondary)
+                    .symbolRenderingMode(.hierarchical)
+                    .padding(4)
             }
         }
     }

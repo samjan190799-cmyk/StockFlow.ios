@@ -35,6 +35,9 @@ struct PhotoMetadata: Identifiable, Sendable {
     var selectedStocks: Set<String> = ["Shutterstock", "Adobe Stock"]
     var imageData: Data?
     
+    var uploadProgress: Double = 0.0
+    var errorMessage: String? = nil
+    
     var uiImage: UIImage? {
         if let data = imageData {
             return UIImage(data: data)

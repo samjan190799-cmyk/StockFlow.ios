@@ -35,20 +35,20 @@ struct StockSettingsView: View {
                                                 endPoint: .bottomTrailing
                                             )
                                         )
-                                        .frame(width: 42, height: 42)
+                                        .frame(width: 52, height: 52)
                                         .overlay(
                                             Text(String(platform.name.prefix(2)))
-                                                .font(.system(size: 14, weight: .black))
+                                                .font(.system(size: 18, weight: .black))
                                                 .foregroundStyle(.white)
                                         )
                                         .shadow(color: colorForPlatform(platform.id).opacity(0.35), radius: 5)
                                     
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(platform.name)
-                                            .font(.system(size: 15, weight: .bold))
+                                            .font(.system(size: 17, weight: .bold))
                                             .foregroundStyle(.primary)
                                         Text(platform.host)
-                                            .font(.system(size: 11))
+                                            .font(.system(size: 12))
                                             .foregroundStyle(.secondary)
                                     }
                                     
@@ -64,21 +64,20 @@ struct StockSettingsView: View {
                                     .labelsHidden()
                                     .tint(Color(hex: "7C3AED"))
                                 }
-                                .padding(12)
+                                .padding(16)
                                 .background(
                                     ZStack {
-                                        // Soft brand gradient overlay
                                         gradientForPlatform(platform.id)
-                                        Color.black.opacity(0.12)
+                                        Color.black.opacity(0.15)
                                         Rectangle().fill(.ultraThinMaterial)
                                     }
                                 )
-                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(LinearGradient(colors: [Color.white.opacity(0.12), Color.white.opacity(0.04)], startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                        .stroke(LinearGradient(colors: [Color.white.opacity(0.15), Color.white.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
                                 )
-                                .shadow(color: colorForPlatform(platform.id).opacity(platform.isEnabled ? 0.08 : 0.0), radius: 8, x: 0, y: 4)
+                                .shadow(color: colorForPlatform(platform.id).opacity(platform.isEnabled ? 0.12 : 0.0), radius: 10, x: 0, y: 5)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     HapticHelper.selection()
@@ -296,7 +295,7 @@ struct PlatformDetailSheet: View {
                             .foregroundStyle(.secondary)
                             .tint(.secondary)
                         }
-                        .glassCard(cornerRadius: 20, padding: 16)
+                        .glassCard(cornerRadius: 24, padding: 20)
                         
                         Button(action: {
                             HapticHelper.trigger(.medium)
