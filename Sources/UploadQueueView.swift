@@ -1194,6 +1194,7 @@ struct UploadQueueView: View {
                             title: "",
                             keywords: [],
                             description: "",
+                            categories: [],
                             status: .new,
                             imageData: finalData
                         )

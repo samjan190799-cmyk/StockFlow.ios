@@ -25,19 +25,43 @@ enum PhotoStatus: String, Codable, CaseIterable, Sendable {
 
 // MARK: - Photo Metadata Model
 struct PhotoMetadata: Identifiable, Sendable {
-    let id = UUID()
+    let id: UUID
     var filename: String
     var fileSize: String
     var title: String
     var keywords: [String]
     var description: String
-    var categories: [String] = []
-    var status: PhotoStatus = .new
-    var selectedStocks: Set<String> = ["Shutterstock", "Adobe Stock"]
+    var categories: [String]
+    var status: PhotoStatus
+    var selectedStocks: Set<String>
     var imageData: Data?
     
     var uploadProgress: Double = 0.0
     var errorMessage: String? = nil
+    
+    init(
+        id: UUID = UUID(),
+        filename: String,
+        fileSize: String,
+        title: String,
+        keywords: [String],
+        description: String,
+        categories: [String] = [],
+        status: PhotoStatus = .new,
+        selectedStocks: Set<String> = ["Shutterstock", "Adobe Stock"],
+        imageData: Data? = nil
+    ) {
+        self.id = id
+        self.filename = filename
+        self.fileSize = fileSize
+        self.title = title
+        self.keywords = keywords
+        self.description = description
+        self.categories = categories
+        self.status = status
+        self.selectedStocks = selectedStocks
+        self.imageData = imageData
+    }
     
     var uiImage: UIImage? {
         if let data = imageData {
