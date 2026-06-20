@@ -25,79 +25,16 @@ struct StockSettingsView: View {
                         
                         LazyVStack(spacing: 12) {
                             ForEach(platforms) { platform in
-                                HStack(spacing: 14) {
-                                    // 3D Brand Logo initials circle
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [colorForPlatform(platform.id), colorForPlatform(platform.id).opacity(0.65)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                        .frame(width: 52, height: 52)
-                                        .overlay(
-                                            Text(String(platform.name.prefix(2)))
-                                                .font(.system(size: 18, weight: .black))
-                                                .foregroundStyle(.white)
-                                        )
-                                        .shadow(color: colorForPlatform(platform.id).opacity(platform.isEnabled ? 0.45 : 0.15), radius: platform.isEnabled ? 8 : 4)
-                                    
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(platform.name)
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundStyle(platform.isEnabled ? .primary : .primary.opacity(0.6))
-                                        Text(platform.host)
-                                            .font(.system(size: 11, design: .monospaced))
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                        
-                                        let isConfigured = !platform.username.isEmpty && !platform.passwordHash.isEmpty
-                                        HStack(spacing: 4) {
-                                            Circle()
-                                                .fill(isConfigured ? Color.green : Color.orange)
-                                                .frame(width: 5, height: 5)
-                                            Text(isConfigured ? "Настроен" : "Нужна настройка")
-                                                .font(.system(size: 10, weight: .semibold))
-                                                .foregroundStyle(isConfigured ? Color.green : Color.orange)
-                                        }
-                                        .padding(.top, 1)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Toggle("", isOn: Binding(
-                                        get: { platform.isEnabled },
-                                        set: { value in
-                                            HapticHelper.trigger(.light)
-                                            togglePlatform(platform.id, isEnabled: value)
-                                        }
-                                    ))
-                                    .labelsHidden()
-                                    .tint(Color(hex: "7C3AED"))
-                                }
-                                .padding(16)
-                                .background(
-                                    ZStack {
-                                        if platform.isEnabled {
-                                            colorForPlatform(platform.id).opacity(0.08)
-                                        } else {
-                                            Color.black.opacity(0.12)
-                                        }
-                                        Rectangle().fill(.ultraThinMaterial)
-                                    }
+                                PlatformRowView(
+                                    platform: platform,
+                                    onToggle: { value in
+                                        togglePlatform(platform.id, isEnabled: value)
+                                    },
+                                    onTap: {
+                                        selectedPlatformId = platform.id
+                                    },
+                                    color: colorForPlatform(platform.id)
                                 )
-                                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                        .stroke(LinearGradient(colors: [Color.white.opacity(0.15), Color.white.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
-                                )
-                                .shadow(color: colorForPlatform(platform.id).opacity(platform.isEnabled ? 0.12 : 0.0), radius: 10, x: 0, y: 5)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    HapticHelper.selection()
-                                    selectedPlatformId = platform.id
-                                }
                             }
                         }
                     }
@@ -151,6 +88,90 @@ struct StockSettingsView: View {
                         )
                 }
             }
+        }
+    }
+}
+
+@MainActor
+struct PlatformRowView: View {
+    let platform: StockPlatform
+    let onToggle: (Bool) -> Void
+    let onTap: () -> Void
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 14) {
+            // 3D Brand Logo initials circle
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [color, color.opacity(0.65)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 52, height: 52)
+                .overlay(
+                    Text(String(platform.name.prefix(2)))
+                        .font(.system(size: 18, weight: .black))
+                        .foregroundStyle(.white)
+                )
+                .shadow(color: color.opacity(platform.isEnabled ? 0.45 : 0.15), radius: platform.isEnabled ? 8 : 4)
+            
+            VStack(alignment: .leading, spacing: 3) {
+                Text(platform.name)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(platform.isEnabled ? .primary : .primary.opacity(0.6))
+                Text(platform.host)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                
+                let isConfigured = !platform.username.isEmpty && !platform.passwordHash.isEmpty
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(isConfigured ? Color.green : Color.orange)
+                        .frame(width: 5, height: 5)
+                    Text(isConfigured ? "Настроен" : "Нужна настройка")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(isConfigured ? Color.green : Color.orange)
+                }
+                .padding(.top, 1)
+            }
+            
+            Spacer()
+            
+            Toggle("", isOn: Binding(
+                get: { platform.isEnabled },
+                set: { value in
+                    HapticHelper.trigger(.light)
+                    onToggle(value)
+                }
+            ))
+            .labelsHidden()
+            .tint(Color(hex: "7C3AED"))
+        }
+        .padding(16)
+        .background(
+            ZStack {
+                if platform.isEnabled {
+                    color.opacity(0.08)
+                } else {
+                    Color.black.opacity(0.12)
+                }
+                Rectangle().fill(.ultraThinMaterial)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(LinearGradient(colors: [Color.white.opacity(0.15), Color.white.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
+        )
+        .shadow(color: color.opacity(platform.isEnabled ? 0.12 : 0.0), radius: 10, x: 0, y: 5)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            HapticHelper.selection()
+            onTap()
         }
     }
     
