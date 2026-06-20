@@ -448,8 +448,7 @@ class FTPClient {
                 completionHandler(true)
             }, DispatchQueue.global())
             sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
-            // Закомментировано, так как Shutterstock не поддерживает SNI на канале данных и сбрасывает соединение (SNI connection abort)
-            // sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, cleanHost)
+            sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, cleanHost)
             return NWParameters(tls: tlsOptions)
         } else {
             return NWParameters.tcp
@@ -647,6 +646,7 @@ class FTPESFramer: NWProtocolFramerImplementation {
     }
     
     private var state = State.waitingForBanner
+    private var peerName: String?
     
     required init(framer: NWProtocolFramer.Instance) {}
     
@@ -700,6 +700,9 @@ class FTPESFramer: NWProtocolFramerImplementation {
                         completionHandler(true)
                     }, DispatchQueue.global())
                     sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
+                    if let peer = self.peerName {
+                        sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, peer)
+                    }
                     
                     do {
                         try framer.prependApplicationProtocol(options: tlsOptions)
@@ -732,6 +735,9 @@ class FTPESFramer: NWProtocolFramerImplementation {
     }
     
     func handleOutput(framer: NWProtocolFramer.Instance, message: NWProtocolFramer.Message, messageLength: Int, isComplete: Bool) {
+        if let peer = message["peerName"] as? String {
+            self.peerName = peer
+        }
         try? framer.writeOutputNoCopy(length: messageLength)
     }
     
