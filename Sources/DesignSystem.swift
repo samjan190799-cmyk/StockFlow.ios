@@ -55,6 +55,8 @@ struct LiquidBackgroundView: View {
     
     var body: some View {
         let isDark = colorScheme == .dark
+        let dotColor = isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)
+        
         return ZStack {
             // Dark elegant base
             Color(.systemBackground)
@@ -100,7 +102,6 @@ struct LiquidBackgroundView: View {
             Canvas { context, size in
                 let dotSize: CGFloat = 1.2
                 let spacing: CGFloat = 18.0
-                let dotColor = isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)
                 for x in stride(from: 0, to: size.width, by: spacing) {
                     for y in stride(from: 0, to: size.height, by: spacing) {
                         context.fill(Path(CGRect(x: x, y: y, width: dotSize, height: dotSize)), with: .color(dotColor))
@@ -139,17 +140,28 @@ struct GlassModifier: ViewModifier {
     
     func body(content: Content) -> some View {
         let isDark = colorScheme == .dark
+        
+        let glassTint = isDark ? Color.black.opacity(0.22) : Color.white.opacity(0.45)
+        
+        let borderColors = isDark ? [
+            Color.white.opacity(0.28),
+            Color.white.opacity(0.06),
+            Color.black.opacity(0.04),
+            Color.white.opacity(0.16)
+        ] : [
+            Color.white.opacity(0.65),
+            Color.white.opacity(0.25),
+            Color.black.opacity(0.08),
+            Color.white.opacity(0.45)
+        ]
+        
+        let shadowColor = isDark ? Color.black.opacity(0.12) : Color.gray.opacity(0.12)
+        
         return content
             .padding(paddingValue)
             .background(
                 ZStack {
-                    // Soft glass tint base
-                    if isDark {
-                        Color.black.opacity(0.22)
-                    } else {
-                        Color.white.opacity(0.45)
-                    }
-                    // System frosted blur
+                    glassTint
                     Rectangle().fill(.ultraThinMaterial)
                 }
             )
@@ -158,24 +170,14 @@ struct GlassModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         LinearGradient(
-                            colors: isDark ? [
-                                Color.white.opacity(0.28),
-                                Color.white.opacity(0.06),
-                                Color.black.opacity(0.04),
-                                Color.white.opacity(0.16)
-                            ] : [
-                                Color.white.opacity(0.65),
-                                Color.white.opacity(0.25),
-                                Color.black.opacity(0.08),
-                                Color.white.opacity(0.45)
-                            ],
+                            colors: borderColors,
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
                         lineWidth: 1.2
                     )
             )
-            .shadow(color: isDark ? Color.black.opacity(0.12) : Color.gray.opacity(0.12), radius: 14, x: 0, y: 7)
+            .shadow(color: shadowColor, radius: 14, x: 0, y: 7)
     }
 }
 
