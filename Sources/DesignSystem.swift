@@ -55,7 +55,7 @@ struct LiquidBackgroundView: View {
     
     var body: some View {
         let isDark = colorScheme == .dark
-        let dotColor = isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)
+        let dotColor: Color = isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)
         
         return ZStack {
             // Dark elegant base
@@ -141,21 +141,26 @@ struct GlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         let isDark = colorScheme == .dark
         
-        let glassTint = isDark ? Color.black.opacity(0.22) : Color.white.opacity(0.45)
+        let glassTint: Color = isDark ? Color.black.opacity(0.22) : Color.white.opacity(0.45)
         
-        let borderColors = isDark ? [
-            Color.white.opacity(0.28),
-            Color.white.opacity(0.06),
-            Color.black.opacity(0.04),
-            Color.white.opacity(0.16)
-        ] : [
-            Color.white.opacity(0.65),
-            Color.white.opacity(0.25),
-            Color.black.opacity(0.08),
-            Color.white.opacity(0.45)
-        ]
+        let borderColors: [Color]
+        if isDark {
+            borderColors = [
+                Color.white.opacity(0.28),
+                Color.white.opacity(0.06),
+                Color.black.opacity(0.04),
+                Color.white.opacity(0.16)
+            ]
+        } else {
+            borderColors = [
+                Color.white.opacity(0.65),
+                Color.white.opacity(0.25),
+                Color.black.opacity(0.08),
+                Color.white.opacity(0.45)
+            ]
+        }
         
-        let shadowColor = isDark ? Color.black.opacity(0.12) : Color.gray.opacity(0.12)
+        let shadowColor: Color = isDark ? Color.black.opacity(0.12) : Color.gray.opacity(0.12)
         
         return content
             .padding(paddingValue)
