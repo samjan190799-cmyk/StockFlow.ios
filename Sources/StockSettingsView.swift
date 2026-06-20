@@ -90,7 +90,6 @@ struct StockSettingsView: View {
             }
         }
     }
-}
 
     
     // MARK: - Brand Colors Mock
