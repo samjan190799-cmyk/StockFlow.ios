@@ -8,6 +8,28 @@ import Darwin
 // Решает проблему неработающего URLSession FTP на iOS 16+.
 class FTPClient {
     
+    // MARK: - Shared TLS Options for Session Resumption
+    private static var _sharedTLSOptions: NWProtocolTLS.Options?
+    private static let tlsLock = NSLock()
+    
+    static func setSharedTLSOptions(_ options: NWProtocolTLS.Options) {
+        tlsLock.lock()
+        defer { tlsLock.unlock() }
+        _sharedTLSOptions = options
+    }
+    
+    static func getSharedTLSOptions() -> NWProtocolTLS.Options? {
+        tlsLock.lock()
+        defer { tlsLock.unlock() }
+        return _sharedTLSOptions
+    }
+    
+    static func clearSharedTLSOptions() {
+        tlsLock.lock()
+        defer { tlsLock.unlock() }
+        _sharedTLSOptions = nil
+    }
+    
     private class ConnectionReader {
         let connection: NWConnection
         var buffer = Data()
@@ -75,6 +97,7 @@ class FTPClient {
         username: String,
         password: String
     ) async throws {
+        clearSharedTLSOptions()
         let cleanHost = cleanedHost(host)
         let scheme = schemeFor(host: host)
         
@@ -188,6 +211,7 @@ class FTPClient {
         password: String,
         progress: ((Double) -> Void)? = nil
     ) async throws {
+        clearSharedTLSOptions()
         let cleanHost = cleanedHost(host)
         let resolvedIp = resolveHost(cleanHost) ?? cleanHost
         
@@ -441,6 +465,11 @@ class FTPClient {
     
     private static func setupDataParameters(useTls: Bool, cleanHost: String) -> NWParameters {
         if useTls {
+            if let sharedOptions = getSharedTLSOptions() {
+                print("FTPClient: Использование общих TLS параметров от контрольного канала для Session Resumption")
+                return NWParameters(tls: sharedOptions)
+            }
+            
             let tlsOptions = NWProtocolTLS.Options()
             sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
             sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
@@ -703,6 +732,9 @@ class FTPESFramer: NWProtocolFramerImplementation {
                     if let peer = self.peerName {
                         sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, peer)
                     }
+                    
+                    // Сохраняем общие TLS параметры
+                    FTPClient.setSharedTLSOptions(tlsOptions)
                     
                     do {
                         try framer.prependApplicationProtocol(options: tlsOptions)
