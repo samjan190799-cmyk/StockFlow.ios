@@ -26,8 +26,7 @@ struct SmartStockApp: App {
         
         // Настройка TabBar в стеклянном стиле (полупрозрачный blur)
         let appearance = UITabBarAppearance()
-        appearance.configureWithBlurEffect()
-        appearance.backgroundColor = UIColor.clear
+        appearance.configureWithTransparentBackground()
         appearance.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
         appearance.shadowColor = UIColor.white.withAlphaComponent(0.08)
         
