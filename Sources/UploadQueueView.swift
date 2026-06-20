@@ -1158,9 +1158,26 @@ struct UploadQueueView: View {
                 switch result {
                 case .success(let data):
                     if let data = data {
+                        var finalData = data
+                        let isJpeg = data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
+                        
+                        if !isJpeg {
+                            if let uiImage = UIImage(data: data),
+                               let jpegData = uiImage.jpegData(compressionQuality: 0.95) {
+                                finalData = jpegData
+                                Task { @MainActor in
+                                    FTPTranscriptLogger.shared.logInfo("[Diagnostic] Авто-конвертация не-JPEG (RAW/HEIC/PNG) в JPEG (размер: \(data.count) -> \(jpegData.count))")
+                                }
+                            } else {
+                                Task { @MainActor in
+                                    FTPTranscriptLogger.shared.logInfo("[WARNING] Файл не является JPEG и не удалось конвертировать его в UIImage.")
+                                }
+                            }
+                        }
+                        
                         let randomNum = Int.random(in: 1000...9999)
                         let filename = "IMG_\(randomNum).JPG"
-                        let sizeMB = Double(data.count) / (1024.0 * 1024.0)
+                        let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
                         let fileSizeStr = String(format: "%.2f МБ", sizeMB)
                         
                         let newPhoto = PhotoMetadata(
@@ -1170,7 +1187,7 @@ struct UploadQueueView: View {
                             keywords: [],
                             description: "",
                             status: .new,
-                            imageData: data
+                            imageData: finalData
                         )
                         
                         Task {
