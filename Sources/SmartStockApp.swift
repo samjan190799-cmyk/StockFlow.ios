@@ -44,6 +44,8 @@ struct SmartStockApp: App {
         UITabBar.appearance().scrollEdgeAppearance = appearance
     }
     
+    @State private var displayLinkHelper = DisplayLinkHelper()
+    
     var body: some Scene {
         WindowGroup {
             // id(sysLanguage) перестраивает всё дерево при смене языка — это единственный
@@ -55,9 +57,9 @@ struct SmartStockApp: App {
                     }
                 
                 AIAssistantView()
-                    .tabItem {
-                        Label("ИИ-Ассистент".localized, systemImage: "sparkles")
-                    }
+                     .tabItem {
+                         Label("ИИ-Ассистент".localized, systemImage: "sparkles")
+                     }
                 
                 StockSettingsView()
                     .tabItem {
@@ -80,7 +82,7 @@ struct SmartStockApp: App {
         }
     }
     
-    /// Применяет ограничение FPS через CADisplayLink preferred frame rate
+    /// Применяет ограничение FPS через CADisplayLink
     private func applyFrameRate(_ fpsSetting: String) {
         let targetFps: Int
         if fpsSetting.contains("120") {
@@ -91,18 +93,36 @@ struct SmartStockApp: App {
             targetFps = 60
         }
         
-        // iOS 15+: устанавливаем preferredFrameRateRange для всех окон
-        if #available(iOS 15.0, *) {
-            let range = CAFrameRateRange(minimum: Float(min(targetFps, 30)),
-                                         maximum: Float(targetFps),
-                                         preferred: Float(targetFps))
-            for scene in UIApplication.shared.connectedScenes {
-                if let windowScene = scene as? UIWindowScene {
-                    for window in windowScene.windows {
-                        window.layer.preferredFrameRateRange = range
-                    }
-                }
-            }
-        }
+        displayLinkHelper.setup(fps: targetFps)
     }
 }
+
+// MARK: - DisplayLinkHelper
+/// Вспомогательный класс для динамической адаптации частоты кадров (ProMotion) на iOS
+final class DisplayLinkHelper: NSObject {
+    private var displayLink: CADisplayLink?
+    
+    func setup(fps: Int) {
+        displayLink?.invalidate()
+        
+        let link = CADisplayLink(target: self, selector: #selector(step))
+        if #available(iOS 15.0, *) {
+            let minFps = Float(min(fps, 30))
+            let maxFps = Float(fps)
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: minFps, maximum: maxFps, preferred: maxFps)
+        } else {
+            link.preferredFramesPerSecond = fps
+        }
+        link.add(to: .main, forMode: .common)
+        self.displayLink = link
+    }
+    
+    @objc private func step() {
+        // Пустая функция-обработчик
+    }
+    
+    deinit {
+        displayLink?.invalidate()
+    }
+}
+
