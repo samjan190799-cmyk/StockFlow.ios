@@ -46,6 +46,7 @@ extension Color {
 
 // MARK: - Liquid Ambient Background (Fixed Layout with Drifting Blobs & Grid Texture)
 struct LiquidBackgroundView: View {
+    @Environment(\.colorScheme) var colorScheme
     @State private var animateGlow = false
     @State private var driftOffset1 = CGSize.zero
     @State private var driftOffset2 = CGSize.zero
@@ -53,6 +54,7 @@ struct LiquidBackgroundView: View {
     @State private var driftOffset4 = CGSize.zero
     
     var body: some View {
+        let isDark = colorScheme == .dark
         ZStack {
             // Dark elegant base
             Color(.systemBackground)
@@ -61,7 +63,7 @@ struct LiquidBackgroundView: View {
             ZStack {
                 // Violet blob top-left
                 Circle()
-                    .fill(Color(hex: "7C3AED").opacity(0.16))
+                    .fill(Color(hex: "7C3AED").opacity(isDark ? 0.16 : 0.08))
                     .frame(width: 320, height: 320)
                     .scaleEffect(animateGlow ? 1.25 : 0.85)
                     .blur(radius: 80)
@@ -69,7 +71,7 @@ struct LiquidBackgroundView: View {
                 
                 // Blue blob center-right
                 Circle()
-                    .fill(Color(hex: "2563EB").opacity(0.16))
+                    .fill(Color(hex: "2563EB").opacity(isDark ? 0.16 : 0.08))
                     .frame(width: 340, height: 340)
                     .scaleEffect(animateGlow ? 0.85 : 1.2)
                     .blur(radius: 90)
@@ -77,7 +79,7 @@ struct LiquidBackgroundView: View {
                 
                 // Pink blob bottom-left
                 Circle()
-                    .fill(Color(hex: "DB2777").opacity(0.14))
+                    .fill(Color(hex: "DB2777").opacity(isDark ? 0.14 : 0.07))
                     .frame(width: 300, height: 300)
                     .scaleEffect(animateGlow ? 1.15 : 0.9)
                     .blur(radius: 85)
@@ -85,7 +87,7 @@ struct LiquidBackgroundView: View {
                 
                 // Amber blob bottom-right (New 4th blob for richer ambient)
                 Circle()
-                    .fill(Color(hex: "F59E0B").opacity(0.09))
+                    .fill(Color(hex: "F59E0B").opacity(isDark ? 0.09 : 0.05))
                     .frame(width: 280, height: 280)
                     .scaleEffect(animateGlow ? 0.9 : 1.15)
                     .blur(radius: 75)
@@ -98,9 +100,10 @@ struct LiquidBackgroundView: View {
             Canvas { context, size in
                 let dotSize: CGFloat = 1.2
                 let spacing: CGFloat = 18.0
+                let dotColor = isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)
                 for x in stride(from: 0, to: size.width, by: spacing) {
                     for y in stride(from: 0, to: size.height, by: spacing) {
-                        context.fill(Path(CGRect(x: x, y: y, width: dotSize, height: dotSize)), with: .color(.white.opacity(0.035)))
+                        context.fill(Path(CGRect(x: x, y: y, width: dotSize, height: dotSize)), with: .color(dotColor))
                     }
                 }
             }
@@ -130,16 +133,22 @@ struct LiquidBackgroundView: View {
 
 // MARK: - Glassmorphism 2.0 View Modifier
 struct GlassModifier: ViewModifier {
+    @Environment(\.colorScheme) var colorScheme
     var cornerRadius: CGFloat
     var paddingValue: CGFloat
     
     func body(content: Content) -> some View {
+        let isDark = colorScheme == .dark
         content
             .padding(paddingValue)
             .background(
                 ZStack {
-                    // Soft dark glass tint base
-                    Color.black.opacity(0.22)
+                    // Soft glass tint base
+                    if isDark {
+                        Color.black.opacity(0.22)
+                    } else {
+                        Color.white.opacity(0.45)
+                    }
                     // System frosted blur
                     Rectangle().fill(.ultraThinMaterial)
                 }
@@ -149,11 +158,16 @@ struct GlassModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         LinearGradient(
-                            colors: [
+                            colors: isDark ? [
                                 Color.white.opacity(0.28),
                                 Color.white.opacity(0.06),
                                 Color.black.opacity(0.04),
                                 Color.white.opacity(0.16)
+                            ] : [
+                                Color.white.opacity(0.65),
+                                Color.white.opacity(0.25),
+                                Color.black.opacity(0.08),
+                                Color.white.opacity(0.45)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -161,7 +175,7 @@ struct GlassModifier: ViewModifier {
                         lineWidth: 1.2
                     )
             )
-            .shadow(color: Color.black.opacity(0.12), radius: 14, x: 0, y: 7)
+            .shadow(color: isDark ? Color.black.opacity(0.12) : Color.gray.opacity(0.12), radius: 14, x: 0, y: 7)
     }
 }
 

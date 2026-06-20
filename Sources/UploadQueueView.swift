@@ -233,8 +233,8 @@ class QueueViewModel: ObservableObject {
             throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Изображение пустое"])
         }
         
-        // Embed metadata (Title, Description, Keywords) into the image bytes
-        let preparedData = writeMetadata(to: data, title: photo.title, description: photo.description, keywords: photo.keywords) ?? data
+        // Embed metadata (Title, Description, Keywords, Categories) into the image bytes
+        let preparedData = writeMetadata(to: data, title: photo.title, description: photo.description, keywords: photo.keywords, categories: photo.categories) ?? data
         
         // Load active platforms
         guard let platformsData = UserDefaults.standard.data(forKey: "stock_platforms"),
@@ -487,7 +487,7 @@ class QueueViewModel: ObservableObject {
     }
     
     
-    private func writeMetadata(to imageData: Data, title: String, description: String, keywords: [String]) -> Data? {
+    private func writeMetadata(to imageData: Data, title: String, description: String, keywords: [String], categories: [String]) -> Data? {
         guard let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return nil }
         guard let type = CGImageSourceGetType(source) else { return nil }
         
@@ -502,6 +502,14 @@ class QueueViewModel: ObservableObject {
         iptc[kCGImagePropertyIPTCObjectName as String] = title
         iptc[kCGImagePropertyIPTCCaptionAbstract as String] = description
         iptc[kCGImagePropertyIPTCKeywords as String] = keywords
+        
+        if !categories.isEmpty {
+            iptc[kCGImagePropertyIPTCCategory as String] = categories[0]
+            if categories.count > 1 {
+                iptc[kCGImagePropertyIPTCSupplementalCategory as String] = Array(categories.dropFirst())
+            }
+        }
+        
         properties[iptcKey] = iptc
         
         // TIFF Dictionary

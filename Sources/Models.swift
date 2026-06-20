@@ -31,6 +31,7 @@ struct PhotoMetadata: Identifiable, Sendable {
     var title: String
     var keywords: [String]
     var description: String
+    var categories: [String] = []
     var status: PhotoStatus = .new
     var selectedStocks: Set<String> = ["Shutterstock", "Adobe Stock"]
     var imageData: Data?

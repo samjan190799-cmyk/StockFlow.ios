@@ -5,13 +5,14 @@ struct AIResult: Codable {
     var title: String
     var description: String
     var keywords: [String]
+    var categories: [String]?
 }
 
 final class AIManager: Sendable {
     static let shared = AIManager()
     private init() {}
     
-    static let defaultPrompt = "Analyze this image for a stock photo agency. Provide: 1. A commercially viable Title (max 70 characters), 2. A detailed Description (max 200 characters), 3. A list of 25-35 highly relevant Keywords (comma separated). Output strictly in JSON format matching this schema: {\"title\": \"string\", \"description\": \"string\", \"keywords\": [\"keyword1\", \"keyword2\", ...]}"
+    static let defaultPrompt = "Analyze this image for a stock photo agency. Provide: 1. A commercially viable Title (max 70 characters), 2. A detailed Description (max 200 characters), 3. A list of 25-35 highly relevant Keywords (comma separated), 4. Select exactly 1 or 2 categories that describe this image from this list: [Abstract, Animals/Wildlife, Arts, Backgrounds/Textures, Beauty/Fashion, Buildings/Landmarks, Business/Finance, Celebrities, Education, Food and drink, Healthcare/Medical, Holidays, Industrial, Interiors, Miscellaneous, Nature, Objects, Parks/Outdoor, People, Religion, Science, Signs/Symbols, Sports/Recreation, Technology, Transportation, Vintage]. Output strictly in JSON format matching this schema: {\"title\": \"string\", \"description\": \"string\", \"keywords\": [\"keyword1\", \"keyword2\", ...], \"categories\": [\"category1\", \"category2\"]}"
     
     func analyzePhoto(imageData: Data, customPrompt: String, provider: String, apiKey: String) async throws -> AIResult {
         guard !imageData.isEmpty else {
@@ -237,7 +238,21 @@ final class AIManager: Sendable {
                 }
             }
             
-            return AIResult(title: title, description: description, keywords: keywords)
+            // Look for categories
+            let categoryKeys = ["categories", "Categories", "CATEGORIES", "category", "Category", "CATEGORY"]
+            var categories: [String] = []
+            for key in categoryKeys {
+                if let val = json[key] as? [String] {
+                    categories = val.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    break
+                } else if let val = json[key] {
+                    let valStr = "\(val)"
+                    categories = valStr.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                    break
+                }
+            }
+            
+            return AIResult(title: title, description: description, keywords: keywords, categories: categories)
         }
     }
 }

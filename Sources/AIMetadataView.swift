@@ -9,6 +9,14 @@ struct AIMetadataView: View {
     @State private var newKeyword = ""
     @State private var isRegenerating = false
 
+    private let shutterstockCategories = [
+        "Abstract", "Animals/Wildlife", "Arts", "Backgrounds/Textures", "Beauty/Fashion",
+        "Buildings/Landmarks", "Business/Finance", "Celebrities", "Education", "Food and drink",
+        "Healthcare/Medical", "Holidays", "Industrial", "Interiors", "Miscellaneous",
+        "Nature", "Objects", "Parks/Outdoor", "People", "Religion",
+        "Science", "Signs/Symbols", "Sports/Recreation", "Technology", "Transportation", "Vintage"
+    ]
+
     var onContinue: (@MainActor ([PhotoMetadata]) -> Void)?
 
     init(photos: [PhotoMetadata], currentIndex: Int = 0, onContinue: (@MainActor ([PhotoMetadata]) -> Void)? = nil) {
@@ -37,6 +45,10 @@ struct AIMetadataView: View {
                     
                     // Keywords Panel
                     keywordsField
+                        .glassCard(cornerRadius: 18, padding: 14)
+                    
+                    // Categories Panel
+                    categoriesField
                         .glassCard(cornerRadius: 18, padding: 14)
                     
                     // Description Panel
@@ -246,6 +258,57 @@ struct AIMetadataView: View {
         }
     }
 
+    private var categoriesField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Категории (Макс. 2)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                
+                Spacer()
+                
+                if photos[currentIndex].categories.count < 2 {
+                    Menu {
+                        ForEach(shutterstockCategories, id: \.self) { category in
+                            if !photos[currentIndex].categories.contains(category) {
+                                Button(category) {
+                                    HapticHelper.trigger(.light)
+                                    photos[currentIndex].categories.append(category)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("Добавить")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .foregroundStyle(Color(hex: "7C3AED"))
+                    }
+                } else {
+                    Text("Лимит достигнут")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if photos[currentIndex].categories.isEmpty {
+                Text("Категории не выбраны. Выберите до 2 категорий.")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            } else {
+                FlowLayout(spacing: 6) {
+                    ForEach(photos[currentIndex].categories, id: \.self) { category in
+                        KeywordChip(text: category, onRemove: { removeCategory(category) })
+                    }
+                }
+            }
+        }
+    }
+
     private var continueButton: some View {
         Button(action: {
             HapticHelper.trigger(.medium)
@@ -291,6 +354,10 @@ struct AIMetadataView: View {
         photos[currentIndex].keywords.removeAll { $0 == keyword }
     }
 
+    private func removeCategory(_ category: String) {
+        photos[currentIndex].categories.removeAll { $0 == category }
+    }
+
     private func regenerate() {
         let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? AIProvider.gemini.rawValue
         let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
@@ -313,6 +380,7 @@ struct AIMetadataView: View {
                 self.photos[curIdx].title = "Драматичное закатное небо над горой Арарат (Демо)"
                 self.photos[curIdx].keywords = ["Арарат", "гора", "закат", "Армения", "пейзаж", "природа", "демо"]
                 self.photos[curIdx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
+                self.photos[curIdx].categories = ["Nature", "Backgrounds/Textures"]
                 self.isRegenerating = false
             }
             return
@@ -331,6 +399,7 @@ struct AIMetadataView: View {
                 self.photos[curIdx].title = result.title
                 self.photos[curIdx].description = result.description
                 self.photos[curIdx].keywords = result.keywords
+                self.photos[curIdx].categories = result.categories ?? []
                 self.isRegenerating = false
             } catch {
                 self.photos[curIdx].description = "Ошибка: \(error.localizedDescription)"
