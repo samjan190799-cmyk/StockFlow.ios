@@ -47,7 +47,7 @@ struct SystemSettingsView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             sectionHeader("Интерфейс".localized)
                             
-                            pickerRow("Язык интерфейса".localized, selection: $sysLanguage, options: ["Русский", "English"])
+                            pickerRow("Язык интерфейса".localized, selection: $sysLanguage, options: ["Русский", "English", "Հայերեն"])
                             
                             Divider().background(Color.primary.opacity(0.08))
 
@@ -319,7 +319,16 @@ struct SystemSettingsView: View {
             .onChange(of: sysTheme) { _ in HapticHelper.trigger(.light) }
             .onChange(of: sysLanguage) { newLang in
                 HapticHelper.trigger(.medium)
-                showToast(newLang == "English" ? "Language changed to English" : "Язык изменён на Русский")
+                let message: String
+                switch newLang {
+                case "English":
+                    message = "Language changed to English"
+                case "Հայերեն":
+                    message = "Լեզուն փոխվեց Հայերենի"
+                default:
+                    message = "Язык изменён на Русский"
+                }
+                showToast(message)
             }
             .onChange(of: sysFps) { newFps in
                 HapticHelper.trigger(.light)

@@ -649,9 +649,9 @@ class QueueViewModel: ObservableObject {
     
     private func getStreamWord(_ count: Int) -> String {
         switch count {
-        case 1: return "поток"
-        case 3, 4: return "потока"
-        default: return "потоков"
+        case 1: return "поток".localized
+        case 3, 4: return "потока".localized
+        default: return "потоков".localized
         }
     }
 }

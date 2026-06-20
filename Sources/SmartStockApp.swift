@@ -7,6 +7,7 @@ struct SmartStockApp: App {
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @AppStorage("sys_fps") private var sysFps: String = "120 FPS (Ультра-плавность)"
     @StateObject private var viewModel = QueueViewModel()
+    @State private var tabViewID = UUID()
     
     var colorScheme: ColorScheme? {
         switch sysTheme {
@@ -74,9 +75,14 @@ struct SmartStockApp: App {
                         Label("Параметры".localized, systemImage: "gearshape")
                     }
             }
-            .id(sysLanguage) // Перестраивает UI при смене языка
+            .id(tabViewID) // Перестраивает UI при смене языка
             .preferredColorScheme(colorScheme)
             .tint(Color(hex: "7C3AED"))
+            .onChange(of: sysLanguage) { _ in
+                DispatchQueue.main.async {
+                    tabViewID = UUID()
+                }
+            }
             .onChange(of: sysFps) { newFps in
                 applyFrameRate(newFps)
             }
