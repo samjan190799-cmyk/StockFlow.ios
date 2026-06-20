@@ -290,113 +290,104 @@ class FTPClient {
                 throw ftpError("Ошибка установки бинарного режима: \(typeResp)")
             }
             
-            // 7. Send EPSV (Extended Passive Mode) first, fallback to PASV
+            // 7. Establish Data Connection
+            var connectedDataChannel: NWConnection? = nil
             var dataPort: Int = 0
             var dataIp: String = cleanHost
             
+            // Сначала пробуем EPSV с коротким таймаутом
+            var epsvSuccess = false
             do {
                 try await sendCommand(connection: controlConnection, cmd: "EPSV\r\n")
+                let epsvResp = try await reader.readLine()
+                
+                if epsvResp.hasPrefix("229") {
+                    let pattern = "\\(\\|\\|\\|(\\d+)\\|\\)"
+                    if let regex = try? NSRegularExpression(pattern: pattern),
+                       let match = regex.firstMatch(in: epsvResp, range: NSRange(epsvResp.startIndex..., in: epsvResp)),
+                       let range = Range(match.range(at: 1), in: epsvResp),
+                       let port = Int(epsvResp[range]) {
+                        dataPort = port
+                        await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] EPSV port: \(dataPort)") }
+                        
+                        let dataHostEndpoint = NWEndpoint.Host(resolvedIp)
+                        await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Attempting EPSV connection to \(resolvedIp):\(dataPort)...") }
+                        
+                        let dataParameters = setupDataParameters(useTls: useTlsOnDataChannel, cleanHost: cleanHost)
+                        let conn = NWConnection(host: dataHostEndpoint, port: NWEndpoint.Port(rawValue: UInt16(dataPort))!, using: dataParameters)
+                        conn.start(queue: DispatchQueue.global())
+                        
+                        // Пробуем подключиться с коротким таймаутом 6 секунд
+                        try await waitForReady(connection: conn, timeout: 6)
+                        connectedDataChannel = conn
+                        epsvSuccess = true
+                        await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] EPSV connection established successfully.") }
+                    }
+                }
             } catch {
-                throw ftpError("Ошибка при отправке команды EPSV: \(error.localizedDescription)")
+                await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] EPSV connection failed or timed out: \(error.localizedDescription). Falling back to PASV...") }
             }
             
-            let epsvResp: String
-            do {
-                epsvResp = try await reader.readLine()
-            } catch {
-                throw ftpError("Ошибка при чтении ответа на EPSV: \(error.localizedDescription)")
+            // Если EPSV не удался, пробуем PASV
+            if !epsvSuccess {
+                do {
+                    try await sendCommand(connection: controlConnection, cmd: "PASV\r\n")
+                    let pasvResp = try await reader.readLine()
+                    
+                    guard pasvResp.hasPrefix("227") else {
+                        throw ftpError("Ошибка пассивного режима: \(pasvResp)")
+                    }
+                    
+                    let pattern = "\\(([^)]+)\\)"
+                    guard let regex = try? NSRegularExpression(pattern: pattern),
+                          let match = regex.firstMatch(in: pasvResp, range: NSRange(pasvResp.startIndex..., in: pasvResp)),
+                          let range = Range(match.range(at: 1), in: pasvResp) else {
+                        throw ftpError("Ошибка разбора ответа PASV: \(pasvResp)")
+                    }
+                    
+                    let components = String(pasvResp[range]).components(separatedBy: ",")
+                    guard components.count == 6 else {
+                        throw ftpError("Ошибка формата ответа PASV")
+                    }
+                    
+                    let parsedIp = components[0...3].joined(separator: ".")
+                    dataIp = parsedIp
+                    if dataIp.hasPrefix("10.") || dataIp.hasPrefix("192.168.") || dataIp.hasPrefix("172.") {
+                        dataIp = cleanHost
+                    }
+                    
+                    guard let p1 = Int(components[4]), let p2 = Int(components[5]) else {
+                        throw ftpError("Ошибка разбора порта PASV")
+                    }
+                    dataPort = p1 * 256 + p2
+                    
+                    let dataHostEndpoint: NWEndpoint.Host
+                    if dataIp == cleanHost || dataIp == resolvedIp {
+                        dataHostEndpoint = NWEndpoint.Host(resolvedIp)
+                    } else {
+                        dataHostEndpoint = NWEndpoint.Host(dataIp)
+                    }
+                    
+                    await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Attempting PASV connection to \(dataIp) [\(resolvedIp)]:\(dataPort)...") }
+                    
+                    let dataParameters = setupDataParameters(useTls: useTlsOnDataChannel, cleanHost: cleanHost)
+                    let conn = NWConnection(host: dataHostEndpoint, port: NWEndpoint.Port(rawValue: UInt16(dataPort))!, using: dataParameters)
+                    conn.start(queue: DispatchQueue.global())
+                    
+                    try await waitForReady(connection: conn, timeout: 20)
+                    connectedDataChannel = conn
+                    await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] PASV connection established successfully.") }
+                } catch {
+                    controlConnection.cancel()
+                    throw ftpError("Не удалось установить соединение через EPSV и PASV: \(error.localizedDescription)")
+                }
             }
             
-            if epsvResp.hasPrefix("229") {
-                let pattern = "\\(\\|\\|\\|(\\d+)\\|\\)"
-                if let regex = try? NSRegularExpression(pattern: pattern),
-                   let match = regex.firstMatch(in: epsvResp, range: NSRange(epsvResp.startIndex..., in: epsvResp)),
-                   let range = Range(match.range(at: 1), in: epsvResp),
-                   let port = Int(epsvResp[range]) {
-                    dataPort = port
-                    await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] EPSV port: \(dataPort)") }
-                } else {
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка разбора порта EPSV: \(epsvResp)")
-                }
-            } else {
-                print("FTPClient: EPSV отклонен (\(epsvResp)), пробуем PASV...")
-                try await sendCommand(connection: controlConnection, cmd: "PASV\r\n")
-                let pasvResp = try await reader.readLine()
-                
-                guard pasvResp.hasPrefix("227") else {
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка пассивного режима: \(pasvResp)")
-                }
-                
-                let pattern = "\\(([^)]+)\\)"
-                guard let regex = try? NSRegularExpression(pattern: pattern),
-                      let match = regex.firstMatch(in: pasvResp, range: NSRange(pasvResp.startIndex..., in: pasvResp)),
-                      let range = Range(match.range(at: 1), in: pasvResp) else {
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка разбора ответа PASV: \(pasvResp)")
-                }
-                
-                let components = String(pasvResp[range]).components(separatedBy: ",")
-                guard components.count == 6 else {
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка формата ответа PASV")
-                }
-                
-                let parsedIp = components[0...3].joined(separator: ".")
-                dataIp = parsedIp
-                if dataIp.hasPrefix("10.") || dataIp.hasPrefix("192.168.") || dataIp.hasPrefix("172.") {
-                    print("FTPClient: PASV вернул внутренний IP \(dataIp), заменяем на хост \(cleanHost)")
-                    dataIp = cleanHost
-                } else {
-                    print("FTPClient: PASV вернул IP \(dataIp)")
-                }
-                
-                guard let p1 = Int(components[4]), let p2 = Int(components[5]) else {
-                    controlConnection.cancel()
-                    throw ftpError("Ошибка разбора порта PASV")
-                }
-                dataPort = p1 * 256 + p2
+            guard let conn = connectedDataChannel else {
+                controlConnection.cancel()
+                throw ftpError("Не удалось инициализировать канал данных")
             }
-            
-            // 8. Connect Data Channel
-            var dataHostEndpoint = NWEndpoint.Host(dataIp)
-            
-            if dataIp == cleanHost || dataIp == resolvedIp {
-                dataHostEndpoint = NWEndpoint.Host(resolvedIp)
-                await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Data IP mapped to resolvedIp: \(resolvedIp)") }
-            } else {
-                await MainActor.run { FTPTranscriptLogger.shared.logResponse("[DEBUG] Data IP from PASV: \(dataIp)") }
-            }
-            
-            let dataParameters: NWParameters
-            if useTlsOnDataChannel {
-                let tlsOptions = NWProtocolTLS.Options()
-                sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-                sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-                sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
-                    completionHandler(true)
-                }, DispatchQueue.global())
-                sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
-                // Закомментировано, так как Shutterstock не поддерживает SNI на канале данных и сбрасывает соединение (SNI connection abort)
-                // sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, cleanHost)
-                dataParameters = NWParameters(tls: tlsOptions)
-            } else {
-                dataParameters = NWParameters.tcp
-            }
-            
-            let conn = NWConnection(
-                host: dataHostEndpoint,
-                port: NWEndpoint.Port(rawValue: UInt16(dataPort))!,
-                using: dataParameters
-            )
             dataConnection = conn
-            conn.start(queue: DispatchQueue.global())
-            do {
-                try await waitForReady(connection: conn, timeout: 30)
-            } catch {
-                throw ftpError("Ошибка при открытии канала данных: \(error.localizedDescription)")
-            }
             
             // 9. Send STOR on Control Channel
             do {
@@ -448,8 +439,23 @@ class FTPClient {
         }
     }
     
-    // MARK: - Private Helpers
-    
+    private static func setupDataParameters(useTls: Bool, cleanHost: String) -> NWParameters {
+        if useTls {
+            let tlsOptions = NWProtocolTLS.Options()
+            sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+            sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+            sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
+                completionHandler(true)
+            }, DispatchQueue.global())
+            sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
+            // Закомментировано, так как Shutterstock не поддерживает SNI на канале данных и сбрасывает соединение (SNI connection abort)
+            // sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, cleanHost)
+            return NWParameters(tls: tlsOptions)
+        } else {
+            return NWParameters.tcp
+        }
+    }
+
     private static func upgradeToTLS(connection: NWConnection, host: String) async throws {
         let message = NWProtocolFramer.Message(definition: FTPESFramer.definition)
         message["upgradeTLS"] = true
@@ -693,6 +699,7 @@ class FTPESFramer: NWProtocolFramerImplementation {
                         print("FTPESFramer (Control): Блок верификации TLS вызван")
                         completionHandler(true)
                     }, DispatchQueue.global())
+                    sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
                     
                     do {
                         try framer.prependApplicationProtocol(options: tlsOptions)
