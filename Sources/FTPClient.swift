@@ -378,9 +378,8 @@ class FTPClient {
                     completionHandler(true)
                 }, DispatchQueue.global())
                 sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
-                // Обязательно указываем SNI (cleanHost), так как при прямом подключении по IP 
-                // балансировщики Shutterstock могут сбрасывать соединение без правильного SNI.
-                sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, cleanHost)
+                // Закомментировано, так как Shutterstock не поддерживает SNI на канале данных и сбрасывает соединение (SNI connection abort)
+                // sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, cleanHost)
                 dataParameters = NWParameters(tls: tlsOptions)
             } else {
                 dataParameters = NWParameters.tcp
