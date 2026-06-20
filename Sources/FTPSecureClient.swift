@@ -396,6 +396,10 @@ class FTPSecureClient {
     /// SecureTransport использует PeerID как ключ кеша TLS-сессий.
     /// Если контрольный канал и канал данных имеют одинаковый PeerID,
     /// SecureTransport автоматически выполняет Session Resumption.
+    ///
+    /// ВАЖНО: SSLSetPeerID работает ТОЛЬКО с TLS 1.2 (Session ID resumption, RFC 5077).
+    /// TLS 1.3 использует PSK-тикеты (RFC 8446), несовместимые с этим механизмом.
+    /// Принудительно фиксируем TLS 1.2 на обоих каналах.
     private static func createSSLContext(sock: Int32, peerName: String, peerId: Data) throws -> SSLContext {
         guard let context = SSLCreateContext(nil, .clientSide, .streamType) else {
             throw ftpError("Ошибка создания SSLContext")
@@ -447,6 +451,12 @@ class FTPSecureClient {
         }
         SSLSetConnection(context, connRef)
 
+        // ФИКСИРУЕМ TLS 1.2: SSLSetPeerID (Session ID resumption) несовместим с TLS 1.3.
+        // TLS 1.3 PSK-тикеты — другой механизм. Без этого сервер получает некорректный
+        // ClientHello и возвращает fatal alert → OSStatus -9806.
+        SSLSetProtocolVersionMin(context, .tlsProtocol12)
+        SSLSetProtocolVersionMax(context, .tlsProtocol12)
+
         // PeerID для общего кеша TLS-сессий — КРИТИЧЕСКИ ВАЖНО
         let peerIdStatus = peerId.withUnsafeBytes { ptr -> OSStatus in
             SSLSetPeerID(context, ptr.baseAddress!, peerId.count)
@@ -468,6 +478,7 @@ class FTPSecureClient {
 
     /// TLS Handshake с обработкой breakOnServerAuth.
     /// При получении errSSLPeerAuthCompleted продолжаем без верификации.
+    /// Логирует согласованную TLS-версию для диагностики.
     private static func performSSLHandshake(context: SSLContext) throws {
         var status: OSStatus
         repeat {
@@ -476,6 +487,21 @@ class FTPSecureClient {
 
         if status != noErr {
             throw ftpError("TLS handshake ошибка: OSStatus \(status)")
+        }
+
+        // Логируем согласованную версию TLS для диагностики
+        var negotiated = SSLProtocol.sslProtocolUnknown
+        SSLGetNegotiatedProtocolVersion(context, &negotiated)
+        let versionName: String
+        switch negotiated {
+        case .tlsProtocol12: versionName = "TLS 1.2"
+        case .tlsProtocol13: versionName = "TLS 1.3"
+        case .tlsProtocol11: versionName = "TLS 1.1"
+        case .tlsProtocol1:  versionName = "TLS 1.0"
+        default:             versionName = "Unknown (\(negotiated.rawValue))"
+        }
+        DispatchQueue.main.async {
+            FTPTranscriptLogger.shared.logResponse("[SecureTransport] Согласована версия: \(versionName)")
         }
     }
 
