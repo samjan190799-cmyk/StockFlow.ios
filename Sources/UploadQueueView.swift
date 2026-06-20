@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import ImageIO
+import UIKit
 
 // MARK: - Queue View Model (MainActor Isolated, Safe Concurrency)
 @MainActor
@@ -643,6 +644,14 @@ class QueueViewModel: ObservableObject {
                     self.showToast = false
                 }
             }
+        }
+    }
+    
+    private func getStreamWord(_ count: Int) -> String {
+        switch count {
+        case 1: return "поток"
+        case 3, 4: return "потока"
+        default: return "потоков"
         }
     }
 }
