@@ -172,19 +172,21 @@ class FTPSecureClient {
         setSocketTimeout(dataSock, seconds: 60)
         setNoSigPipe(dataSock)
 
-        // === ШАГ 10: TLS на канале данных (с ТЕМ ЖЕ PeerID → Session Resumption!) ===
+        // === ШАГ 10: Отправка команды STOR на контрольном канале ===
+        try sslWriteCmd(context: controlSSL!, cmd: "STOR \(filename)\r\n")
+        let storResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+        guard storResp.hasPrefix("150") || storResp.hasPrefix("125") else {
+            throw ftpError("STOR ошибка: \(storResp)")
+        }
+
+        // === ШАГ 11: TLS на канале данных (с ТЕМ ЖЕ PeerID → Session Resumption!) ===
+        // Рукопожатие запускается строго после того, как сервер подтвердил команду STOR (ответ 150/125).
+        // Это предотвращает дедлок, так как AWS Transfer Family ожидает привязки команды до начала TLS-сессии.
         if useTlsDataChannel {
             logMsg("[SecureTransport] TLS канала данных (Session Resumption через SSLSetPeerID)...")
             dataSSL = try createSSLContext(sock: dataSock, peerName: cleanHost, peerId: peerId, requireValidCertificate: requireValidCert)
             try performSSLHandshake(context: dataSSL!, requireValidCertificate: requireValidCert)
             logMsg("[SecureTransport] ✅ TLS канала данных УСПЕХ — Session Resumption работает!")
-        }
-
-        // === ШАГ 11: STOR ===
-        try sslWriteCmd(context: controlSSL!, cmd: "STOR \(filename)\r\n")
-        let storResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
-        guard storResp.hasPrefix("150") || storResp.hasPrefix("125") else {
-            throw ftpError("STOR ошибка: \(storResp)")
         }
 
         // === ШАГ 12: Передача данных ===
