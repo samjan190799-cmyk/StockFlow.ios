@@ -370,7 +370,7 @@ class FTPSecureClient {
 
         while offset < total {
             let end = min(offset + chunkSize, total)
-            let chunk = data[offset..<end]
+            let chunk = Data(data[offset..<end])
 
             try chunk.withUnsafeBytes { buffer in
                 var totalSent = 0
@@ -597,7 +597,7 @@ class FTPSecureClient {
 
         while offset < total {
             let end = min(offset + chunkSize, total)
-            let chunk = data[offset..<end]
+            let chunk = Data(data[offset..<end])
 
             try chunk.withUnsafeBytes { buffer in
                 var totalWritten = 0
