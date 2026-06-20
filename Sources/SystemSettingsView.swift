@@ -19,6 +19,10 @@ struct SystemSettingsView: View {
     @AppStorage("sys_compress_jpeg") private var compressJpeg: Bool = false
     @AppStorage("sys_notifications") private var sysNotifications: Bool = true
     
+    // PC Server settings
+    @AppStorage("sys_pc_server_enabled") private var pcServerEnabled: Bool = false
+    @AppStorage("sys_pc_server_address") private var pcServerAddress: String = "192.168.1.50:5000"
+    
     // Auth settings
     @AppStorage("user_signed_in") private var isUserSignedIn: Bool = false
     @AppStorage("user_email") private var userEmail: String = ""
@@ -220,6 +224,51 @@ struct SystemSettingsView: View {
                         }
                         .glassCard()
                         
+                        // SECTION 5: Local PC Server
+                        VStack(alignment: .leading, spacing: 10) {
+                            sectionHeader("Локальный ПК-сервер")
+                            
+                            Toggle("Загрузка через ПК-сервер", isOn: $pcServerEnabled)
+                                .tint(Color(hex: "7C3AED"))
+                            
+                            if pcServerEnabled {
+                                Divider().background(Color.white.opacity(0.1))
+                                
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Адрес сервера (IP:Порт)")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(.secondary)
+                                    
+                                    TextField("192.168.1.50:5000", text: $pcServerAddress)
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 13))
+                                        .padding(12)
+                                        .background(Color.black.opacity(0.18))
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+                                        )
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled(true)
+                                        .onChange(of: pcServerAddress) { newValue in
+                                            let cleaned = newValue
+                                                .replacingOccurrences(of: "http://", with: "")
+                                                .replacingOccurrences(of: "https://", with: "")
+                                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                                            if cleaned != newValue {
+                                                pcServerAddress = cleaned
+                                            }
+                                        }
+                                }
+                            }
+                            
+                            Text("Позволяет отправлять фото через программу на вашем компьютере. Полезно, если на телефоне блокируется FTPS к Shutterstock.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        .glassCard()
+                        
                         // Save Button
                         Button(action: {
                             HapticHelper.trigger(.medium)
@@ -267,6 +316,8 @@ struct SystemSettingsView: View {
             .onChange(of: parallelStreams) { _ in HapticHelper.trigger(.light) }
             .onChange(of: upscaleThreshold) { _ in HapticHelper.trigger(.light) }
             .onChange(of: upscaleFactor) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: pcServerEnabled) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: pcServerAddress) { _ in HapticHelper.trigger(.light) }
             .overlay {
                 if isSigningIn {
                     Color.black.opacity(0.4)

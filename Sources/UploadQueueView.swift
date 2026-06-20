@@ -228,7 +228,7 @@ class QueueViewModel: ObservableObject {
         }
     }
     
-    private func performRealUpload(for photo: PhotoMetadata, progress: ((Double) -> Void)? = nil) async throws {
+    private func performRealUpload(for photo: PhotoMetadata, progress: (@Sendable (Double) -> Void)? = nil) async throws {
         guard let data = photo.imageData else {
             throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Изображение пустое"])
         }
@@ -248,6 +248,20 @@ class QueueViewModel: ObservableObject {
         }
         guard !activePlatforms.isEmpty else {
             throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Нет активных стоков для отправки. Включите фотостоки в настройках и отметьте их для этого фото."])
+        }
+        
+        // Проверяем, включен ли ПК-сервер
+        let pcServerEnabled = UserDefaults.standard.bool(forKey: "sys_pc_server_enabled")
+        if pcServerEnabled {
+            let pcAddress = UserDefaults.standard.string(forKey: "sys_pc_server_address") ?? "192.168.1.50:5000"
+            try await uploadViaPCServer(
+                data: preparedData,
+                filename: photo.filename,
+                pcAddress: pcAddress,
+                activePlatforms: activePlatforms,
+                progress: progress
+            )
+            return
         }
         
         var uploadErrors: [String] = []
@@ -289,6 +303,187 @@ class QueueViewModel: ObservableObject {
             throw NSError(domain: "Upload", code: -2, userInfo: [NSLocalizedDescriptionKey: "Частичный успех. Ошибки: \(details)"])
         }
     }
+    
+    private func uploadViaPCServer(
+        data: Data,
+        filename: String,
+        pcAddress: String,
+        activePlatforms: [StockPlatform],
+        progress: (@Sendable (Double) -> Void)? = nil
+    ) async throws {
+        // Шаг 1: Загрузка временного файла на ПК
+        progress?(0.05)
+        let fileId = try await uploadMultipart(data: data, filename: filename, pcAddress: pcAddress)
+        
+        let targetStockIds = Set(activePlatforms.map { $0.id })
+        
+        // Шаг 2: Запуск загрузки на ПК и SSE-мониторинг
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await self.listenToSSE(pcAddress: pcAddress, fileId: fileId, targetStocks: targetStockIds, progress: progress)
+            }
+            
+            group.addTask {
+                // Небольшая задержка, чтобы дать SSE-слушателю подключиться к бэкенду
+                try await Task.sleep(nanoseconds: 500_000_000)
+                
+                for platform in activePlatforms {
+                    let serviceKey = "com.samvel.smartstock.platform.\(platform.id)"
+                    let password = KeychainHelper.shared.read(for: serviceKey) ?? ""
+                    
+                    guard !platform.username.isEmpty, !password.isEmpty else {
+                        throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "\(platform.name): не введены логин или пароль"])
+                    }
+                    
+                    try await self.startPCStockUpload(fileId: fileId, pcAddress: pcAddress, platform: platform, passwordHash: password)
+                }
+            }
+            
+            try await group.waitForAll()
+        }
+    }
+    
+    private func uploadMultipart(data: Data, filename: String, pcAddress: String) async throws -> String {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        guard let url = URL(string: "http://\(pcAddress)/api/upload-temp") else {
+            throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Некорректный адрес ПК-сервера: \(pcAddress)"])
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"photos\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+        
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            let errorMsg = String(data: responseData, encoding: .utf8) ?? "Неизвестная ошибка"
+            throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Ошибка загрузки на ПК-сервер: \(errorMsg)"])
+        }
+        
+        struct TempUploadResponse: Codable {
+            struct FileItem: Codable {
+                let id: String
+            }
+            let success: Bool
+            let files: [FileItem]
+        }
+        
+        let decoded = try JSONDecoder().decode(TempUploadResponse.self, from: responseData)
+        guard decoded.success, let firstFile = decoded.files.first else {
+            throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Не удалось получить ID временного файла от ПК"])
+        }
+        return firstFile.id
+    }
+    
+    private func startPCStockUpload(fileId: String, pcAddress: String, platform: StockPlatform, passwordHash: String) async throws {
+        guard let url = URL(string: "http://\(pcAddress)/api/upload-stock") else {
+            throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Некорректный URL для запуска выгрузки"])
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let protocolStr = platform.host.lowercased().contains("sftp") ? "sftp" : "ftps"
+        
+        let profile: [String: Any] = [
+            "host": platform.host,
+            "port": protocolStr == "sftp" ? 22 : 21,
+            "username": platform.username,
+            "password": passwordHash,
+            "protocol": protocolStr,
+            "remotePath": ""
+        ]
+        
+        let body: [String: Any] = [
+            "fileId": fileId,
+            "profile": profile,
+            "targetStockId": platform.id
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            let errorMsg = String(data: responseData, encoding: .utf8) ?? "Неизвестная ошибка"
+            throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Не удалось запустить загрузку на \(platform.name) через ПК: \(errorMsg)"])
+        }
+    }
+    
+    private func listenToSSE(pcAddress: String, fileId: String, targetStocks: Set<String>, progress: (@Sendable (Double) -> Void)?) async throws {
+        guard let url = URL(string: "http://\(pcAddress)/api/upload-events") else {
+            throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Некорректный URL для SSE событий"])
+        }
+        
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 600
+        
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Не удалось подключиться к каналу событий ПК"])
+        }
+        
+        struct SSEEvent: Codable {
+            let fileId: String?
+            let stockId: String?
+            let status: String?
+            let progress: Double?
+            let error: String?
+        }
+        
+        var stockProgresses: [String: Double] = [:]
+        var completedStocks = Set<String>()
+        var failedStocks = [String: String]()
+        
+        for try await line in bytes.lines {
+            if line.hasPrefix("data: ") {
+                let jsonString = String(line.dropFirst(6))
+                guard let jsonData = jsonString.data(using: .utf8) else { continue }
+                
+                guard let event = try? JSONDecoder().decode(SSEEvent.self, from: jsonData) else { continue }
+                
+                if event.fileId == fileId, let stockId = event.stockId {
+                    let isTarget = targetStocks.contains(where: { $0.lowercased().contains(stockId.lowercased()) })
+                    if isTarget {
+                        if event.status == "uploading", let prog = event.progress {
+                            stockProgresses[stockId] = prog / 100.0
+                            let totalProgress = stockProgresses.values.reduce(0.0, +) / Double(targetStocks.count)
+                            progress?(totalProgress)
+                        } else if event.status == "success" {
+                            stockProgresses[stockId] = 1.0
+                            completedStocks.insert(stockId)
+                            let totalProgress = stockProgresses.values.reduce(0.0, +) / Double(targetStocks.count)
+                            progress?(totalProgress)
+                        } else if event.status == "error" {
+                            failedStocks[stockId] = event.error ?? "Ошибка при загрузке с ПК"
+                            completedStocks.insert(stockId)
+                        }
+                        
+                        if completedStocks.count == targetStocks.count {
+                            if !failedStocks.isEmpty {
+                                let details = failedStocks.map { "\($0.key): \($0.value)" }.joined(separator: "; ")
+                                throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Ошибка выгрузки через ПК: \(details)"])
+                            }
+                            return
+                        }
+                    }
+                }
+            }
+        }
+        
+        if completedStocks.count < targetStocks.count {
+            throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Соединение с ПК-сервером разорвано до завершения выгрузки"])
+        }
+    }
+    
     
     private func writeMetadata(to imageData: Data, title: String, description: String, keywords: [String]) -> Data? {
         guard let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return nil }
