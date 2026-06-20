@@ -242,21 +242,8 @@ struct PlatformRowView: View {
             .tint(Color(hex: "7C3AED"))
         }
         .padding(16)
-        .background(
-            ZStack {
-                if platform.isEnabled {
-                    color.opacity(0.08)
-                } else {
-                    Color.black.opacity(0.12)
-                }
-                Rectangle().fill(.ultraThinMaterial)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(LinearGradient(colors: [Color.white.opacity(0.15), Color.white.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
-        )
+        .background(platform.isEnabled ? color.opacity(0.06) : Color.clear)
+        .glassCard(cornerRadius: 22, padding: 0)
         .shadow(color: color.opacity(platform.isEnabled ? 0.12 : 0.0), radius: 10, x: 0, y: 5)
         .contentShape(Rectangle())
         .onTapGesture {
@@ -301,7 +288,7 @@ struct PlatformDetailSheet: View {
                                     .tint(Color(hex: "7C3AED"))
                             }
                             
-                            Divider().background(Color.white.opacity(0.1))
+                            Divider().background(Color.primary.opacity(0.08))
                             
                             customInputField(title: "Имя пользователя (логин)", placeholder: "Username", text: $platform.username, isSecure: false)
                             
@@ -354,7 +341,7 @@ struct PlatformDetailSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .stroke(Color.white.opacity(0.18), lineWidth: 1.2)
+                                    .stroke(Color.primary.opacity(0.12), lineWidth: 1.2)
                             )
                         }
                         .buttonStyle(PremiumButtonStyle())
@@ -400,11 +387,11 @@ struct PlatformDetailSheet: View {
             .textFieldStyle(.plain)
             .font(.system(size: 13))
             .padding(12)
-            .background(Color.black.opacity(0.18))
+            .background(Color.primary.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+                    .stroke(Color.primary.opacity(0.12), lineWidth: 1.2)
             )
             .textInputAutocapitalization(.never)
         }

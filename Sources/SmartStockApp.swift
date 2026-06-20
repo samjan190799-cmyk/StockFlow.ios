@@ -22,16 +22,16 @@ struct SmartStockApp: App {
             }
         }
         
-        // Style TabBar to match iOS Music App (glassmorphism + thin outline border)
+        // Настройка TabBar для соответствия стилю Glassmorphism в обеих темах
         let appearance = UITabBarAppearance()
         appearance.configureWithDefaultBackground()
-        appearance.backgroundColor = UIColor(white: 0.1, alpha: 0.6)
-        appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
-        appearance.shadowColor = UIColor(white: 1.0, alpha: 0.15)
+        appearance.backgroundColor = .clear
+        appearance.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
+        appearance.shadowColor = UIColor.separator.withAlphaComponent(0.3)
         appearance.shadowImage = UIImage()
         
         let activeColor = UIColor(red: 124/255, green: 58/255, blue: 237/255, alpha: 1.0)
-        let normalColor = UIColor.gray
+        let normalColor = UIColor.secondaryLabel
         
         appearance.stackedLayoutAppearance.selected.iconColor = activeColor
         appearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: activeColor]

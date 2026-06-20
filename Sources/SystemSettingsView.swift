@@ -3,6 +3,7 @@ import AuthenticationServices
 
 @MainActor
 struct SystemSettingsView: View {
+    @Environment(\.colorScheme) var colorScheme
     // Left Column settings
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @AppStorage("sys_theme") private var sysTheme: String = "Темная"
@@ -41,6 +42,133 @@ struct SystemSettingsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         
+                        // SECTION 1: Interface
+                        VStack(alignment: .leading, spacing: 12) {
+                            sectionHeader("Интерфейс")
+                            
+                            pickerRow("Язык интерфейса", selection: $sysLanguage, options: ["Русский", "English"])
+                            
+                            Divider().background(Color.primary.opacity(0.08))
+                            
+                            pickerRow("Тема оформления", selection: $sysTheme, options: ["Темная", "Светлая", "Системная"])
+                            
+                            Divider().background(Color.primary.opacity(0.08))
+                            
+                            pickerRow("Предел частоты кадров", selection: $sysFps, options: [
+                                "120 FPS (Ультра-плавность)",
+                                "60 FPS (Стандартный)",
+                                "30 FPS (Энергосбережение)"
+                            ])
+                        }
+                        .glassCard()
+                        
+                        // SECTION 2: Scheduler
+                        VStack(alignment: .leading, spacing: 10) {
+                            sectionHeader("Планировщик")
+                            
+                            Toggle("Фоновый планировщик выгрузки", isOn: $bgScheduler)
+                                .tint(Color(hex: "7C3AED"))
+                            
+                            Text("При активации планировщика система будет проверять новые фото и отправлять их в фоновом режиме.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        .glassCard()
+                        
+                        // SECTION 3: Auto Upscaling
+                        VStack(alignment: .leading, spacing: 12) {
+                            sectionHeader("Автоматический Апскейл")
+                            
+                            Toggle("Включить авто-апскейл", isOn: $autoUpscale)
+                                .tint(Color(hex: "7C3AED"))
+                            
+                            if autoUpscale {
+                                Divider().background(Color.primary.opacity(0.08))
+                                
+                                pickerRow("Порог срабатывания", selection: $upscaleThreshold, options: [
+                                    "Меньше 4 МБ (Рекомендуется)",
+                                    "Меньше 2 МБ",
+                                    "Меньше 8 МБ"
+                                ])
+                                
+                                Divider().background(Color.primary.opacity(0.08))
+                                
+                                pickerRow("Коэффициент (масштаб)", selection: $upscaleFactor, options: [
+                                    "Увеличение 2x (Бикубическое)",
+                                    "Увеличение 4x (Нейросеть)"
+                                ])
+                            }
+                        }
+                        .glassCard()
+                        
+                        // SECTION 4: Upload parameters
+                        VStack(alignment: .leading, spacing: 12) {
+                            sectionHeader("Параметры выгрузки")
+                            
+                            pickerIntRow("Потоки параллельной загрузки", selection: $parallelStreams, options: [1, 3, 5])
+                            
+                            Divider().background(Color.primary.opacity(0.08))
+                            
+                            Toggle("Автоповтор при сбоях", isOn: $retryOnFail)
+                                .tint(Color(hex: "7C3AED"))
+                            
+                            Divider().background(Color.primary.opacity(0.08))
+                            
+                            Toggle("Сжатие JPEG перед загрузкой", isOn: $compressJpeg)
+                                .tint(Color(hex: "7C3AED"))
+                            
+                            Divider().background(Color.primary.opacity(0.08))
+                            
+                            Toggle("Системные уведомления", isOn: $sysNotifications)
+                                .tint(Color(hex: "7C3AED"))
+                        }
+                        .glassCard()
+                        
+                        // SECTION 5: Local PC Server
+                        VStack(alignment: .leading, spacing: 10) {
+                            sectionHeader("Локальный ПК-сервер")
+                            
+                            Toggle("Загрузка через ПК-сервер", isOn: $pcServerEnabled)
+                                .tint(Color(hex: "7C3AED"))
+                            
+                            if pcServerEnabled {
+                                Divider().background(Color.primary.opacity(0.08))
+                                
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Адрес сервера (IP:Порт)")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(.secondary)
+                                    
+                                    TextField("192.168.1.50:5000", text: $pcServerAddress)
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 13))
+                                        .padding(12)
+                                        .background(Color.primary.opacity(0.06))
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(Color.primary.opacity(0.12), lineWidth: 1.2)
+                                        )
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled(true)
+                                        .onChange(of: pcServerAddress) { newValue in
+                                            let cleaned = newValue
+                                                .replacingOccurrences(of: "http://", with: "")
+                                                .replacingOccurrences(of: "https://", with: "")
+                                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                                            if cleaned != newValue {
+                                                pcServerAddress = cleaned
+                                            }
+                                        }
+                                }
+                            }
+                            
+                            Text("Позволяет отправлять фото через программу на вашем компьютере. Полезно, если на телефоне блокируется FTPS к Shutterstock.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        .glassCard()
+                        
                         // SECTION 0: Cloud Sync
                         VStack(alignment: .leading, spacing: 12) {
                             sectionHeader("Облачная синхронизация")
@@ -74,7 +202,7 @@ struct SystemSettingsView: View {
                                     .font(.system(size: 12))
                                     .foregroundStyle(.secondary)
                                 
-                                Divider().background(Color.white.opacity(0.1))
+                                Divider().background(Color.primary.opacity(0.08))
                                 
                                 HStack(spacing: 12) {
                                     // Apple Sign In Button
@@ -101,7 +229,7 @@ struct SystemSettingsView: View {
                                             }
                                         }
                                     )
-                                    .signInWithAppleButtonStyle(.white)
+                                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                                     .frame(height: 38)
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
                                     
@@ -118,154 +246,17 @@ struct SystemSettingsView: View {
                                         }
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 10)
-                                        .background(Color.white.opacity(0.1))
-                                        .foregroundStyle(.white)
+                                        .background(Color.primary.opacity(0.08))
+                                        .foregroundStyle(.primary)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 8)
-                                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
                                         )
                                     }
                                     .buttonStyle(PremiumButtonStyle())
                                 }
                             }
-                        }
-                        .glassCard()
-                        
-                        // SECTION 1: Interface
-                        VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Интерфейс")
-                            
-                            pickerRow("Язык интерфейса", selection: $sysLanguage, options: ["Русский", "English"])
-                            
-                            Divider().background(Color.white.opacity(0.1))
-                            
-                            pickerRow("Тема оформления", selection: $sysTheme, options: ["Темная", "Светлая", "Системная"])
-                            
-                            Divider().background(Color.white.opacity(0.1))
-                            
-                            pickerRow("Предел частоты кадров", selection: $sysFps, options: [
-                                "120 FPS (Ультра-плавность)",
-                                "60 FPS (Стандартный)",
-                                "30 FPS (Энергосбережение)"
-                            ])
-                        }
-                        .glassCard()
-                        
-                        // SECTION 2: Scheduler
-                        VStack(alignment: .leading, spacing: 10) {
-                            sectionHeader("Планировщик")
-                            
-                            Toggle("Фоновый планировщик выгрузки", isOn: $bgScheduler)
-                                .tint(Color(hex: "7C3AED"))
-                            
-                            Text("При активации планировщика система будет проверять новые фото и отправлять их в фоновом режиме.")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                        .glassCard()
-                        
-                        // SECTION 3: Auto Upscaling
-                        VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Автоматический Апскейл")
-                            
-                            Toggle("Включить авто-апскейл", isOn: $autoUpscale)
-                                .tint(Color(hex: "7C3AED"))
-                            
-                            if autoUpscale {
-                                Divider().background(Color.white.opacity(0.1))
-                                
-                                pickerRow("Порог срабатывания", selection: $upscaleThreshold, options: [
-                                    "Меньше 4 МБ (Рекомендуется)",
-                                    "Меньше 2 МБ",
-                                    "Меньше 8 МБ"
-                                ])
-                                
-                                Divider().background(Color.white.opacity(0.1))
-                                
-                                pickerRow("Коэффициент (масштаб)", selection: $upscaleFactor, options: [
-                                    "Увеличение 2x (Бикубическое)",
-                                    "Увеличение 4x (Нейросеть)"
-                                ])
-                            }
-                        }
-                        .glassCard()
-                        
-                        // SECTION 4: Upload parameters
-                        VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Параметры выгрузки")
-                            
-                            HStack {
-                                Text("Потоки параллельной загрузки")
-                                    .font(.system(size: 14))
-                                Spacer()
-                                Picker("", selection: $parallelStreams) {
-                                    Text("1 поток").tag(1)
-                                    Text("3 потока").tag(3)
-                                    Text("5 потоков").tag(5)
-                                }
-                                .pickerStyle(.menu)
-                            }
-                            
-                            Divider().background(Color.white.opacity(0.1))
-                            
-                            Toggle("Автоповтор при сбоях", isOn: $retryOnFail)
-                                .tint(Color(hex: "7C3AED"))
-                            
-                            Divider().background(Color.white.opacity(0.1))
-                            
-                            Toggle("Сжатие JPEG перед загрузкой", isOn: $compressJpeg)
-                                .tint(Color(hex: "7C3AED"))
-                            
-                            Divider().background(Color.white.opacity(0.1))
-                            
-                            Toggle("Системные уведомления", isOn: $sysNotifications)
-                                .tint(Color(hex: "7C3AED"))
-                        }
-                        .glassCard()
-                        
-                        // SECTION 5: Local PC Server
-                        VStack(alignment: .leading, spacing: 10) {
-                            sectionHeader("Локальный ПК-сервер")
-                            
-                            Toggle("Загрузка через ПК-сервер", isOn: $pcServerEnabled)
-                                .tint(Color(hex: "7C3AED"))
-                            
-                            if pcServerEnabled {
-                                Divider().background(Color.white.opacity(0.1))
-                                
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("Адрес сервера (IP:Порт)")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(.secondary)
-                                    
-                                    TextField("192.168.1.50:5000", text: $pcServerAddress)
-                                        .textFieldStyle(.plain)
-                                        .font(.system(size: 13))
-                                        .padding(12)
-                                        .background(Color.black.opacity(0.18))
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 10)
-                                                .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
-                                        )
-                                        .textInputAutocapitalization(.never)
-                                        .autocorrectionDisabled(true)
-                                        .onChange(of: pcServerAddress) { newValue in
-                                            let cleaned = newValue
-                                                .replacingOccurrences(of: "http://", with: "")
-                                                .replacingOccurrences(of: "https://", with: "")
-                                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                                            if cleaned != newValue {
-                                                pcServerAddress = cleaned
-                                            }
-                                        }
-                                }
-                            }
-                            
-                            Text("Позволяет отправлять фото через программу на вашем компьютере. Полезно, если на телефоне блокируется FTPS к Shutterstock.")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
                         }
                         .glassCard()
                         
@@ -395,6 +386,37 @@ struct SystemSettingsView: View {
         }
     }
     
+    
+    private func pickerIntRow(_ label: String, selection: Binding<Int>, options: [Int]) -> some View {
+        Menu {
+            Picker("", selection: selection) {
+                ForEach(options, id: \.self) { option in
+                    Text("\(option) \(getStreamWord(option))").tag(option)
+                }
+            }
+        } label: {
+            HStack(alignment: .center, spacing: 8) {
+                Text(label)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Text("\(selection.wrappedValue) \(getStreamWord(selection.wrappedValue))")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+    
+    private func getStreamWord(_ count: Int) -> String {
+        switch count {
+        case 1: return "поток"
+        case 3, 4: return "потока"
+        default: return "потоков"
+        }
+    }
     
     private func signInWithGoogle() {
         selectedProviderForAuth = "Google"
