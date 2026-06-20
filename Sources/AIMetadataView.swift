@@ -270,12 +270,10 @@ struct AIMetadataView: View {
                 
                 if photos[currentIndex].categories.count < 2 {
                     Menu {
-                        ForEach(shutterstockCategories, id: \.self) { category in
-                            if !photos[currentIndex].categories.contains(category) {
-                                Button(category) {
-                                    HapticHelper.trigger(.light)
-                                    photos[currentIndex].categories.append(category)
-                                }
+                        ForEach(shutterstockCategories.filter { !photos[currentIndex].categories.contains($0) }, id: \.self) { category in
+                            Button(category) {
+                                HapticHelper.trigger(.light)
+                                photos[currentIndex].categories.append(category)
                             }
                         }
                     } label: {

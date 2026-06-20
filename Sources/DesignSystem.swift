@@ -55,7 +55,7 @@ struct LiquidBackgroundView: View {
     
     var body: some View {
         let isDark = colorScheme == .dark
-        ZStack {
+        return ZStack {
             // Dark elegant base
             Color(.systemBackground)
             
@@ -139,7 +139,7 @@ struct GlassModifier: ViewModifier {
     
     func body(content: Content) -> some View {
         let isDark = colorScheme == .dark
-        content
+        return content
             .padding(paddingValue)
             .background(
                 ZStack {
