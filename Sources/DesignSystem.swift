@@ -47,14 +47,48 @@ extension Color {
 // MARK: - Liquid Ambient Background (Fixed Layout with Drifting Blobs & Grid Texture)
 struct LiquidBackgroundView: View {
     @Environment(\.colorScheme) var colorScheme
+    @State private var animateBlobs = false
     
     var body: some View {
         let isDark = colorScheme == .dark
-        let dotColor: Color = isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.03)
-        let bgColor = isDark ? Color(hex: "0A0A0C") : Color(hex: "F4F4F6")
+        let dotColor: Color = isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)
+        let bgColor = isDark ? Color(hex: "060608") : Color(hex: "F8F9FA")
         
         return ZStack {
             bgColor
+            
+            // Plasma blobs
+            if isDark {
+                // Dark mode neon glow circles
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: "4F46E5").opacity(0.18))
+                        .frame(width: 320, height: 320)
+                        .blur(radius: 65)
+                        .offset(x: animateBlobs ? -90 : 100, y: animateBlobs ? -110 : 90)
+                    
+                    Circle()
+                        .fill(Color(hex: "EC4899").opacity(0.15))
+                        .frame(width: 280, height: 280)
+                        .blur(radius: 65)
+                        .offset(x: animateBlobs ? 100 : -90, y: animateBlobs ? 90 : -110)
+                }
+            } else {
+                // Light mode soft pastel circles
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: "A5B4FC").opacity(0.30))
+                        .frame(width: 350, height: 350)
+                        .blur(radius: 70)
+                        .offset(x: animateBlobs ? -80 : 90, y: animateBlobs ? -100 : 80)
+                    
+                    Circle()
+                        .fill(Color(hex: "FBCFE8").opacity(0.30))
+                        .frame(width: 300, height: 300)
+                        .blur(radius: 70)
+                        .offset(x: animateBlobs ? 90 : -80, y: animateBlobs ? 80 : -100)
+                }
+            }
             
             // Retro dot-grid texture overlay for premium feel
             Canvas { context, size in
@@ -69,6 +103,11 @@ struct LiquidBackgroundView: View {
             .allowsHitTesting(false)
         }
         .ignoresSafeArea()
+        .onAppear {
+            withAnimation(.easeInOut(duration: 16).repeatForever(autoreverses: true)) {
+                animateBlobs = true
+            }
+        }
     }
 }
 
@@ -82,20 +121,29 @@ struct GlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         let isDark = colorScheme == .dark
         
-        // Solid cards with fine borders and soft shadows
-        let cardBg: Color = isDark ? Color(hex: "18181B") : Color.white
-        let borderColor: Color = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
-        let shadowColor: Color = isDark ? Color.black.opacity(0.35) : Color.black.opacity(0.03)
-        
         return content
             .padding(paddingValue)
-            .background(cardBg)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(borderColor, lineWidth: 1)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(isDark ? 0.22 : 0.50),
+                                Color.white.opacity(isDark ? 0.06 : 0.15),
+                                Color.black.opacity(isDark ? 0.05 : 0.02),
+                                Color.white.opacity(isDark ? 0.12 : 0.30)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.2
+                    )
             )
-            .shadow(color: shadowColor, radius: 8, x: 0, y: 4)
+            .shadow(color: Color.black.opacity(isDark ? 0.22 : 0.06), radius: 10, x: 0, y: 5)
     }
 }
 
@@ -121,15 +169,25 @@ struct SmartStockLogoView: View {
     var body: some View {
         let isDark = colorScheme == .dark
         return ZStack {
-            // Solid base panel
+            // Glass base panel
             RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
-                .fill(isDark ? Color(hex: "18181B") : Color.white)
+                .fill(.ultraThinMaterial)
                 .frame(width: size, height: size)
                 .overlay(
                     RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
-                        .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06), lineWidth: 1.2)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isDark ? 0.22 : 0.45),
+                                    Color.white.opacity(isDark ? 0.06 : 0.15)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.2
+                        )
                 )
-                .shadow(color: Color.black.opacity(isDark ? 0.3 : 0.08), radius: 8, x: 0, y: 4)
+                .shadow(color: Color.black.opacity(isDark ? 0.20 : 0.06), radius: 8, x: 0, y: 4)
             
             // Aperture blades & Lens symbol
             Image(systemName: "camera.aperture")

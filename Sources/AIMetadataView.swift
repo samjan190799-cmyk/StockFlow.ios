@@ -184,11 +184,11 @@ struct AIMetadataView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .padding(12)
-                .background(Color.black.opacity(0.18))
+                .background(Color.primary.opacity(0.05))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 1.2)
                 )
         }
     }
@@ -211,11 +211,11 @@ struct AIMetadataView: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
                     .padding(10)
-                    .background(Color.black.opacity(0.18))
+                    .background(Color.primary.opacity(0.05))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+                            .stroke(Color.primary.opacity(0.08), lineWidth: 1.2)
                     )
                     .onSubmit(addKeyword)
                 
@@ -249,11 +249,11 @@ struct AIMetadataView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 6)
                 .frame(height: 90)
-                .background(Color.black.opacity(0.18))
+                .background(Color.primary.opacity(0.05))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 1.2)
                 )
         }
     }

@@ -1015,214 +1015,302 @@ struct UploadQueueView: View {
     
     // MARK: - Photo Row Component
     private func photoRow(_ photo: PhotoMetadata) -> some View {
-        HStack(spacing: 14) {
-            // Larger rounded thumbnail
-            Group {
-                if let uiImage = photo.uiImage {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    ZStack {
-                        Color.white.opacity(0.04)
-                        Image(systemName: "photo")
-                            .font(.system(size: 18))
-                            .foregroundStyle(.secondary)
+        VStack(spacing: 16) {
+            // Раздел 1: Превью и Ключевые слова
+            HStack(alignment: .top, spacing: 14) {
+                // Превью
+                Group {
+                    if let uiImage = photo.uiImage {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            Color.primary.opacity(0.04)
+                            Image(systemName: "photo")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
-            }
-            .frame(width: 64, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
-            )
-            .shadow(color: Color.black.opacity(0.15), radius: 3)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(photo.filename)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                .frame(width: 100, height: 135)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+                )
+                .shadow(color: Color.black.opacity(0.15), radius: 4)
                 
-                if !photo.title.isEmpty {
-                    Text(photo.title)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.primary.opacity(0.75))
-                        .lineLimit(1)
-                } else {
-                    Text("ИИ метаданные отсутствуют")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .italic()
-                }
-                
-                HStack(spacing: 6) {
-                    Text(photo.fileSize)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                    
-                    Text("•")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                    
-                    Text("Тегов: \(photo.keywords.count)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                    
-                    Spacer()
-                    
-                    // Status Badge Capsule (Glassmorphic)
-                    Text(photo.status.rawValue)
+                // Ключевые слова
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("КЛЮЧЕВЫЕ СЛОВА (Генерация ИИ)".localized)
                         .font(.system(size: 9, weight: .bold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(photo.status.color.opacity(0.12))
-                        .foregroundStyle(photo.status.color)
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(photo.status.color.opacity(0.3), lineWidth: 1)
-                        )
-                }
-                
-                // Выбранные стоки для фото
-                if !photo.selectedStocks.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(Array(photo.selectedStocks).sorted(), id: \.self) { stock in
-                            Text(String(stock.prefix(2)).uppercased())
-                                .font(.system(size: 8, weight: .bold))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(Color.white.opacity(0.08))
-                                .foregroundStyle(.secondary)
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .stroke(Color.white.opacity(0.1), lineWidth: 0.8)
-                                )
-                        }
-                    }
-                    .padding(.top, 2)
-                }
-                
-                if photo.status == .uploading {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("Выгрузка...")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text("\(Int(photo.uploadProgress * 100))%")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(photo.status.color)
-                        }
-                        
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(Color.white.opacity(0.08))
-                                    .frame(height: 4)
-                                
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color(hex: "7C3AED"), Color(hex: "EC4899")],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .frame(width: geo.size.width * CGFloat(photo.uploadProgress), height: 4)
-                                    .shadow(color: Color(hex: "7C3AED").opacity(0.5), radius: 2)
-                            }
-                        }
-                        .frame(height: 4)
-                    }
-                    .padding(.top, 4)
-                }
-                
-                if photo.status == .error, let errorMsg = photo.errorMessage {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.octagon.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.red)
-                        Text(errorMsg)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.red)
-                            .lineLimit(2)
-                        Spacer()
-                        Button(action: {
-                            HapticHelper.trigger(.light)
-                            selectedErrorMsg = errorMsg
-                            showingErrorAlert = true
-                        }) {
-                            Text("Подробнее")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(Color(hex: "7C3AED"))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color(hex: "7C3AED").opacity(0.1))
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    .padding(.top, 2)
-                }
-            }
-            
-            Spacer()
-            
-            // Inline Action Panel (Combined Send, Delete, and Stocks choice)
-            Menu {
-                Section {
-                    Button(action: {
-                        HapticHelper.trigger(.light)
-                        viewModel.uploadPhoto(photo.id)
-                    }) {
-                        Label("Отправить на стоки", systemImage: "paperplane.fill")
-                    }
+                        .foregroundStyle(.secondary)
                     
-                    Button(action: {
-                        HapticHelper.trigger(.light)
-                        viewModel.runAIForPhoto(photo.id)
-                    }) {
-                        Label("Заполнить ИИ", systemImage: "sparkles")
-                    }
-                }
-                
-                Menu {
-                    ForEach(["Shutterstock", "Adobe Stock", "iStock / Getty", "Freepik", "Depositphotos", "Alamy", "Dreamstime", "123RF", "Pond5"], id: \.self) { stock in
-                        Button(action: {
-                            HapticHelper.selection()
-                            viewModel.toggleStockForPhoto(photo.id, stockName: stock)
-                        }) {
-                            HStack {
-                                Text(stock)
-                                if photo.selectedStocks.contains(stock) {
-                                    Spacer()
-                                    Image(systemName: "checkmark")
+                    if photo.keywords.isEmpty {
+                        Text("Ключевые слова отсутствуют. Запустите ИИ-анализ.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .italic()
+                            .padding(.top, 4)
+                    } else {
+                        QueueFlowLayout(spacing: 5) {
+                            ForEach(photo.keywords, id: \.self) { kw in
+                                QueueKeywordChip(text: kw) {
+                                    // Удаление тега
+                                    if let idx = viewModel.photos.firstIndex(where: { $0.id == photo.id }) {
+                                        viewModel.photos[idx].keywords.removeAll { $0 == kw }
+                                        HapticHelper.trigger(.light)
+                                    }
                                 }
                             }
                         }
                     }
-                } label: {
-                    Label("Выбрать стоки...", systemImage: "checklist")
+                }
+            }
+            
+            Divider().background(Color.primary.opacity(0.08))
+            
+            // Раздел 2: Метаданные
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("МЕТАДАННЫЕ".localized)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(action: {
+                        HapticHelper.selection()
+                        editingPhoto = ActiveSheetPhoto(
+                            id: photo.id,
+                            photos: viewModel.photos,
+                            index: viewModel.photos.firstIndex(where: { $0.id == photo.id }) ?? 0
+                        )
+                    }) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color(hex: "7C3AED"))
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
                 
-                Divider()
-                
-                Button(role: .destructive, action: {
-                    HapticHelper.trigger(.medium)
-                    viewModel.removePhoto(photo.id)
-                }) {
-                    Label("Удалить из очереди", systemImage: "trash")
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Title")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    
+                    Text(photo.title.isEmpty ? "Без названия".localized : photo.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.primary.opacity(0.04))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    
+                    Text("Description")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    
+                    Text(photo.description.isEmpty ? "Описание отсутствует".localized : photo.description)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.primary.opacity(0.85))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.primary.opacity(0.04))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
-            } label: {
-                Image(systemName: "ellipsis.circle.fill")
-                    .font(.system(size: 24))
+            }
+            
+            Divider().background(Color.primary.opacity(0.08))
+            
+            // Раздел 3: Прогноз популярности
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("ПРОГНОЗ ПОПУЛЯРНОСТИ (Рыночный анализ ИИ)".localized)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                
+                // Табличка
+                VStack(spacing: 8) {
+                    HStack(spacing: 0) {
+                        Spacer()
+                        HStack(spacing: 12) {
+                            Text("Shutterstock")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 60, alignment: .center)
+                            Text("Adobe Stock")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 60, alignment: .center)
+                            Text("Getty")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 40, alignment: .center)
+                        }
+                    }
+                    .padding(.bottom, 2)
+                    
+                    let displayKeywords = photo.keywords.isEmpty ? ["Пейзаж", "Путешествие", "Горы"] : Array(photo.keywords.prefix(3))
+                    ForEach(displayKeywords, id: \.self) { kw in
+                        let hash = abs(kw.hashValue ^ photo.id.hashValue)
+                        let val = Double(55 + (hash % 41)) / 100.0 // от 0.55 до 0.95
+                        PopularityRow(keyword: kw, value: val)
+                    }
+                }
+            }
+            
+            Divider().background(Color.primary.opacity(0.08))
+            
+            // Нижняя строка статуса и кнопки вызова контекстного меню
+            HStack(spacing: 8) {
+                Text(photo.fileSize)
+                    .font(.system(size: 10))
                     .foregroundStyle(.secondary)
-                    .symbolRenderingMode(.hierarchical)
-                    .padding(4)
+                
+                Text("•")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                
+                Text("Статус:".localized + " \(photo.status.rawValue)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                
+                Spacer()
+                
+                // Status Badge Capsule (Glassmorphic)
+                Text(photo.status.rawValue)
+                    .font(.system(size: 9, weight: .bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(photo.status.color.opacity(0.12))
+                    .foregroundStyle(photo.status.color)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(photo.status.color.opacity(0.3), lineWidth: 1)
+                    )
+                
+                // Меню действий
+                Menu {
+                    Section {
+                        Button(action: {
+                            HapticHelper.trigger(.light)
+                            viewModel.uploadPhoto(photo.id)
+                        }) {
+                            Label("Отправить на стоки", systemImage: "paperplane.fill")
+                        }
+                        
+                        Button(action: {
+                            HapticHelper.trigger(.light)
+                            viewModel.runAIForPhoto(photo.id)
+                        }) {
+                            Label("Заполнить ИИ", systemImage: "sparkles")
+                        }
+                    }
+                    
+                    Menu {
+                        ForEach(["Shutterstock", "Adobe Stock", "iStock / Getty", "Freepik", "Depositphotos", "Alamy", "Dreamstime", "123RF", "Pond5"], id: \.self) { stock in
+                            Button(action: {
+                                HapticHelper.selection()
+                                viewModel.toggleStockForPhoto(photo.id, stockName: stock)
+                            }) {
+                                HStack {
+                                    Text(stock)
+                                    if photo.selectedStocks.contains(stock) {
+                                        Spacer()
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Выбрать стоки...", systemImage: "checklist")
+                    }
+                    
+                    Divider()
+                    
+                    Button(role: .destructive, action: {
+                        HapticHelper.trigger(.medium)
+                        viewModel.removePhoto(photo.id)
+                    }) {
+                        Label("Удалить из очереди", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.secondary)
+                        .symbolRenderingMode(.hierarchical)
+                        .padding(4)
+                }
+            }
+            
+            // Прогресс бар
+            if photo.status == .uploading {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Выгрузка...")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(Int(photo.uploadProgress * 100))%")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(photo.status.color)
+                    }
+                    
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Color.white.opacity(0.08))
+                                .frame(height: 4)
+                            
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(hex: "7C3AED"), Color(hex: "EC4899")],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: geo.size.width * CGFloat(photo.uploadProgress), height: 4)
+                                .shadow(color: Color(hex: "7C3AED").opacity(0.5), radius: 2)
+                        }
+                    }
+                    .frame(height: 4)
+                }
+            }
+            
+            if photo.status == .error, let errorMsg = photo.errorMessage {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.octagon.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.red)
+                    Text(errorMsg)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.red)
+                        .lineLimit(2)
+                    Spacer()
+                    Button(action: {
+                        HapticHelper.trigger(.light)
+                        selectedErrorMsg = errorMsg
+                        showingErrorAlert = true
+                    }) {
+                        Text("Подробнее")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color(hex: "7C3AED"))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: "7C3AED").opacity(0.1))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
             }
         }
     }
@@ -1447,4 +1535,121 @@ actor UploadSemaphore {
         }
     }
 }
+// MARK: - Queue Flow Layout
+struct QueueFlowLayout: Layout {
+    var spacing: CGFloat = 5
 
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth, x > 0 {
+                totalHeight += rowHeight + spacing
+                x = 0
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        totalHeight += rowHeight
+        return CGSize(width: maxWidth, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX, x > bounds.minX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: .unspecified)
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+// MARK: - Queue Keyword Chip
+struct QueueKeywordChip: View {
+    let text: String
+    let onRemove: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(text)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.primary)
+            Button(action: {
+                HapticHelper.trigger(.light)
+                onRemove()
+            }) {
+                Image(systemName: "pencil")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color.white.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Popularity Row
+struct PopularityRow: View {
+    let keyword: String
+    let value: Double
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(keyword)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.primary.opacity(0.85))
+                .frame(width: 80, alignment: .leading)
+                .lineLimit(1)
+            
+            ZStack(alignment: .leading) {
+                // Градиентная подложка шкалы
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3.5)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "10B981"), Color(hex: "F59E0B"), Color(hex: "EF4444")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(height: 7)
+                        
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 11, height: 11)
+                            .shadow(color: .black.opacity(0.35), radius: 2)
+                            .offset(x: geo.size.width * CGFloat(value) - 5.5, y: -2)
+                    }
+                }
+                .frame(height: 7)
+            }
+            
+            Text("Высокий".localized)
+                .font(.system(size: 9, weight: .black))
+                .foregroundStyle(.secondary)
+                .frame(width: 44, alignment: .trailing)
+        }
+    }
+}

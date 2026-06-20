@@ -24,10 +24,12 @@ struct SmartStockApp: App {
             }
         }
         
-        // Настройка TabBar для соответствия нео-минималистичному стилю
+        // Настройка TabBar в стеклянном стиле (полупрозрачный blur)
         let appearance = UITabBarAppearance()
-        appearance.configureWithDefaultBackground()
-        appearance.shadowColor = UIColor.separator.withAlphaComponent(0.12)
+        appearance.configureWithBlurEffect()
+        appearance.backgroundColor = UIColor.clear
+        appearance.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
+        appearance.shadowColor = UIColor.white.withAlphaComponent(0.08)
         
         let activeColor = UIColor(red: 124/255, green: 58/255, blue: 237/255, alpha: 1.0)
         let normalColor = UIColor.secondaryLabel
