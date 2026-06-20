@@ -9,9 +9,9 @@ struct AIMetadataView: View {
     @State private var newKeyword = ""
     @State private var isRegenerating = false
 
-    var onContinue: (([PhotoMetadata]) -> Void)?
+    var onContinue: (@MainActor ([PhotoMetadata]) -> Void)?
 
-    init(photos: [PhotoMetadata], currentIndex: Int = 0, onContinue: (([PhotoMetadata]) -> Void)? = nil) {
+    init(photos: [PhotoMetadata], currentIndex: Int = 0, onContinue: (@MainActor ([PhotoMetadata]) -> Void)? = nil) {
         self._photos = State(initialValue: photos)
         self._currentIndex = State(initialValue: currentIndex)
         self.onContinue = onContinue
