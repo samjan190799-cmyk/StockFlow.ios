@@ -76,6 +76,7 @@ struct SmartStockApp: App {
             }
             .id(sysLanguage) // Перестраивает UI при смене языка
             .preferredColorScheme(colorScheme)
+            .tint(Color(hex: "7C3AED"))
             .onChange(of: sysFps) { newFps in
                 applyFrameRate(newFps)
             }
@@ -110,9 +111,8 @@ final class DisplayLinkHelper: NSObject {
         
         let link = CADisplayLink(target: self, selector: #selector(step))
         if #available(iOS 15.0, *) {
-            let minFps = Float(min(fps, 30))
-            let maxFps = Float(fps)
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: minFps, maximum: maxFps, preferred: maxFps)
+            let rate = Float(fps)
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: rate, maximum: rate, preferred: rate)
         } else {
             link.preferredFramesPerSecond = fps
         }

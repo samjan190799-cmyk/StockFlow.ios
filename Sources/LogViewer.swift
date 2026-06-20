@@ -47,7 +47,7 @@ struct LogViewer: View {
                     }) {
                         Text(isCopied ? "Скопировано!" : "Копировать")
                             .bold()
-                            .foregroundColor(isCopied ? .green : .blue)
+                            .foregroundColor(isCopied ? .green : Color(hex: "7C3AED"))
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {

@@ -668,6 +668,7 @@ struct UploadQueueView: View {
     @State private var showLogViewer = false
     @State private var selectedErrorMsg: String? = nil
     @State private var showingErrorAlert = false
+    @State private var selectedDetailPhoto: PhotoMetadata? = nil
     
     var filteredPhotos: [PhotoMetadata] {
         viewModel.photos.filter { photo in
@@ -796,14 +797,10 @@ struct UploadQueueView: View {
                             LazyVStack(spacing: 10) {
                                 ForEach(filteredPhotos) { photo in
                                     photoRow(photo)
-                                        .glassCard(cornerRadius: 16, padding: 12)
+                                        .glassCard(cornerRadius: 12, padding: 10)
                                         .onTapGesture {
                                             HapticHelper.selection()
-                                            editingPhoto = ActiveSheetPhoto(
-                                                id: photo.id,
-                                                photos: viewModel.photos,
-                                                index: viewModel.photos.firstIndex(where: { $0.id == photo.id }) ?? 0
-                                            )
+                                            selectedDetailPhoto = photo
                                         }
                                         .contextMenu {
                                             Button {
@@ -949,6 +946,9 @@ struct UploadQueueView: View {
                     }
                 }
             }
+            .sheet(item: $selectedDetailPhoto) { photo in
+                PhotoDetailSheet(photo: photo, viewModel: viewModel, editingPhoto: $editingPhoto)
+            }
             .alert("Ошибка загрузки", isPresented: $showingErrorAlert) {
                 Button("Скопировать") {
                     if let msg = selectedErrorMsg {
@@ -983,7 +983,7 @@ struct UploadQueueView: View {
                     .textCase(.uppercase)
                 
                 HStack(spacing: 12) {
-                    statColumn(title: "Всего", count: total, color: .blue)
+                    statColumn(title: "Всего", count: total, color: Color(hex: "7C3AED"))
                     statColumn(title: "Готово", count: ready, color: Color(hex: "EC4899"))
                     statColumn(title: "Успех", count: success, color: Color(hex: "10B981"))
                     if errors > 0 {
@@ -1015,6 +1015,384 @@ struct UploadQueueView: View {
     
     // MARK: - Photo Row Component
     private func photoRow(_ photo: PhotoMetadata) -> some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 12) {
+                // Thumbnail
+                Group {
+                    if let uiImage = photo.uiImage {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            Color.primary.opacity(0.04)
+                            Image(systemName: "photo")
+                                .font(.system(size: 16))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .frame(width: 48, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+                
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(photo.filename)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    
+                    HStack(spacing: 6) {
+                        Text(photo.fileSize)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        
+                        Text("•")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        
+                        Text("Тегов: \(photo.keywords.count)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Status Badge
+                Text(photo.status.rawValue)
+                    .font(.system(size: 9, weight: .bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(photo.status.color.opacity(0.12))
+                    .foregroundStyle(photo.status.color)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(photo.status.color.opacity(0.3), lineWidth: 1)
+                    )
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            
+            // Progress Bar if uploading
+            if photo.status == .uploading {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(Color.white.opacity(0.08))
+                            .frame(height: 3)
+                        
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "7C3AED"), Color(hex: "EC4899")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: geo.size.width * CGFloat(photo.uploadProgress), height: 3)
+                    }
+                }
+                .frame(height: 3)
+                .padding(.top, 2)
+            }
+        }
+    }
+    
+    // MARK: - Load Photos Logic
+    private func loadSelectedPhotos(from items: [PhotosPickerItem]) {
+        let vm = viewModel
+        for item in items {
+            item.loadTransferable(type: Data.self) { result in
+                switch result {
+                case .success(let data):
+                    if let data = data {
+                        var finalData = data
+                        let isJpeg = data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
+                        
+                        if !isJpeg {
+                            if let uiImage = UIImage(data: data),
+                               let jpegData = uiImage.jpegData(compressionQuality: 0.95) {
+                                finalData = jpegData
+                                Task { @MainActor in
+                                    FTPTranscriptLogger.shared.logInfo("[Diagnostic] Авто-конвертация не-JPEG (RAW/HEIC/PNG) в JPEG (размер: \(data.count) -> \(jpegData.count))")
+                                }
+                            } else {
+                                Task { @MainActor in
+                                    FTPTranscriptLogger.shared.logInfo("[WARNING] Файл не является JPEG и не удалось конвертировать его в UIImage.")
+                                }
+                            }
+                        }
+                        
+                        let randomNum = Int.random(in: 1000...9999)
+                        let filename = "IMG_\(randomNum).JPG"
+                        
+                        // Авто-апскейл: применяем только если настройка включена
+                        let autoUpscaleEnabled = UserDefaults.standard.bool(forKey: "sys_auto_upscale")
+                        if autoUpscaleEnabled {
+                            let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? ""
+                            let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? ""
+                            
+                            // Определяем порог в МБ
+                            let thresholdMB: Double
+                            if thresholdStr.contains("2 МБ") {
+                                thresholdMB = 2.0
+                            } else if thresholdStr.contains("8 МБ") {
+                                thresholdMB = 8.0
+                            } else {
+                                thresholdMB = 4.0 // Рекомендуется
+                            }
+                            
+                            let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
+                            if sizeMB < thresholdMB, let uiImage = UIImage(data: finalData) {
+                                // Определяем коэффициент масштабирования
+                                let scale: CGFloat = factorStr.contains("4x") ? 4.0 : 2.0
+                                let newSize = CGSize(
+                                    width: uiImage.size.width * scale,
+                                    height: uiImage.size.height * scale
+                                )
+                                UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+                                uiImage.draw(in: CGRect(origin: .zero, size: newSize))
+                                let upscaled = UIGraphicsGetImageFromCurrentImageContext()
+                                UIGraphicsEndImageContext()
+                                
+                                if let upscaled = upscaled,
+                                   let upscaledData = upscaled.jpegData(compressionQuality: 0.92) {
+                                    finalData = upscaledData
+                                    Task { @MainActor in
+                                        FTPTranscriptLogger.shared.logInfo("[Upscale] Авто-апскейл \(String(format: "%.1f", sizeMB)) МБ → \(String(format: "%.1f", Double(upscaledData.count)/1024/1024)) МБ (\(Int(scale))x, бикубика)")
+                                    }
+                                }
+                            }
+                        }
+                        
+                        let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
+                        let fileSizeStr = String(format: "%.2f МБ", sizeMB)
+                        
+                        let newPhoto = PhotoMetadata(
+                            filename: filename,
+                            fileSize: fileSizeStr,
+                            title: "",
+                            keywords: [],
+                            description: "",
+                            categories: [],
+                            status: .new,
+                            imageData: finalData
+                        )
+                        
+                        Task {
+                            await vm.addPhoto(newPhoto)
+                        }
+                    }
+                case .failure(let error):
+                    print("Error loading image: \(error.localizedDescription)")
+                }
+            }
+        }
+        selectedItems = []
+    }
+}
+
+// MARK: - Dashboard Progress Ring Component
+struct DashboardProgressRing: View {
+    var total: Int
+    var completed: Int
+    var ready: Int
+    
+    var percentCompleted: Double {
+        total > 0 ? Double(completed) / Double(total) : 0
+    }
+    
+    var percentReady: Double {
+        total > 0 ? Double(ready) / Double(total) : 0
+    }
+    
+    var body: some View {
+        ZStack {
+            // Track
+            Circle()
+                .stroke(Color.white.opacity(0.05), lineWidth: 6)
+                
+            // Ready Segment
+            Circle()
+                .trim(from: 0.0, to: CGFloat(percentReady + percentCompleted))
+                .stroke(
+                    LinearGradient(colors: [Color(hex: "7C3AED"), Color(hex: "EC4899")], startPoint: .top, endPoint: .bottom),
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                )
+                .rotationEffect(Angle(degrees: -90))
+                
+            // Completed Segment
+            Circle()
+                .trim(from: 0.0, to: CGFloat(percentCompleted))
+                .stroke(
+                    LinearGradient(colors: [Color(hex: "10B981"), Color(hex: "34D399")], startPoint: .top, endPoint: .bottom),
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                )
+                .rotationEffect(Angle(degrees: -90))
+            
+            // Text info
+            VStack(spacing: 0) {
+                Text(total > 0 ? "\(Int((percentCompleted + percentReady) * 100))%" : "0%")
+                    .font(.system(size: 13, weight: .black))
+                    .foregroundStyle(.primary)
+                Text("готовность")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 68, height: 68)
+    }
+}
+
+// MARK: - Helper Models for Sheet Presentation
+struct ActiveSheetPhoto: Identifiable, Sendable {
+    let id: UUID
+    let photos: [PhotoMetadata]
+    let index: Int
+}
+
+// MARK: - Filter Chip Component
+@MainActor
+struct FilterChip: View {
+    let text: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: {
+            HapticHelper.selection()
+            action()
+        }) {
+            Text(text)
+                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background {
+                    if isSelected {
+                        AppleTheme.primaryGradient
+                    } else {
+                        Color.white.opacity(0.08)
+                    }
+                }
+                .foregroundStyle(isSelected ? .white : .primary.opacity(0.85))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            isSelected ? Color.clear : Color.white.opacity(0.12),
+                            lineWidth: 1
+                        )
+                )
+        }
+        .buttonStyle(PremiumButtonStyle())
+    }
+}
+
+// MARK: - Upload Concurrency Semaphore (Actor-based, thread-safe)
+/// Ограничивает количество одновременных задач загрузки согласно настройке sys_parallel_streams
+actor UploadSemaphore {
+    private let limit: Int
+    private var running: Int = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    
+    init(limit: Int) {
+        self.limit = max(1, limit)
+    }
+    
+    func wait() async {
+        if running < limit {
+            running += 1
+        } else {
+            await withCheckedContinuation { continuation in
+                waiters.append(continuation)
+            }
+            running += 1
+        }
+    }
+    
+    func signal() {
+        running -= 1
+        if !waiters.isEmpty {
+            let next = waiters.removeFirst()
+            next.resume()
+        }
+    }
+}
+// MARK: - Photo Detail Sheet
+struct PhotoDetailSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    let photo: PhotoMetadata
+    @ObservedObject var viewModel: QueueViewModel
+    @Binding var editingPhoto: ActiveSheetPhoto?
+    
+    var currentPhoto: PhotoMetadata {
+        viewModel.photos.first(where: { $0.id == photo.id }) ?? photo
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                LiquidBackgroundView()
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        DetailCardView(photo: currentPhoto, viewModel: viewModel, editingPhoto: $editingPhoto)
+                            .glassCard(cornerRadius: 20, padding: 16)
+                            .padding(.horizontal)
+                            .padding(.top, 12)
+                        
+                        Button(action: {
+                            dismiss()
+                        }) {
+                            Text("Закрыть")
+                                .font(.system(size: 14, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.06))
+                                .foregroundStyle(.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                                )
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 24)
+                    }
+                }
+            }
+            .navigationTitle("Детали фотографии")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Готово") {
+                        dismiss()
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Detail Card View
+struct DetailCardView: View {
+    let photo: PhotoMetadata
+    @ObservedObject var viewModel: QueueViewModel
+    @Binding var editingPhoto: ActiveSheetPhoto?
+    
+    @State private var selectedErrorMsg: String? = nil
+    @State private var showingErrorAlert = false
+    
+    var body: some View {
         VStack(spacing: 16) {
             // Раздел 1: Превью и Ключевые слова
             HStack(alignment: .top, spacing: 14) {
@@ -1251,41 +1629,6 @@ struct UploadQueueView: View {
                 }
             }
             
-            // Прогресс бар
-            if photo.status == .uploading {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Выгрузка...")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(Int(photo.uploadProgress * 100))%")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(photo.status.color)
-                    }
-                    
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.white.opacity(0.08))
-                                .frame(height: 4)
-                            
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(hex: "7C3AED"), Color(hex: "EC4899")],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: geo.size.width * CGFloat(photo.uploadProgress), height: 4)
-                                .shadow(color: Color(hex: "7C3AED").opacity(0.5), radius: 2)
-                        }
-                    }
-                    .frame(height: 4)
-                }
-            }
-            
             if photo.status == .error, let errorMsg = photo.errorMessage {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.octagon.fill")
@@ -1313,228 +1656,22 @@ struct UploadQueueView: View {
                 }
             }
         }
-    }
-    
-    // MARK: - Load Photos Logic
-    private func loadSelectedPhotos(from items: [PhotosPickerItem]) {
-        let vm = viewModel
-        for item in items {
-            item.loadTransferable(type: Data.self) { result in
-                switch result {
-                case .success(let data):
-                    if let data = data {
-                        var finalData = data
-                        let isJpeg = data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
-                        
-                        if !isJpeg {
-                            if let uiImage = UIImage(data: data),
-                               let jpegData = uiImage.jpegData(compressionQuality: 0.95) {
-                                finalData = jpegData
-                                Task { @MainActor in
-                                    FTPTranscriptLogger.shared.logInfo("[Diagnostic] Авто-конвертация не-JPEG (RAW/HEIC/PNG) в JPEG (размер: \(data.count) -> \(jpegData.count))")
-                                }
-                            } else {
-                                Task { @MainActor in
-                                    FTPTranscriptLogger.shared.logInfo("[WARNING] Файл не является JPEG и не удалось конвертировать его в UIImage.")
-                                }
-                            }
-                        }
-                        
-                        let randomNum = Int.random(in: 1000...9999)
-                        let filename = "IMG_\(randomNum).JPG"
-                        
-                        // Авто-апскейл: применяем только если настройка включена
-                        let autoUpscaleEnabled = UserDefaults.standard.bool(forKey: "sys_auto_upscale")
-                        if autoUpscaleEnabled {
-                            let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? ""
-                            let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? ""
-                            
-                            // Определяем порог в МБ
-                            let thresholdMB: Double
-                            if thresholdStr.contains("2 МБ") {
-                                thresholdMB = 2.0
-                            } else if thresholdStr.contains("8 МБ") {
-                                thresholdMB = 8.0
-                            } else {
-                                thresholdMB = 4.0 // Рекомендуется
-                            }
-                            
-                            let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
-                            if sizeMB < thresholdMB, let uiImage = UIImage(data: finalData) {
-                                // Определяем коэффициент масштабирования
-                                let scale: CGFloat = factorStr.contains("4x") ? 4.0 : 2.0
-                                let newSize = CGSize(
-                                    width: uiImage.size.width * scale,
-                                    height: uiImage.size.height * scale
-                                )
-                                UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-                                uiImage.draw(in: CGRect(origin: .zero, size: newSize))
-                                let upscaled = UIGraphicsGetImageFromCurrentImageContext()
-                                UIGraphicsEndImageContext()
-                                
-                                if let upscaled = upscaled,
-                                   let upscaledData = upscaled.jpegData(compressionQuality: 0.92) {
-                                    finalData = upscaledData
-                                    Task { @MainActor in
-                                        FTPTranscriptLogger.shared.logInfo("[Upscale] Авто-апскейл \(String(format: "%.1f", sizeMB)) МБ → \(String(format: "%.1f", Double(upscaledData.count)/1024/1024)) МБ (\(Int(scale))x, бикубика)")
-                                    }
-                                }
-                            }
-                        }
-                        
-                        let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
-                        let fileSizeStr = String(format: "%.2f МБ", sizeMB)
-                        
-                        let newPhoto = PhotoMetadata(
-                            filename: filename,
-                            fileSize: fileSizeStr,
-                            title: "",
-                            keywords: [],
-                            description: "",
-                            categories: [],
-                            status: .new,
-                            imageData: finalData
-                        )
-                        
-                        Task {
-                            await vm.addPhoto(newPhoto)
-                        }
-                    }
-                case .failure(let error):
-                    print("Error loading image: \(error.localizedDescription)")
+        .alert("Ошибка загрузки", isPresented: $showingErrorAlert) {
+            Button("Скопировать") {
+                if let msg = selectedErrorMsg {
+                    UIPasteboard.general.string = msg
+                    HapticHelper.notification(.success)
                 }
             }
-        }
-        selectedItems = []
-    }
-}
-
-// MARK: - Dashboard Progress Ring Component
-struct DashboardProgressRing: View {
-    var total: Int
-    var completed: Int
-    var ready: Int
-    
-    var percentCompleted: Double {
-        total > 0 ? Double(completed) / Double(total) : 0
-    }
-    
-    var percentReady: Double {
-        total > 0 ? Double(ready) / Double(total) : 0
-    }
-    
-    var body: some View {
-        ZStack {
-            // Track
-            Circle()
-                .stroke(Color.white.opacity(0.05), lineWidth: 6)
-                
-            // Ready Segment
-            Circle()
-                .trim(from: 0.0, to: CGFloat(percentReady + percentCompleted))
-                .stroke(
-                    LinearGradient(colors: [Color(hex: "7C3AED"), Color(hex: "EC4899")], startPoint: .top, endPoint: .bottom),
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .rotationEffect(Angle(degrees: -90))
-                
-            // Completed Segment
-            Circle()
-                .trim(from: 0.0, to: CGFloat(percentCompleted))
-                .stroke(
-                    LinearGradient(colors: [Color(hex: "10B981"), Color(hex: "34D399")], startPoint: .top, endPoint: .bottom),
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .rotationEffect(Angle(degrees: -90))
-            
-            // Text info
-            VStack(spacing: 0) {
-                Text(total > 0 ? "\(Int((percentCompleted + percentReady) * 100))%" : "0%")
-                    .font(.system(size: 13, weight: .black))
-                    .foregroundStyle(.primary)
-                Text("готовность")
-                    .font(.system(size: 8))
-                    .foregroundStyle(.secondary)
+            Button("ОК", role: .cancel) {}
+        } message: {
+            if let msg = selectedErrorMsg {
+                Text(msg)
             }
         }
-        .frame(width: 68, height: 68)
     }
 }
 
-// MARK: - Helper Models for Sheet Presentation
-struct ActiveSheetPhoto: Identifiable, Sendable {
-    let id: UUID
-    let photos: [PhotoMetadata]
-    let index: Int
-}
-
-// MARK: - Filter Chip Component
-@MainActor
-struct FilterChip: View {
-    let text: String
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: {
-            HapticHelper.selection()
-            action()
-        }) {
-            Text(text)
-                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background {
-                    if isSelected {
-                        AppleTheme.primaryGradient
-                    } else {
-                        Color.white.opacity(0.08)
-                    }
-                }
-                .foregroundStyle(isSelected ? .white : .primary.opacity(0.85))
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            isSelected ? Color.clear : Color.white.opacity(0.12),
-                            lineWidth: 1
-                        )
-                )
-        }
-        .buttonStyle(PremiumButtonStyle())
-    }
-}
-
-// MARK: - Upload Concurrency Semaphore (Actor-based, thread-safe)
-/// Ограничивает количество одновременных задач загрузки согласно настройке sys_parallel_streams
-actor UploadSemaphore {
-    private let limit: Int
-    private var running: Int = 0
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-    
-    init(limit: Int) {
-        self.limit = max(1, limit)
-    }
-    
-    func wait() async {
-        if running < limit {
-            running += 1
-        } else {
-            await withCheckedContinuation { continuation in
-                waiters.append(continuation)
-            }
-            running += 1
-        }
-    }
-    
-    func signal() {
-        running -= 1
-        if !waiters.isEmpty {
-            let next = waiters.removeFirst()
-            next.resume()
-        }
-    }
-}
 // MARK: - Queue Flow Layout
 struct QueueFlowLayout: Layout {
     var spacing: CGFloat = 5
@@ -1653,3 +1790,4 @@ struct PopularityRow: View {
         }
     }
 }
+

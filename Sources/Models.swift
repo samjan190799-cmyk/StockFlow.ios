@@ -15,7 +15,7 @@ enum PhotoStatus: String, Codable, CaseIterable, Sendable {
         switch self {
         case .new: return .gray
         case .aiAnalyzing: return .orange
-        case .ready: return .blue
+        case .ready: return .indigo
         case .uploading: return .purple
         case .success: return .green
         case .error: return .red
