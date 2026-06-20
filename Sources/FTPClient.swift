@@ -443,11 +443,11 @@ class FTPClient {
         if useTls {
             let tlsOptions = NWProtocolTLS.Options()
             sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-            sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
             sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
                 completionHandler(true)
             }, DispatchQueue.global())
             sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
+            sec_protocol_options_set_tls_tickets_enabled(tlsOptions.securityProtocolOptions, true)
             sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, cleanHost)
             return NWParameters(tls: tlsOptions)
         } else {
@@ -694,12 +694,12 @@ class FTPESFramer: NWProtocolFramerImplementation {
                     print("FTPESFramer: Получен ответ 234. Выполняем переход на TLS...")
                     let tlsOptions = NWProtocolTLS.Options()
                     sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-                    sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
                     sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { (_, _, completionHandler) in
                         print("FTPESFramer (Control): Блок верификации TLS вызван")
                         completionHandler(true)
                     }, DispatchQueue.global())
                     sec_protocol_options_set_tls_resumption_enabled(tlsOptions.securityProtocolOptions, true)
+                    sec_protocol_options_set_tls_tickets_enabled(tlsOptions.securityProtocolOptions, true)
                     if let peer = self.peerName {
                         sec_protocol_options_set_tls_server_name(tlsOptions.securityProtocolOptions, peer)
                     }
