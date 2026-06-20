@@ -582,23 +582,32 @@ class FTPSecureClient {
         }
 
         try data.withUnsafeBytes { buffer in
-            var totalWritten = 0
-            while totalWritten < data.count {
-                var written = 0
-                let ptr = buffer.baseAddress!.advanced(by: totalWritten)
-                let remaining = data.count - totalWritten
-                let status = SSLWrite(context, ptr, remaining, &written)
+            var processed = 0
+            let ptr = buffer.baseAddress!
+            var status = SSLWrite(context, ptr, data.count, &processed)
 
-                totalWritten += written
-
-                if status != noErr && status != errSSLWouldBlock {
-                    throw ftpError("SSL write ошибка: \(status)")
+            if status == errSSLWouldBlock {
+                // Команда буферизирована, нужно вытолкнуть
+                while status == errSSLWouldBlock {
+                    var dummy = 0
+                    status = SSLWrite(context, nil, 0, &dummy)
                 }
+            }
+
+            if status != noErr {
+                throw ftpError("SSL write ошибка: \(status)")
             }
         }
     }
 
     /// Отправка бинарных данных файла через SSL (PROT P)
+    ///
+    /// КРИТИЧЕСКИ ВАЖНО: SecureTransport буферизирует данные внутри SSLContextRef.
+    /// Когда SSLWrite возвращает errSSLWouldBlock, ВСЕ переданные данные уже были
+    /// скопированы во внутренний буфер (не в сокет). Параметр 'processed' показывает
+    /// не количество реально отправленных байт, а количество помещённых в буфер.
+    /// Для очистки буфера нужно вызывать SSLWrite(nil, 0) до получения noErr.
+    /// Эта логика скопирована из исходного кода curl (lib/vtls/sectransp.c).
     private static func sslWriteData(context: SSLContext, sock: Int32, data: Data, progress: (@Sendable (Double) -> Void)?) throws {
         let chunkSize = 65536
         var offset = 0
@@ -609,36 +618,44 @@ class FTPSecureClient {
             let chunk = Data(data[offset..<end])
 
             try chunk.withUnsafeBytes { buffer in
-                var totalWritten = 0
-                while totalWritten < chunk.count {
-                    var written = 0
-                    let ptr = buffer.baseAddress!.advanced(by: totalWritten)
-                    let remaining = chunk.count - totalWritten
-                    var status = SSLWrite(context, ptr, remaining, &written)
-
-                    totalWritten += written
-
-                    // Критический фикс для SecureTransport:
-                    // Если SSLWrite возвращает errSSLWouldBlock, это означает, что данные были скопированы 
-                    // во внутренний буфер TLS, но не были полностью отправлены в сокет.
-                    // Нельзя передавать новые (или старые) данные до тех пор, пока буфер не будет очищен!
-                    // Очистка производится вызовом SSLWrite(..., nil, 0, ...).
+                let ptr = buffer.baseAddress!
+                let len = chunk.count
+                
+                // Отправляем данные в SecureTransport
+                var processed = 0
+                var status = SSLWrite(context, ptr, len, &processed)
+                
+                if status == noErr {
+                    // Все данные были успешно буферизированы И отправлены
+                    return
+                }
+                
+                if status == errSSLWouldBlock {
+                    // SecureTransport принял ВСЕ len байт во внутренний буфер,
+                    // но не смог отправить их в сокет.
+                    // Теперь нужно «вытолкнуть» буфер вызовами SSLWrite(nil, 0).
+                    var flushAttempts = 0
                     while status == errSSLWouldBlock {
-                        // Ждем готовности сокета к записи
                         var pollFd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
-                        let pollResult = poll(&pollFd, 1, 10000) // таймаут 10 секунд
+                        let pollResult = poll(&pollFd, 1, 30000) // таймаут 30 секунд
                         if pollResult <= 0 {
-                            throw ftpError("Таймаут отправки данных (буфер переполнен)")
+                            throw ftpError("Таймаут отправки данных (буфер переполнен, попытка \(flushAttempts))")
                         }
                         
                         var dummy = 0
                         status = SSLWrite(context, nil, 0, &dummy)
+                        flushAttempts += 1
                     }
-
+                    
                     if status != noErr {
-                        throw ftpError("Ошибка передачи данных: OSStatus \(status)")
+                        throw ftpError("Ошибка передачи данных при flush: OSStatus \(status)")
                     }
+                    // Все данные из внутреннего буфера успешно отправлены
+                    return
                 }
+                
+                // Любая другая ошибка — фатальная
+                throw ftpError("Ошибка передачи данных: OSStatus \(status)")
             }
 
             offset = end
