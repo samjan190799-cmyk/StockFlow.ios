@@ -95,8 +95,9 @@ class FTPSecureClient {
         }
 
         // === ШАГ 4: Upgrade контрольного канала на TLS ===
-        controlSSL = try createSSLContext(sock: controlSock, peerName: cleanHost, peerId: peerId)
-        try performSSLHandshake(context: controlSSL!)
+        let requireValidCert = cleanHost.contains("shutterstock.com") || cleanHost.contains("gettyimages.com")
+        controlSSL = try createSSLContext(sock: controlSock, peerName: cleanHost, peerId: peerId, requireValidCertificate: requireValidCert)
+        try performSSLHandshake(context: controlSSL!, requireValidCertificate: requireValidCert)
         logMsg("[SecureTransport] ✅ TLS handshake контрольного канала завершён")
 
         // === ШАГ 5: Авторизация ===
@@ -174,8 +175,8 @@ class FTPSecureClient {
         // === ШАГ 10: TLS на канале данных (с ТЕМ ЖЕ PeerID → Session Resumption!) ===
         if useTlsDataChannel {
             logMsg("[SecureTransport] TLS канала данных (Session Resumption через SSLSetPeerID)...")
-            dataSSL = try createSSLContext(sock: dataSock, peerName: cleanHost, peerId: peerId)
-            try performSSLHandshake(context: dataSSL!)
+            dataSSL = try createSSLContext(sock: dataSock, peerName: cleanHost, peerId: peerId, requireValidCertificate: requireValidCert)
+            try performSSLHandshake(context: dataSSL!, requireValidCertificate: requireValidCert)
             logMsg("[SecureTransport] ✅ TLS канала данных УСПЕХ — Session Resumption работает!")
         }
 
@@ -400,7 +401,7 @@ class FTPSecureClient {
     /// ВАЖНО: SSLSetPeerID работает ТОЛЬКО с TLS 1.2 (Session ID resumption, RFC 5077).
     /// TLS 1.3 использует PSK-тикеты (RFC 8446), несовместимые с этим механизмом.
     /// Принудительно фиксируем TLS 1.2 на обоих каналах.
-    private static func createSSLContext(sock: Int32, peerName: String, peerId: Data) throws -> SSLContext {
+    private static func createSSLContext(sock: Int32, peerName: String, peerId: Data, requireValidCertificate: Bool) throws -> SSLContext {
         guard let context = SSLCreateContext(nil, .clientSide, .streamType) else {
             throw ftpError("Ошибка создания SSLContext")
         }
@@ -470,8 +471,10 @@ class FTPSecureClient {
             _ = SSLSetPeerDomainName(context, cstr, peerName.count)
         }
 
-        // Пропускаем верификацию сертификата (как в текущем FTPClient)
-        SSLSetSessionOption(context, .breakOnServerAuth, true)
+        // Пропускаем верификацию сертификата только если это не требуется явно
+        if !requireValidCertificate {
+            SSLSetSessionOption(context, .breakOnServerAuth, true)
+        }
 
         return context
     }
@@ -479,11 +482,11 @@ class FTPSecureClient {
     /// TLS Handshake с обработкой breakOnServerAuth.
     /// При получении errSSLPeerAuthCompleted продолжаем без верификации.
     /// Логирует согласованную TLS-версию для диагностики.
-    private static func performSSLHandshake(context: SSLContext) throws {
+    private static func performSSLHandshake(context: SSLContext, requireValidCertificate: Bool) throws {
         var status: OSStatus
         repeat {
             status = SSLHandshake(context)
-        } while status == errSSLWouldBlock || status == errSSLPeerAuthCompleted
+        } while status == errSSLWouldBlock || (!requireValidCertificate && status == errSSLPeerAuthCompleted)
 
         if status != noErr {
             throw ftpError("TLS handshake ошибка: OSStatus \(status)")
