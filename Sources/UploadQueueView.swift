@@ -280,7 +280,9 @@ class QueueViewModel: ObservableObject {
             // FTPClient теперь сам определяет протокол по хосту (ftp/ftps/sftp)
             // Передаём оригинальный host как есть
             do {
-                try await FTPClient.upload(
+                // FTPSecureClient использует BSD-сокеты + SecureTransport
+                // с SSLSetPeerID для TLS Session Resumption (решает проблему Shutterstock)
+                try await FTPSecureClient.upload(
                     data: preparedData,
                     filename: photo.filename,
                     host: platform.host,
