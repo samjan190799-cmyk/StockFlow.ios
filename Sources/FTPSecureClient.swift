@@ -76,9 +76,9 @@ class FTPSecureClient {
 
         // Гарантированная очистка ресурсов (LIFO: data → control)
         defer { Darwin.close(controlSock) }
-        defer { if let ssl = controlSSL { SSLClose(ssl); controlSSL = nil } }
+        defer { if let ssl = controlSSL { secureSSLClose(context: ssl, sock: controlSock); controlSSL = nil } }
         defer { if dataSock >= 0 { Darwin.close(dataSock); dataSock = -1 } }
-        defer { if let ssl = dataSSL { SSLClose(ssl); dataSSL = nil } }
+        defer { if let ssl = dataSSL { secureSSLClose(context: ssl, sock: dataSock); dataSSL = nil } }
 
         // === ШАГ 2: Чтение баннера (plain text) ===
         var plainBuf = Data()
@@ -198,7 +198,7 @@ class FTPSecureClient {
 
         // === ШАГ 13: Закрытие канала данных ===
         if let ssl = dataSSL {
-            SSLClose(ssl)
+            secureSSLClose(context: ssl, sock: dataSock)
             dataSSL = nil
         }
         Darwin.close(dataSock)
@@ -614,18 +614,25 @@ class FTPSecureClient {
                     var written = 0
                     let ptr = buffer.baseAddress!.advanced(by: totalWritten)
                     let remaining = chunk.count - totalWritten
-                    let status = SSLWrite(context, ptr, remaining, &written)
+                    var status = SSLWrite(context, ptr, remaining, &written)
 
                     totalWritten += written
 
-                    if status == errSSLWouldBlock {
+                    // Критический фикс для SecureTransport:
+                    // Если SSLWrite возвращает errSSLWouldBlock, это означает, что данные были скопированы 
+                    // во внутренний буфер TLS, но не были полностью отправлены в сокет.
+                    // Нельзя передавать новые (или старые) данные до тех пор, пока буфер не будет очищен!
+                    // Очистка производится вызовом SSLWrite(..., nil, 0, ...).
+                    while status == errSSLWouldBlock {
                         // Ждем готовности сокета к записи
                         var pollFd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
                         let pollResult = poll(&pollFd, 1, 10000) // таймаут 10 секунд
                         if pollResult <= 0 {
                             throw ftpError("Таймаут отправки данных (буфер переполнен)")
                         }
-                        continue // повторяем попытку с обновленным смещением
+                        
+                        var dummy = 0
+                        status = SSLWrite(context, nil, 0, &dummy)
                     }
 
                     if status != noErr {
@@ -637,6 +644,21 @@ class FTPSecureClient {
             offset = end
             if total > 0 { progress?(Double(offset) / Double(total)) }
         }
+    }
+
+    // MARK: - Helper Methods
+
+    private static func secureSSLClose(context: SSLContext, sock: Int32) {
+        var closeStatus: OSStatus
+        var attempts = 0
+        repeat {
+            closeStatus = SSLClose(context)
+            if closeStatus == errSSLWouldBlock {
+                var pollFd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
+                poll(&pollFd, 1, 2000) // Ждем 2 секунды
+                attempts += 1
+            }
+        } while closeStatus == errSSLWouldBlock && attempts < 5
     }
 
     // MARK: - EPSV / PASV Parsers
