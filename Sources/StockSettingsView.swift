@@ -211,7 +211,7 @@ struct PlatformRowView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(platform.name)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(platform.isEnabled ? .primary : .primary.opacity(0.6))
+                    .foregroundStyle(platform.isEnabled ? Color.primary : Color.primary.opacity(0.6))
                 Text(platform.host)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)
