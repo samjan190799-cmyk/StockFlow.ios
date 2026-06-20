@@ -191,7 +191,7 @@ class FTPSecureClient {
 
         // === ШАГ 12: Передача данных ===
         if let ssl = dataSSL {
-            try sslWriteData(context: ssl, data: data, progress: progress)
+            try sslWriteData(context: ssl, sock: dataSock, data: data, progress: progress)
         } else {
             try plainWriteData(sock: dataSock, data: data, progress: progress)
         }
@@ -381,7 +381,16 @@ class FTPSecureClient {
                     if sent > 0 {
                         totalSent += sent
                     } else {
-                        throw ftpError("Ошибка передачи данных: errno \(errno)")
+                        let err = errno
+                        if err == EAGAIN || err == EWOULDBLOCK {
+                            var pollFd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
+                            let pollResult = poll(&pollFd, 1, 10000) // ждем до 10 сек
+                            if pollResult <= 0 {
+                                throw ftpError("Таймаут передачи данных: errno \(err)")
+                            }
+                            continue
+                        }
+                        throw ftpError("Ошибка передачи данных: errno \(err)")
                     }
                 }
             }
@@ -590,7 +599,7 @@ class FTPSecureClient {
     }
 
     /// Отправка бинарных данных файла через SSL (PROT P)
-    private static func sslWriteData(context: SSLContext, data: Data, progress: (@Sendable (Double) -> Void)?) throws {
+    private static func sslWriteData(context: SSLContext, sock: Int32, data: Data, progress: (@Sendable (Double) -> Void)?) throws {
         let chunkSize = 65536
         var offset = 0
         let total = data.count
@@ -607,11 +616,21 @@ class FTPSecureClient {
                     let remaining = chunk.count - totalWritten
                     let status = SSLWrite(context, ptr, remaining, &written)
 
-                    totalWritten += written
+                    if status == errSSLWouldBlock {
+                        // Ждем готовности сокета к записи
+                        var pollFd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
+                        let pollResult = poll(&pollFd, 1, 10000) // таймаут 10 секунд
+                        if pollResult <= 0 {
+                            throw ftpError("Таймаут отправки данных (буфер переполнен)")
+                        }
+                        continue // повторяем попытку с тем же смещением
+                    }
 
-                    if status != noErr && status != errSSLWouldBlock {
+                    if status != noErr {
                         throw ftpError("Ошибка передачи данных: OSStatus \(status)")
                     }
+
+                    totalWritten += written
                 }
             }
 
