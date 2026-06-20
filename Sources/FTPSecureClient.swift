@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import CommonCrypto
 
 // MARK: - FTPSecureClient
 // Нативный FTPS-клиент на базе BSD-сокетов + SecureTransport.
@@ -61,6 +62,10 @@ class FTPSecureClient {
         let resolvedIp = resolveHost(cleanHost) ?? cleanHost
 
         logMsg("[SecureTransport] Подключение к \(cleanHost) [\(resolvedIp)]:\(port)")
+
+        // Логируем хэш исходных данных для контроля целостности
+        let originalSha256 = sha256String(for: data)
+        logMsg("[Diagnostic] Исходный файл: \(filename), размер: \(data.count) байт, SHA-256: \(originalSha256)")
 
         // Уникальный PeerID для общего кеша TLS-сессий между каналами
         let peerId = "ftps-\(cleanHost)".data(using: .utf8)!
@@ -270,7 +275,10 @@ class FTPSecureClient {
 
         // Обратно в блокирующий режим
         flags = fcntl(sock, F_GETFL, 0)
-        _ = fcntl(sock, F_SETFL, flags & ~O_NONBLOCK)
+        let fcntlStatus = fcntl(sock, F_SETFL, flags & ~O_NONBLOCK)
+        if fcntlStatus < 0 {
+            logMsg("[WARNING] fcntl F_SETFL failed, errno: \(errno)")
+        }
 
         return sock
     }
@@ -609,9 +617,17 @@ class FTPSecureClient {
     /// Для очистки буфера нужно вызывать SSLWrite(nil, 0) до получения noErr.
     /// Эта логика скопирована из исходного кода curl (lib/vtls/sectransp.c).
     private static func sslWriteData(context: SSLContext, sock: Int32, data: Data, progress: (@Sendable (Double) -> Void)?) throws {
-        let chunkSize = 65536
+        let chunkSize = 16384 // 16 KB (размер одной TLS-записи)
         var offset = 0
         let total = data.count
+        var totalBytesWrittenToSocket = 0
+        var totalErrWouldBlockCount = 0
+
+        // Инициализация контекста хэширования SHA-256
+        var shaCtx = CC_SHA256_CTX()
+        CC_SHA256_Init(&shaCtx)
+
+        logMsg("[Diagnostic] Начало передачи по SSL. Размер: \(total) байт, чанк: \(chunkSize) байт")
 
         while offset < total {
             let end = min(offset + chunkSize, total)
@@ -620,47 +636,72 @@ class FTPSecureClient {
             try chunk.withUnsafeBytes { buffer in
                 let ptr = buffer.baseAddress!
                 let len = chunk.count
-                
-                // Отправляем данные в SecureTransport
-                var processed = 0
-                var status = SSLWrite(context, ptr, len, &processed)
-                
-                if status == noErr {
-                    // Все данные были успешно буферизированы И отправлены
-                    return
-                }
-                
-                if status == errSSLWouldBlock {
-                    // SecureTransport принял ВСЕ len байт во внутренний буфер,
-                    // но не смог отправить их в сокет.
-                    // Теперь нужно «вытолкнуть» буфер вызовами SSLWrite(nil, 0).
-                    var flushAttempts = 0
-                    while status == errSSLWouldBlock {
-                        var pollFd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
-                        let pollResult = poll(&pollFd, 1, 30000) // таймаут 30 секунд
-                        if pollResult <= 0 {
-                            throw ftpError("Таймаут отправки данных (буфер переполнен, попытка \(flushAttempts))")
+                var bytesWrittenThisChunk = 0
+
+                while bytesWrittenThisChunk < len {
+                    let currentPtr = ptr.advanced(by: bytesWrittenThisChunk)
+                    let currentLen = len - bytesWrittenThisChunk
+
+                    var processed = 0
+                    var status = SSLWrite(context, currentPtr, currentLen, &processed)
+
+                    if status == noErr {
+                        if processed > 0 {
+                            CC_SHA256_Update(&shaCtx, currentPtr, CC_LONG(processed))
+                            bytesWrittenThisChunk += processed
+                            totalBytesWrittenToSocket += processed
+                        } else if currentLen > 0 {
+                            logMsg("[WARNING] SSLWrite вернул noErr, но processed = 0")
+                            throw ftpError("SSLWrite вернул noErr при processed = 0")
                         }
+                        continue
+                    }
+
+                    if status == errSSLWouldBlock {
+                        totalErrWouldBlockCount += 1
                         
-                        var dummy = 0
-                        status = SSLWrite(context, nil, 0, &dummy)
-                        flushAttempts += 1
+                        if processed > 0 {
+                            CC_SHA256_Update(&shaCtx, currentPtr, CC_LONG(processed))
+                            bytesWrittenThisChunk += processed
+                            totalBytesWrittenToSocket += processed
+                        }
+
+                        if totalErrWouldBlockCount <= 10 || totalErrWouldBlockCount % 50 == 0 {
+                            logMsg("[Diagnostic] errSSLWouldBlock (всего: \(totalErrWouldBlockCount)). Сброс буфера (уже обработано в чанке: \(bytesWrittenThisChunk)/\(len))...")
+                        }
+
+                        var flushAttempts = 0
+                        while status == errSSLWouldBlock {
+                            var pollFd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
+                            let pollResult = poll(&pollFd, 1, 30000) // таймаут 30 секунд
+                            if pollResult <= 0 {
+                                throw ftpError("Таймаут сброса буфера данных (попытка \(flushAttempts))")
+                            }
+
+                            var dummy = 0
+                            status = SSLWrite(context, nil, 0, &dummy)
+                            flushAttempts += 1
+                        }
+
+                        if status != noErr {
+                            throw ftpError("Ошибка сброса буфера данных: OSStatus \(status)")
+                        }
+                        continue
                     }
-                    
-                    if status != noErr {
-                        throw ftpError("Ошибка передачи данных при flush: OSStatus \(status)")
-                    }
-                    // Все данные из внутреннего буфера успешно отправлены
-                    return
+
+                    throw ftpError("Ошибка передачи данных: OSStatus \(status)")
                 }
-                
-                // Любая другая ошибка — фатальная
-                throw ftpError("Ошибка передачи данных: OSStatus \(status)")
             }
 
             offset = end
             if total > 0 { progress?(Double(offset) / Double(total)) }
         }
+
+        var sentHash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        CC_SHA256_Final(&sentHash, &shaCtx)
+        let sentSha256 = sentHash.map { String(format: "%02x", $0) }.joined()
+
+        logMsg("[Diagnostic] Передача по SSL завершена. Всего записано: \(totalBytesWrittenToSocket) байт. Возникновений errSSLWouldBlock: \(totalErrWouldBlockCount). SHA-256 отправленного потока: \(sentSha256)")
     }
 
     // MARK: - Helper Methods
@@ -672,10 +713,24 @@ class FTPSecureClient {
             closeStatus = SSLClose(context)
             if closeStatus == errSSLWouldBlock {
                 var pollFd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
-                poll(&pollFd, 1, 2000) // Ждем 2 секунды
+                _ = poll(&pollFd, 1, 2000) // Ждем 2 секунды
                 attempts += 1
             }
         } while closeStatus == errSSLWouldBlock && attempts < 5
+        
+        if closeStatus != noErr {
+            logMsg("[Diagnostic] SSLClose завершился со статусом: \(closeStatus) после \(attempts) попыток")
+        } else {
+            logMsg("[Diagnostic] SSLClose успешно завершён (close_notify отправлен)")
+        }
+    }
+
+    private static func sha256String(for data: Data) -> String {
+        var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        data.withUnsafeBytes { buffer in
+            _ = CC_SHA256(buffer.baseAddress, CC_LONG(data.count), &hash)
+        }
+        return hash.map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - EPSV / PASV Parsers
