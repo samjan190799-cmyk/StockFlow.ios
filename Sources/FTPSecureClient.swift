@@ -616,6 +616,8 @@ class FTPSecureClient {
                     let remaining = chunk.count - totalWritten
                     let status = SSLWrite(context, ptr, remaining, &written)
 
+                    totalWritten += written
+
                     if status == errSSLWouldBlock {
                         // Ждем готовности сокета к записи
                         var pollFd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
@@ -623,14 +625,12 @@ class FTPSecureClient {
                         if pollResult <= 0 {
                             throw ftpError("Таймаут отправки данных (буфер переполнен)")
                         }
-                        continue // повторяем попытку с тем же смещением
+                        continue // повторяем попытку с обновленным смещением
                     }
 
                     if status != noErr {
                         throw ftpError("Ошибка передачи данных: OSStatus \(status)")
                     }
-
-                    totalWritten += written
                 }
             }
 
