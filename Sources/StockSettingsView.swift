@@ -264,6 +264,7 @@ struct PlatformRowView: View {
             onTap()
         }
     }
+}
 
 // MARK: - Helper Models for Sheet Presentation
 struct ActiveSheetPlatformId: Identifiable, Sendable {
