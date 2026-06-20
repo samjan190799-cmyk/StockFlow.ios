@@ -17,7 +17,7 @@ struct StockSettingsView: View {
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("Интегрированные фотостоки")
+                        Text("Интегрированные фотостоки".localized)
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(.secondary)
                             .textCase(.uppercase)
@@ -41,7 +41,7 @@ struct StockSettingsView: View {
                     .padding()
                 }
             }
-            .navigationTitle("Настройки стоков")
+            .navigationTitle("Настройки стоков".localized)
             .navigationBarTitleDisplayMode(.inline)
             .onAppear(perform: loadPlatforms)
             .sheet(item: Binding(
@@ -68,7 +68,7 @@ struct StockSettingsView: View {
                     )
                 }
             }
-            .alert("Подключение", isPresented: $showingAlert) {
+            .alert("Подключение".localized, isPresented: $showingAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(alertMessage)
@@ -81,7 +81,7 @@ struct StockSettingsView: View {
                             VStack(spacing: 12) {
                                 ProgressView()
                                     .tint(.primary)
-                                Text("Проверка соединения...")
+                                Text("Проверка соединения...".localized)
                                     .font(.system(size: 14, weight: .medium))
                             }
                             .glassCard(cornerRadius: 16, padding: 24)
@@ -157,7 +157,7 @@ struct StockSettingsView: View {
     
     private func testConnection(_ platform: StockPlatform) {
         guard !platform.username.isEmpty && !platform.passwordHash.isEmpty else {
-            alertMessage = "Пожалуйста, введите логин и пароль."
+            alertMessage = "Пожалуйста, введите логин и пароль.".localized
             showingAlert = true
             return
         }
@@ -172,11 +172,11 @@ struct StockSettingsView: View {
                     password: platform.passwordHash
                 )
                 isVerifying = false
-                alertMessage = "Успешное соединение с сервером \(platform.host)! Аутентификация пройдена."
+                alertMessage = "Успешное соединение с сервером".localized + " \(platform.host)"
                 showingAlert = true
             } catch {
                 isVerifying = false
-                alertMessage = "Ошибка соединения с \(platform.host): \(error.localizedDescription)"
+                alertMessage = "Ошибка соединения с".localized + " \(platform.host): \(error.localizedDescription)"
                 showingAlert = true
             }
         }
@@ -222,7 +222,7 @@ struct PlatformRowView: View {
                     Circle()
                         .fill(isConfigured ? Color.green : Color.orange)
                         .frame(width: 5, height: 5)
-                    Text(isConfigured ? "Настроен" : "Нужна настройка")
+                    Text(isConfigured ? "Настроен".localized : "Нужна настройка".localized)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(isConfigured ? Color.green : Color.orange)
                 }
@@ -274,13 +274,13 @@ struct PlatformDetailSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text("Параметры SFTP / FTP для \(platform.name)")
+                            Text("Параметры SFTP / FTP для".localized + " \(platform.name)")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(.secondary)
                                 .textCase(.uppercase)
                             
                             HStack {
-                                Text("Активен")
+                                Text("Активен".localized)
                                     .font(.system(size: 14, weight: .medium))
                                 Spacer()
                                 Toggle("", isOn: $platform.isEnabled)
@@ -290,23 +290,23 @@ struct PlatformDetailSheet: View {
                             
                             Divider().background(Color.primary.opacity(0.08))
                             
-                            customInputField(title: "Имя пользователя (логин)", placeholder: "Username", text: $platform.username, isSecure: false)
+                            customInputField(title: "Имя пользователя (логин)".localized, placeholder: "Username", text: $platform.username, isSecure: false)
                             
-                            customInputField(title: "Пароль", placeholder: "••••••••", text: $platform.passwordHash, isSecure: true)
+                            customInputField(title: "Пароль".localized, placeholder: "••••••••", text: $platform.passwordHash, isSecure: true)
                             
                             HStack {
-                                Text("Сервер выгрузки: \(platform.host)")
+                                Text("Сервер выгрузки:".localized + " \(platform.host)")
                                     .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
                                 Spacer()
                             }
                             
-                            DisclosureGroup("Дополнительные параметры сервера") {
+                            DisclosureGroup("Дополнительные параметры сервера".localized) {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    customInputField(title: "Имя хоста (сервер)", placeholder: "ftp.example.com", text: $platform.host, isSecure: false)
+                                    customInputField(title: "Имя хоста (сервер)".localized, placeholder: "ftp.example.com", text: $platform.host, isSecure: false)
                                     
                                     if platform.id == "adobe" || platform.id == "freepik" {
-                                        Text("Внимание: Данный сток требует SFTP. Plain FTP-соединение для него может быть недоступно.")
+                                        Text("Внимание: Данный сток требует SFTP. Plain FTP-соединение для него может быть недоступно.".localized)
                                             .font(.system(size: 10))
                                             .foregroundStyle(.orange)
                                             .lineLimit(nil)
@@ -328,15 +328,15 @@ struct PlatformDetailSheet: View {
                                 if isVerifying {
                                     ProgressView()
                                         .tint(.primary)
-                                    Text("Проверка...")
+                                    Text("Проверка...".localized)
                                 } else {
-                                    Text("Проверить соединение")
+                                    Text("Проверить соединение".localized)
                                 }
                             }
                             .font(.system(size: 14, weight: .bold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(.ultraThinMaterial)
+                            .background(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.06))
                             .foregroundStyle(.primary)
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                             .overlay(
@@ -354,7 +354,7 @@ struct PlatformDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") {
+                    Button("Готово".localized) {
                         HapticHelper.trigger(.light)
                         onSave()
                         dismiss()

@@ -45,18 +45,18 @@ struct SystemSettingsView: View {
                         
                         // SECTION 1: Interface
                         VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Интерфейс")
+                            sectionHeader("Интерфейс".localized)
                             
-                            pickerRow("Язык интерфейса", selection: $sysLanguage, options: ["Русский", "English"])
+                            pickerRow("Язык интерфейса".localized, selection: $sysLanguage, options: ["Русский", "English"])
                             
                             Divider().background(Color.primary.opacity(0.08))
 
                             
-                            pickerRow("Тема оформления", selection: $sysTheme, options: ["Темная", "Светлая", "Системная"])
+                            pickerRow("Тема оформления".localized, selection: $sysTheme, options: ["Темная", "Светлая", "Системная"])
                             
                             Divider().background(Color.primary.opacity(0.08))
                             
-                            pickerRow("Предел частоты кадров", selection: $sysFps, options: [
+                            pickerRow("Предел частоты кадров".localized, selection: $sysFps, options: [
                                 "120 FPS (Ультра-плавность)",
                                 "60 FPS (Стандартный)",
                                 "30 FPS (Энергосбережение)"
@@ -66,12 +66,12 @@ struct SystemSettingsView: View {
                         
                         // SECTION 2: Scheduler
                         VStack(alignment: .leading, spacing: 10) {
-                            sectionHeader("Планировщик")
+                            sectionHeader("Планировщик".localized)
                             
-                            Toggle("Фоновый планировщик выгрузки", isOn: $bgScheduler)
+                            Toggle("Фоновый планировщик выгрузки".localized, isOn: $bgScheduler)
                                 .tint(Color(hex: "7C3AED"))
                             
-                            Text("При активации планировщика система будет проверять новые фото и отправлять их в фоновом режиме.")
+                            Text("При активации планировщика система будет проверять новые фото и отправлять их в фоновом режиме.".localized)
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                         }
@@ -79,15 +79,15 @@ struct SystemSettingsView: View {
                         
                         // SECTION 3: Auto Upscaling
                         VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Автоматический Апскейл")
+                            sectionHeader("Автоматический Апскейл".localized)
                             
-                            Toggle("Включить авто-апскейл", isOn: $autoUpscale)
+                            Toggle("Включить авто-апскейл".localized, isOn: $autoUpscale)
                                 .tint(Color(hex: "7C3AED"))
                             
                             if autoUpscale {
                                 Divider().background(Color.primary.opacity(0.08))
                                 
-                                pickerRow("Порог срабатывания", selection: $upscaleThreshold, options: [
+                                pickerRow("Порог срабатывания".localized, selection: $upscaleThreshold, options: [
                                     "Меньше 4 МБ (Рекомендуется)",
                                     "Меньше 2 МБ",
                                     "Меньше 8 МБ"
@@ -95,7 +95,7 @@ struct SystemSettingsView: View {
                                 
                                 Divider().background(Color.primary.opacity(0.08))
                                 
-                                pickerRow("Коэффициент (масштаб)", selection: $upscaleFactor, options: [
+                                pickerRow("Коэффициент (масштаб)".localized, selection: $upscaleFactor, options: [
                                     "Увеличение 2x (Бикубическое)",
                                     "Увеличение 4x (Нейросеть)"
                                 ])
@@ -105,39 +105,39 @@ struct SystemSettingsView: View {
                         
                         // SECTION 4: Upload parameters
                         VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Параметры выгрузки")
+                            sectionHeader("Параметры выгрузки".localized)
                             
-                            pickerIntRow("Потоки параллельной загрузки", selection: $parallelStreams, options: [1, 3, 5])
+                            pickerIntRow("Потоки параллельной загрузки".localized, selection: $parallelStreams, options: [1, 3, 5])
                             
                             Divider().background(Color.primary.opacity(0.08))
                             
-                            Toggle("Автоповтор при сбоях", isOn: $retryOnFail)
+                            Toggle("Автоповтор при сбоях".localized, isOn: $retryOnFail)
                                 .tint(Color(hex: "7C3AED"))
                             
                             Divider().background(Color.primary.opacity(0.08))
                             
-                            Toggle("Сжатие JPEG перед загрузкой", isOn: $compressJpeg)
+                            Toggle("Сжатие JPEG перед загрузкой".localized, isOn: $compressJpeg)
                                 .tint(Color(hex: "7C3AED"))
                             
                             Divider().background(Color.primary.opacity(0.08))
                             
-                            Toggle("Системные уведомления", isOn: $sysNotifications)
+                            Toggle("Системные уведомления".localized, isOn: $sysNotifications)
                                 .tint(Color(hex: "7C3AED"))
                         }
                         .glassCard()
                         
                         // SECTION 5: Local PC Server
                         VStack(alignment: .leading, spacing: 10) {
-                            sectionHeader("Локальный ПК-сервер")
+                            sectionHeader("Локальный ПК-сервер".localized)
                             
-                            Toggle("Загрузка через ПК-сервер", isOn: $pcServerEnabled)
+                            Toggle("Загрузка через ПК-сервер".localized, isOn: $pcServerEnabled)
                                 .tint(Color(hex: "7C3AED"))
                             
                             if pcServerEnabled {
                                 Divider().background(Color.primary.opacity(0.08))
                                 
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text("Адрес сервера (IP:Порт)")
+                                    Text("Адрес сервера (IP:Порт)".localized)
                                         .font(.system(size: 11, weight: .bold))
                                         .foregroundStyle(.secondary)
                                     
@@ -165,7 +165,7 @@ struct SystemSettingsView: View {
                                 }
                             }
                             
-                            Text("Позволяет отправлять фото через программу на вашем компьютере. Полезно, если на телефоне блокируется FTPS к Shutterstock.")
+                            Text("Позволяет отправлять фото через программу на вашем компьютере. Полезно, если на телефоне блокируется FTPS к Shutterstock.".localized)
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                         }
@@ -173,7 +173,7 @@ struct SystemSettingsView: View {
                         
                         // SECTION 0: Cloud Sync
                         VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Облачная синхронизация")
+                            sectionHeader("Облачная синхронизация".localized)
                             
                             if isUserSignedIn {
                                 HStack(spacing: 12) {
@@ -184,14 +184,14 @@ struct SystemSettingsView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(userEmail)
                                             .font(.system(size: 14, weight: .bold))
-                                        Text("Синхронизация профиля активна")
+                                        Text("Синхронизация профиля активна".localized)
                                             .font(.system(size: 11))
                                             .foregroundStyle(.green)
                                     }
                                     
                                     Spacer()
                                     
-                                    Button("Выйти", action: signOut)
+                                    Button("Выйти".localized, action: signOut)
                                         .font(.system(size: 12, weight: .semibold))
                                         .foregroundStyle(.red)
                                         .padding(.horizontal, 10)
@@ -200,7 +200,7 @@ struct SystemSettingsView: View {
                                         .clipShape(Capsule())
                                 }
                             } else {
-                                Text("Войдите в аккаунт, чтобы синхронизировать ваши настройки стоков и ключи API в облаке.")
+                                Text("Войдите в аккаунт, чтобы синхронизировать ваши настройки стоков и ключи API в облаке.".localized)
                                     .font(.system(size: 12))
                                     .foregroundStyle(.secondary)
                                 
@@ -243,7 +243,7 @@ struct SystemSettingsView: View {
                                         HStack {
                                             Image(systemName: "g.circle.fill")
                                                 .font(.system(size: 14))
-                                            Text("Вход с Google")
+                                            Text("Вход с Google".localized)
                                                 .font(.system(size: 13, weight: .semibold))
                                         }
                                         .frame(maxWidth: .infinity)
@@ -267,7 +267,7 @@ struct SystemSettingsView: View {
                             HapticHelper.trigger(.medium)
                             saveSettings()
                         }) {
-                            Text("Сохранить все настройки")
+                            Text("Сохранить все настройки".localized)
                                 .font(.system(size: 14, weight: .bold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
@@ -281,7 +281,7 @@ struct SystemSettingsView: View {
                     .padding()
                 }
             }
-            .navigationTitle("Параметры системы")
+            .navigationTitle("Параметры системы".localized)
             .navigationBarTitleDisplayMode(.inline)
             .overlay(alignment: .bottom) {
                 if showingSavedToast {
@@ -289,12 +289,12 @@ struct SystemSettingsView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 14))
                             .foregroundStyle(.green)
-                        Text(savedToastMessage)
+                        Text(savedToastMessage.localized)
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(.ultraThinMaterial)
+                    .background(colorScheme == .dark ? Color(hex: "2C2C2E") : Color(hex: "E5E5EA"))
                     .foregroundStyle(.primary)
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
@@ -310,7 +310,12 @@ struct SystemSettingsView: View {
             }
             .onChange(of: retryOnFail) { _ in HapticHelper.trigger(.light) }
             .onChange(of: compressJpeg) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: sysNotifications) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: sysNotifications) { newVal in
+                HapticHelper.trigger(.light)
+                if newVal {
+                    NotificationHelper.requestAuthorization()
+                }
+            }
             .onChange(of: sysTheme) { _ in HapticHelper.trigger(.light) }
             .onChange(of: sysLanguage) { newLang in
                 HapticHelper.trigger(.medium)
@@ -319,11 +324,11 @@ struct SystemSettingsView: View {
             .onChange(of: sysFps) { newFps in
                 HapticHelper.trigger(.light)
                 let label = newFps.contains("120") ? "120 FPS" : newFps.contains("30") ? "30 FPS" : "60 FPS"
-                showToast("Частота кадров: \(label) — применится при запуске")
+                showToast("Частота кадров: ".localized + label + " — применится при запуске".localized)
             }
             .onChange(of: parallelStreams) { newVal in
                 HapticHelper.trigger(.light)
-                showToast("Параллельные потоки: \(newVal) — применится при следующей загрузке")
+                showToast("Параллельные потоки: ".localized + "\(newVal)" + " — применится при следующей загрузке".localized)
             }
             .onChange(of: upscaleThreshold) { _ in HapticHelper.trigger(.light) }
             .onChange(of: upscaleFactor) { _ in HapticHelper.trigger(.light) }
@@ -337,7 +342,7 @@ struct SystemSettingsView: View {
                             VStack(spacing: 12) {
                                 ProgressView()
                                     .tint(.primary)
-                                Text("Авторизация...")
+                                Text("Авторизация...".localized)
                                     .font(.system(size: 14, weight: .medium))
                             }
                             .glassCard(cornerRadius: 16, padding: 24)
@@ -372,7 +377,7 @@ struct SystemSettingsView: View {
         Menu {
             Picker("", selection: selection) {
                 ForEach(options, id: \.self) { option in
-                    Text(option).tag(option)
+                    Text(option.localized).tag(option)
                 }
             }
         } label: {
@@ -381,7 +386,7 @@ struct SystemSettingsView: View {
                     .font(.system(size: 14))
                     .foregroundStyle(.primary)
                 Spacer()
-                Text(selection.wrappedValue)
+                Text(selection.wrappedValue.localized)
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -416,7 +421,7 @@ struct SystemSettingsView: View {
         Menu {
             Picker("", selection: selection) {
                 ForEach(options, id: \.self) { option in
-                    Text("\(option) \(getStreamWord(option))").tag(option)
+                    Text("\(option) \(getStreamWord(option).localized)").tag(option)
                 }
             }
         } label: {
@@ -425,7 +430,7 @@ struct SystemSettingsView: View {
                     .font(.system(size: 14))
                     .foregroundStyle(.primary)
                 Spacer()
-                Text("\(selection.wrappedValue) \(getStreamWord(selection.wrappedValue))")
+                Text("\(selection.wrappedValue) \(getStreamWord(selection.wrappedValue).localized)")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                 Image(systemName: "chevron.up.chevron.down")

@@ -213,12 +213,7 @@ struct AIAssistantView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(
-                ZStack {
-                    Color.black.opacity(isSelected ? 0.28 : 0.16)
-                    Rectangle().fill(.ultraThinMaterial)
-                }
-            )
+            .background(isSelected ? color.opacity(0.12) : Color.primary.opacity(0.04))
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)

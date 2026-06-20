@@ -139,14 +139,14 @@ class QueueViewModel: ObservableObject {
         guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
         
         guard checkStockCredentials() else {
-            triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!")
+            triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!".localized)
             return
         }
         
         photos[idx].status = .uploading
         photos[idx].uploadProgress = 0.0
         photos[idx].errorMessage = nil
-        triggerToast("Загрузка файла \(photos[idx].filename)...")
+        triggerToast("Загрузка файла".localized + " \(photos[idx].filename)...")
         
         Task {
             do {
@@ -162,13 +162,21 @@ class QueueViewModel: ObservableObject {
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].status = .success
                     self.photos[index].uploadProgress = 1.0
-                    self.triggerToast("Файл \(self.photos[index].filename) успешно загружен на стоки!")
+                    self.triggerToast("Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized)
+                    NotificationHelper.sendNotification(
+                        title: "Успешная выгрузка".localized,
+                        body: "Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized
+                    )
                 }
             } catch {
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].status = .error
                     self.photos[index].errorMessage = error.localizedDescription
-                    self.triggerToast("Ошибка выгрузки \(self.photos[index].filename): \(error.localizedDescription)")
+                    self.triggerToast("Ошибка выгрузки".localized + " \(self.photos[index].filename): \(error.localizedDescription)")
+                    NotificationHelper.sendNotification(
+                        title: "Ошибка выгрузки".localized,
+                        body: "Файл".localized + " \(self.photos[index].filename): \(error.localizedDescription)"
+                    )
                 }
             }
         }
@@ -177,12 +185,12 @@ class QueueViewModel: ObservableObject {
     func uploadAllReady() {
         let readyPhotos = photos.filter { $0.status == .ready }
         guard !readyPhotos.isEmpty else {
-            triggerToast("Нет файлов, готовых к отправке.")
+            triggerToast("Нет файлов, готовых к отправке.".localized)
             return
         }
         
         guard checkStockCredentials() else {
-            triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!")
+            triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!".localized)
             return
         }
         
@@ -190,7 +198,7 @@ class QueueViewModel: ObservableObject {
         let maxStreams = UserDefaults.standard.integer(forKey: "sys_parallel_streams")
         let streamLimit = maxStreams > 0 ? maxStreams : 3
         
-        triggerToast("Началась отправка \(readyPhotos.count) файлов (\(streamLimit) потока)...")
+        triggerToast("Началась отправка".localized + " \(readyPhotos.count) " + "файлов".localized + " (\(streamLimit) " + getStreamWord(streamLimit).localized + ")...")
         
         for photo in readyPhotos {
             let pId = photo.id
@@ -228,12 +236,20 @@ class QueueViewModel: ObservableObject {
                                 self.photos[index].status = .success
                                 self.photos[index].uploadProgress = 1.0
                                 self.triggerToast("Файл \(self.photos[index].filename) успешно загружен!")
+                                NotificationHelper.sendNotification(
+                                    title: "Успешная выгрузка".localized,
+                                    body: "Файл".localized + " \(self.photos[index].filename) " + "успешно загружен!".localized
+                                )
                             }
                         } catch {
                             if let index = self.photos.firstIndex(where: { $0.id == pId }) {
                                 self.photos[index].status = .error
                                 self.photos[index].errorMessage = error.localizedDescription
                                 self.triggerToast("Ошибка: \(self.photos[index].filename): \(error.localizedDescription)")
+                                NotificationHelper.sendNotification(
+                                    title: "Ошибка выгрузки".localized,
+                                    body: "Файл".localized + " \(self.photos[index].filename): \(error.localizedDescription)"
+                                )
                             }
                         }
                         
@@ -257,6 +273,14 @@ class QueueViewModel: ObservableObject {
         // Embed metadata (Title, Description, Keywords, Categories) into the image bytes
         let preparedData = writeMetadata(to: data, title: photo.title, description: photo.description, keywords: photo.keywords, categories: photo.categories) ?? data
         
+        var finalData = preparedData
+        if UserDefaults.standard.bool(forKey: "sys_compress_jpeg") {
+            if let uiImage = UIImage(data: preparedData),
+               let compressed = uiImage.jpegData(compressionQuality: 0.85) {
+                finalData = writeMetadata(to: compressed, title: photo.title, description: photo.description, keywords: photo.keywords, categories: photo.categories) ?? compressed
+            }
+        }
+        
         // Load active platforms
         guard let platformsData = UserDefaults.standard.data(forKey: "stock_platforms"),
               let platforms = try? JSONDecoder().decode([StockPlatform].self, from: platformsData) else {
@@ -276,7 +300,7 @@ class QueueViewModel: ObservableObject {
         if pcServerEnabled {
             let pcAddress = UserDefaults.standard.string(forKey: "sys_pc_server_address") ?? "192.168.1.50:5000"
             try await uploadViaPCServer(
-                data: preparedData,
+                data: finalData,
                 filename: photo.filename,
                 pcAddress: pcAddress,
                 activePlatforms: activePlatforms,
@@ -287,6 +311,8 @@ class QueueViewModel: ObservableObject {
         
         var uploadErrors: [String] = []
         var successCount = 0
+        
+        let maxAttempts = UserDefaults.standard.bool(forKey: "sys_retry_on_fail") ? 3 : 1
         
         // Upload to each active platform
         for platform in activePlatforms {
@@ -300,20 +326,35 @@ class QueueViewModel: ObservableObject {
             
             // FTPClient теперь сам определяет протокол по хосту (ftp/ftps/sftp)
             // Передаём оригинальный host как есть
-            do {
-                // FTPSecureClient использует BSD-сокеты + SecureTransport
-                // с SSLSetPeerID для TLS Session Resumption (решает проблему Shutterstock)
-                try await FTPSecureClient.upload(
-                    data: preparedData,
-                    filename: photo.filename,
-                    host: platform.host,
-                    port: 21,
-                    username: platform.username,
-                    password: password,
-                    progress: progress
-                )
-                successCount += 1
-            } catch {
+            var attempts = 0
+            var uploadError: Error? = nil
+            
+            while attempts < maxAttempts {
+                do {
+                    // FTPSecureClient использует BSD-сокеты + SecureTransport
+                    // с SSLSetPeerID для TLS Session Resumption (решает проблему Shutterstock)
+                    try await FTPSecureClient.upload(
+                        data: finalData,
+                        filename: photo.filename,
+                        host: platform.host,
+                        port: 21,
+                        username: platform.username,
+                        password: password,
+                        progress: progress
+                    )
+                    successCount += 1
+                    uploadError = nil
+                    break
+                } catch {
+                    attempts += 1
+                    uploadError = error
+                    if attempts < maxAttempts {
+                        try? await Task.sleep(nanoseconds: 2_000_000_000) // Wait 2s before retry
+                    }
+                }
+            }
+            
+            if let error = uploadError {
                 uploadErrors.append("\(platform.name): \(error.localizedDescription)")
             }
         }
@@ -609,6 +650,7 @@ class QueueViewModel: ObservableObject {
 // MARK: - Upload Queue View
 @MainActor
 struct UploadQueueView: View {
+    @Environment(\.colorScheme) var colorScheme
     @ObservedObject var viewModel: QueueViewModel
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var searchText = ""
@@ -822,7 +864,7 @@ struct UploadQueueView: View {
                                 .font(.system(size: 12, weight: .black))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
-                                .background(.ultraThinMaterial)
+                                .background(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.06))
                                 .foregroundStyle(.primary)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                                 .overlay(
@@ -850,10 +892,7 @@ struct UploadQueueView: View {
                             .padding(.horizontal, 18)
                             .padding(.vertical, 12)
                             .background(
-                                ZStack {
-                                    Color.black.opacity(0.4)
-                                    Rectangle().fill(.ultraThinMaterial)
-                                }
+                                colorScheme == .dark ? Color(hex: "2C2C2E") : Color(hex: "E5E5EA")
                             )
                             .foregroundStyle(.primary)
                             .clipShape(Capsule())

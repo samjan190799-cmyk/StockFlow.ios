@@ -24,13 +24,10 @@ struct SmartStockApp: App {
             }
         }
         
-        // Настройка TabBar для соответствия стилю Glassmorphism в обеих темах
+        // Настройка TabBar для соответствия нео-минималистичному стилю
         let appearance = UITabBarAppearance()
         appearance.configureWithDefaultBackground()
-        appearance.backgroundColor = .clear
-        appearance.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
-        appearance.shadowColor = UIColor.separator.withAlphaComponent(0.3)
-        appearance.shadowImage = UIImage()
+        appearance.shadowColor = UIColor.separator.withAlphaComponent(0.12)
         
         let activeColor = UIColor(red: 124/255, green: 58/255, blue: 237/255, alpha: 1.0)
         let normalColor = UIColor.secondaryLabel
@@ -42,6 +39,11 @@ struct SmartStockApp: App {
         
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
+        
+        // Запрос авторизации для уведомлений при запуске
+        if UserDefaults.standard.bool(forKey: "sys_notifications") {
+            NotificationHelper.requestAuthorization()
+        }
     }
     
     @State private var displayLinkHelper = DisplayLinkHelper()
