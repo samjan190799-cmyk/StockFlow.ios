@@ -93,8 +93,7 @@ final class AIManager: Sendable {
         }
         
         guard httpResponse.statusCode == 200 else {
-            let errorText = String(data: data, encoding: .utf8) ?? "Неизвестная ошибка"
-            throw NSError(domain: "AIManager", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Gemini API Error (\(httpResponse.statusCode)): \(errorText)"])
+            throw parseGeminiError(statusCode: httpResponse.statusCode, data: data)
         }
         
         // Parse Gemini response structure
@@ -152,8 +151,7 @@ final class AIManager: Sendable {
         }
         
         guard httpResponse.statusCode == 200 else {
-            let errorText = String(data: data, encoding: .utf8) ?? "Неизвестная ошибка"
-            throw NSError(domain: "AIManager", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "OpenAI API Error (\(httpResponse.statusCode)): \(errorText)"])
+            throw parseOpenAIError(statusCode: httpResponse.statusCode, data: data)
         }
         
         // Parse OpenAI response structure
@@ -254,5 +252,68 @@ final class AIManager: Sendable {
             
             return AIResult(title: title, description: description, keywords: keywords, categories: categories)
         }
+    }
+    
+    // MARK: - Обработка ошибок API
+    private func parseGeminiError(statusCode: Int, data: Data) -> Error {
+        let defaultMessage = "Gemini API Error (\(statusCode))"
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let errorObj = json["error"] as? [String: Any] else {
+            let errorText = String(data: data, encoding: .utf8) ?? "Неизвестная ошибка"
+            return NSError(domain: "AIManager", code: statusCode, userInfo: [NSLocalizedDescriptionKey: "\(defaultMessage): \(errorText)"])
+        }
+        
+        let rawMessage = errorObj["message"] as? String ?? ""
+        let status = errorObj["status"] as? String ?? ""
+        
+        var userFriendlyMessage = ""
+        
+        if statusCode == 429 || status == "RESOURCE_EXHAUSTED" {
+            userFriendlyMessage = "Превышена квота запросов (429: Resource Exhausted). Вы исчерпали лимит бесплатных запросов к Gemini API для модели gemini-2.5-flash."
+            
+            // Извлечение времени ожидания, если оно указано в сообщении (например: "Please retry in 52.059407285s.")
+            if let range = rawMessage.range(of: "Please retry in ([0-9\\.]+s|[0-9\\.]+ seconds)", options: .regularExpression) {
+                let retrySubstring = rawMessage[range]
+                let cleanTime = retrySubstring
+                    .replacingOccurrences(of: "Please retry in ", with: "")
+                    .replacingOccurrences(of: "s", with: " сек")
+                userFriendlyMessage += " Пожалуйста, повторите попытку через \(cleanTime) или проверьте настройки лимитов/оплаты в Google AI Studio."
+            } else {
+                userFriendlyMessage += " Пожалуйста, подождите перед повторной отправкой или проверьте настройки ключа/оплаты в Google AI Studio."
+            }
+        } else if statusCode == 400 {
+            userFriendlyMessage = "Некорректный запрос (400). Возможно, передан неверный API-ключ или параметры запроса."
+            if rawMessage.contains("API key not valid") {
+                userFriendlyMessage = "Недействительный API-ключ Gemini. Проверьте правильность ключа в настройках приложения."
+            }
+        } else {
+            userFriendlyMessage = "Ошибка Gemini API (\(statusCode)): \(rawMessage)"
+        }
+        
+        return NSError(domain: "AIManager", code: statusCode, userInfo: [NSLocalizedDescriptionKey: userFriendlyMessage])
+    }
+    
+    private func parseOpenAIError(statusCode: Int, data: Data) -> Error {
+        let defaultMessage = "OpenAI API Error (\(statusCode))"
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let errorObj = json["error"] as? [String: Any] else {
+            let errorText = String(data: data, encoding: .utf8) ?? "Неизвестная ошибка"
+            return NSError(domain: "AIManager", code: statusCode, userInfo: [NSLocalizedDescriptionKey: "\(defaultMessage): \(errorText)"])
+        }
+        
+        let rawMessage = errorObj["message"] as? String ?? ""
+        let code = errorObj["code"] as? String ?? ""
+        
+        var userFriendlyMessage = ""
+        
+        if statusCode == 401 || code == "invalid_api_key" {
+            userFriendlyMessage = "Недействительный API-ключ OpenAI. Пожалуйста, проверьте правильность ключа в настройках."
+        } else if statusCode == 429 {
+            userFriendlyMessage = "Превышена квота или лимит запросов OpenAI (429). Проверьте баланс вашего аккаунта OpenAI."
+        } else {
+            userFriendlyMessage = "Ошибка OpenAI API (\(statusCode)): \(rawMessage)"
+        }
+        
+        return NSError(domain: "AIManager", code: statusCode, userInfo: [NSLocalizedDescriptionKey: userFriendlyMessage])
     }
 }
