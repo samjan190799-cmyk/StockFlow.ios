@@ -31,6 +31,7 @@ struct SystemSettingsView: View {
     
     @State private var isSigningIn = false
     @State private var showingSavedToast = false
+    @State private var savedToastMessage = "Настройки сохранены!"
     @State private var showSimulatedAuthSheet = false
     @State private var selectedProviderForAuth = ""
     
@@ -49,6 +50,7 @@ struct SystemSettingsView: View {
                             pickerRow("Язык интерфейса", selection: $sysLanguage, options: ["Русский", "English"])
                             
                             Divider().background(Color.primary.opacity(0.08))
+
                             
                             pickerRow("Тема оформления", selection: $sysTheme, options: ["Темная", "Светлая", "Системная"])
                             
@@ -219,7 +221,7 @@ struct SystemSettingsView: View {
                                                         self.userEmail = appleIDCredential.email ?? "samvel.dev@icloud.com"
                                                         self.userProvider = "Apple"
                                                         self.isUserSignedIn = true
-                                                        self.saveSettings()
+                                                        self.showToast("Успешный вход через Apple!")
                                                     }
                                                 case .failure(let error):
                                                     print("Apple Sign In failed: \(error.localizedDescription)")
@@ -283,28 +285,46 @@ struct SystemSettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .overlay(alignment: .bottom) {
                 if showingSavedToast {
-                    Text(isUserSignedIn ? "Успешная авторизация!" : "Настройки успешно сохранены!")
-                        .font(.system(size: 13, weight: .semibold))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(.ultraThinMaterial)
-                        .foregroundStyle(.primary)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
-                        .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
-                        .padding(.bottom, 20)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.green)
+                        Text(savedToastMessage)
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial)
+                    .foregroundStyle(.primary)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                    .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
+                    .padding(.bottom, 20)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .onChange(of: bgScheduler) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: autoUpscale) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: autoUpscale) { newVal in
+                HapticHelper.trigger(.light)
+                showToast(newVal ? "Авто-апскейл включён — работает при добавлении фото" : "Авто-апскейл отключён")
+            }
             .onChange(of: retryOnFail) { _ in HapticHelper.trigger(.light) }
             .onChange(of: compressJpeg) { _ in HapticHelper.trigger(.light) }
             .onChange(of: sysNotifications) { _ in HapticHelper.trigger(.light) }
             .onChange(of: sysTheme) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: sysLanguage) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: sysFps) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: parallelStreams) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: sysLanguage) { newLang in
+                HapticHelper.trigger(.medium)
+                showToast(newLang == "English" ? "Language changed to English" : "Язык изменён на Русский")
+            }
+            .onChange(of: sysFps) { newFps in
+                HapticHelper.trigger(.light)
+                let label = newFps.contains("120") ? "120 FPS" : newFps.contains("30") ? "30 FPS" : "60 FPS"
+                showToast("Частота кадров: \(label) — применится при запуске")
+            }
+            .onChange(of: parallelStreams) { newVal in
+                HapticHelper.trigger(.light)
+                showToast("Параллельные потоки: \(newVal) — применится при следующей загрузке")
+            }
             .onChange(of: upscaleThreshold) { _ in HapticHelper.trigger(.light) }
             .onChange(of: upscaleFactor) { _ in HapticHelper.trigger(.light) }
             .onChange(of: pcServerEnabled) { _ in HapticHelper.trigger(.light) }
@@ -332,7 +352,7 @@ struct SystemSettingsView: View {
                         self.userEmail = email
                         self.userProvider = selectedProviderForAuth
                         self.isUserSignedIn = true
-                        self.saveSettings()
+                        self.showToast("Успешный вход через \(selectedProviderForAuth)!")
                     }
                 )
             }
@@ -375,12 +395,17 @@ struct SystemSettingsView: View {
     }
     
     private func saveSettings() {
-        withAnimation {
+        showToast("Настройки успешно сохранены!")
+    }
+    
+    private func showToast(_ message: String) {
+        savedToastMessage = message
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             showingSavedToast = true
         }
         Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            withAnimation {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            withAnimation(.easeOut(duration: 0.3)) {
                 showingSavedToast = false
             }
         }

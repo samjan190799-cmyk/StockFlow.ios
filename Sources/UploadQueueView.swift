@@ -186,7 +186,11 @@ class QueueViewModel: ObservableObject {
             return
         }
         
-        triggerToast("Началась отправка \(readyPhotos.count) файлов...")
+        // Читаем лимит параллельных потоков из настроек (по умолчанию 3)
+        let maxStreams = UserDefaults.standard.integer(forKey: "sys_parallel_streams")
+        let streamLimit = maxStreams > 0 ? maxStreams : 3
+        
+        triggerToast("Началась отправка \(readyPhotos.count) файлов (\(streamLimit) потока)...")
         
         for photo in readyPhotos {
             let pId = photo.id
@@ -195,35 +199,52 @@ class QueueViewModel: ObservableObject {
                 self.photos[idx].uploadProgress = 0.0
                 self.photos[idx].errorMessage = nil
             }
+        }
+        
+        Task { @MainActor in
+            // Простой семафор на основе actor для ограничения параллелизма
+            let semaphore = UploadSemaphore(limit: streamLimit)
             
-            Task {
-                do {
-                    guard let currentPhoto = self.photos.first(where: { $0.id == pId }) else { return }
-                    try await performRealUpload(for: currentPhoto) { progress in
-                        _ = Task { @MainActor in
+            await withTaskGroup(of: Void.self) { group in
+                for photo in readyPhotos {
+                    let pId = photo.id
+                    group.addTask { @MainActor in
+                        await semaphore.wait()
+                        
+                        do {
+                            guard let currentPhoto = self.photos.first(where: { $0.id == pId }) else {
+                                await semaphore.signal()
+                                return
+                            }
+                            try await self.performRealUpload(for: currentPhoto) { progress in
+                                _ = Task { @MainActor in
+                                    if let index = self.photos.firstIndex(where: { $0.id == pId }) {
+                                        self.photos[index].uploadProgress = progress
+                                    }
+                                }
+                            }
+                            
                             if let index = self.photos.firstIndex(where: { $0.id == pId }) {
-                                self.photos[index].uploadProgress = progress
+                                self.photos[index].status = .success
+                                self.photos[index].uploadProgress = 1.0
+                                self.triggerToast("Файл \(self.photos[index].filename) успешно загружен!")
+                            }
+                        } catch {
+                            if let index = self.photos.firstIndex(where: { $0.id == pId }) {
+                                self.photos[index].status = .error
+                                self.photos[index].errorMessage = error.localizedDescription
+                                self.triggerToast("Ошибка: \(self.photos[index].filename): \(error.localizedDescription)")
                             }
                         }
-                    }
-                    
-                    if let index = self.photos.firstIndex(where: { $0.id == pId }) {
-                        self.photos[index].status = .success
-                        self.photos[index].uploadProgress = 1.0
-                        self.triggerToast("Файл \(self.photos[index].filename) успешно загружен на стоки!")
-                    }
-                } catch {
-                    if let index = self.photos.firstIndex(where: { $0.id == pId }) {
-                        self.photos[index].status = .error
-                        self.photos[index].errorMessage = error.localizedDescription
-                        self.triggerToast("Ошибка выгрузки \(self.photos[index].filename): \(error.localizedDescription)")
+                        
+                        await semaphore.signal()
                     }
                 }
-                
-                let remaining = self.photos.filter { $0.status == .uploading }.count
-                if remaining == 0 {
-                    self.triggerToast("Все файлы обработаны!")
-                }
+            }
+            
+            let remaining = self.photos.filter { $0.status == .uploading }.count
+            if remaining == 0 {
+                self.triggerToast("Все файлы обработаны!")
             }
         }
     }
@@ -1185,6 +1206,46 @@ struct UploadQueueView: View {
                         
                         let randomNum = Int.random(in: 1000...9999)
                         let filename = "IMG_\(randomNum).JPG"
+                        
+                        // Авто-апскейл: применяем только если настройка включена
+                        let autoUpscaleEnabled = UserDefaults.standard.bool(forKey: "sys_auto_upscale")
+                        if autoUpscaleEnabled {
+                            let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? ""
+                            let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? ""
+                            
+                            // Определяем порог в МБ
+                            let thresholdMB: Double
+                            if thresholdStr.contains("2 МБ") {
+                                thresholdMB = 2.0
+                            } else if thresholdStr.contains("8 МБ") {
+                                thresholdMB = 8.0
+                            } else {
+                                thresholdMB = 4.0 // Рекомендуется
+                            }
+                            
+                            let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
+                            if sizeMB < thresholdMB, let uiImage = UIImage(data: finalData) {
+                                // Определяем коэффициент масштабирования
+                                let scale: CGFloat = factorStr.contains("4x") ? 4.0 : 2.0
+                                let newSize = CGSize(
+                                    width: uiImage.size.width * scale,
+                                    height: uiImage.size.height * scale
+                                )
+                                UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+                                uiImage.draw(in: CGRect(origin: .zero, size: newSize))
+                                let upscaled = UIGraphicsGetImageFromCurrentImageContext()
+                                UIGraphicsEndImageContext()
+                                
+                                if let upscaled = upscaled,
+                                   let upscaledData = upscaled.jpegData(compressionQuality: 0.92) {
+                                    finalData = upscaledData
+                                    Task { @MainActor in
+                                        FTPTranscriptLogger.shared.logInfo("[Upscale] Авто-апскейл \(String(format: "%.1f", sizeMB)) МБ → \(String(format: "%.1f", Double(upscaledData.count)/1024/1024)) МБ (\(Int(scale))x, бикубика)")
+                                    }
+                                }
+                            }
+                        }
+                        
                         let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
                         let fileSizeStr = String(format: "%.2f МБ", sizeMB)
                         
@@ -1305,6 +1366,37 @@ struct FilterChip: View {
                 )
         }
         .buttonStyle(PremiumButtonStyle())
+    }
+}
+
+// MARK: - Upload Concurrency Semaphore (Actor-based, thread-safe)
+/// Ограничивает количество одновременных задач загрузки согласно настройке sys_parallel_streams
+actor UploadSemaphore {
+    private let limit: Int
+    private var running: Int = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    
+    init(limit: Int) {
+        self.limit = max(1, limit)
+    }
+    
+    func wait() async {
+        if running < limit {
+            running += 1
+        } else {
+            await withCheckedContinuation { continuation in
+                waiters.append(continuation)
+            }
+            running += 1
+        }
+    }
+    
+    func signal() {
+        running -= 1
+        if !waiters.isEmpty {
+            let next = waiters.removeFirst()
+            next.resume()
+        }
     }
 }
 

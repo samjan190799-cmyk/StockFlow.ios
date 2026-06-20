@@ -4,6 +4,8 @@ import UIKit
 @main
 struct SmartStockApp: App {
     @AppStorage("sys_theme") private var sysTheme: String = "Темная"
+    @AppStorage("sys_language") private var sysLanguage: String = "Русский"
+    @AppStorage("sys_fps") private var sysFps: String = "120 FPS (Ультра-плавность)"
     @StateObject private var viewModel = QueueViewModel()
     
     var colorScheme: ColorScheme? {
@@ -44,28 +46,63 @@ struct SmartStockApp: App {
     
     var body: some Scene {
         WindowGroup {
+            // id(sysLanguage) перестраивает всё дерево при смене языка — это единственный
+            // надёжный способ перерендерить .tabItem labels, которые вычисляются при инициализации
             TabView {
                 UploadQueueView(viewModel: viewModel)
                     .tabItem {
-                        Label("Очередь", systemImage: "tray.and.arrow.down")
+                        Label("Очередь".localized, systemImage: "tray.and.arrow.down")
                     }
                 
                 AIAssistantView()
                     .tabItem {
-                        Label("ИИ-Ассистент", systemImage: "sparkles")
+                        Label("ИИ-Ассистент".localized, systemImage: "sparkles")
                     }
                 
                 StockSettingsView()
                     .tabItem {
-                        Label("Стоки", systemImage: "network")
+                        Label("Стоки".localized, systemImage: "network")
                     }
                 
                 SystemSettingsView()
                     .tabItem {
-                        Label("Параметры", systemImage: "gearshape")
+                        Label("Параметры".localized, systemImage: "gearshape")
                     }
             }
+            .id(sysLanguage) // Перестраивает UI при смене языка
             .preferredColorScheme(colorScheme)
+            .onChange(of: sysFps) { newFps in
+                applyFrameRate(newFps)
+            }
+            .onAppear {
+                applyFrameRate(sysFps)
+            }
+        }
+    }
+    
+    /// Применяет ограничение FPS через CADisplayLink preferred frame rate
+    private func applyFrameRate(_ fpsSetting: String) {
+        let targetFps: Int
+        if fpsSetting.contains("120") {
+            targetFps = 120
+        } else if fpsSetting.contains("30") {
+            targetFps = 30
+        } else {
+            targetFps = 60
+        }
+        
+        // iOS 15+: устанавливаем preferredFrameRateRange для всех окон
+        if #available(iOS 15.0, *) {
+            let range = CAFrameRateRange(minimum: Float(min(targetFps, 30)),
+                                         maximum: Float(targetFps),
+                                         preferred: Float(targetFps))
+            for scene in UIApplication.shared.connectedScenes {
+                if let windowScene = scene as? UIWindowScene {
+                    for window in windowScene.windows {
+                        window.layer.preferredFrameRateRange = range
+                    }
+                }
+            }
         }
     }
 }
