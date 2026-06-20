@@ -260,6 +260,7 @@ struct ActiveSheetPlatformId: Identifiable, Sendable {
 
 // MARK: - Platform Detail Sheet
 struct PlatformDetailSheet: View {
+    @Environment(\.colorScheme) var colorScheme
     @Binding var platform: StockPlatform
     var isVerifying: Bool
     var onSave: () -> Void
