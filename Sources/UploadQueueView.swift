@@ -1036,16 +1036,9 @@ struct UploadQueueView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "person.crop.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(AppleTheme.primaryGradient)
-                            .neonShadow(color: Color(hex: "7C3AED"), radius: 4)
-                        
-                        Text("Галерея".localized)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
+                    Text("Галерея".localized)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.white)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {

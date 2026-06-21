@@ -384,7 +384,7 @@ struct SystemSettingsView: View {
             .onChange(of: sysFps) { newFps in
                 HapticHelper.trigger(.light)
                 let label = newFps.contains("120") ? "120 FPS" : newFps.contains("30") ? "30 FPS" : "60 FPS"
-                showToast("Частота кадров: ".localized + label + " — применится при запуске".localized)
+                showToast("Частота кадров изменена на ".localized + label)
             }
             .onChange(of: parallelStreams) { newVal in
                 HapticHelper.trigger(.light)

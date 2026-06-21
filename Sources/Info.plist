@@ -35,5 +35,9 @@
     <array>
         <string>com.samvel.smartstock.backgroundRefresh</string>
     </array>
+    <key>CADisableMinimumFrameDurationOnPhone</key>
+    <true/>
+    <key>CADisableMinimumFrameDuration</key>
+    <true/>
 </dict>
 </plist>

@@ -218,7 +218,8 @@ struct Localizer {
         "Вы уверены, что хотите выйти из аккаунта?": "Are you sure you want to sign out?",
         "Выйти": "Sign Out",
         "Отмена": "Cancel",
-        "Войти с Google": "Sign In with Google"
+        "Войти с Google": "Sign In with Google",
+        "Частота кадров изменена на ": "Frame rate changed to "
     ]
     
     private static let hyTranslations: [String: String] = [
@@ -428,7 +429,8 @@ struct Localizer {
         "Вы уверены, что хотите выйти из аккаунта?": "Համոզվա՞ծ եք, որ ցանկանում եք դուրս գալ հաշվից:",
         "Выйти": "Դուրս գալ",
         "Отмена": "Չեղարկել",
-        "Войти с Google": "Մուտք Google-ով"
+        "Войти с Google": "Մուտք Google-ով",
+        "Частота кадров изменена на ": "Կադրերի հաճախականությունը փոխվել է՝ "
     ]
     
     static func translate(_ text: String, to lang: String) -> String {
