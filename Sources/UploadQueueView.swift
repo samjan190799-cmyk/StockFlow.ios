@@ -6,6 +6,8 @@ import UIKit
 // MARK: - Queue View Model (MainActor Isolated, Safe Concurrency)
 @MainActor
 class QueueViewModel: ObservableObject {
+    static var shared: QueueViewModel? = nil
+    
     @Published var photos: [PhotoMetadata] = [] {
         didSet {
             savePhotosToDisk()
@@ -29,6 +31,7 @@ class QueueViewModel: ObservableObject {
     
     init() {
         loadPhotosFromDisk()
+        QueueViewModel.shared = self
     }
     
     func savePhotosToDisk() {
@@ -136,6 +139,7 @@ class QueueViewModel: ObservableObject {
                 self.photos[idx].title = result.title
                 self.photos[idx].description = result.description
                 self.photos[idx].keywords = result.keywords
+                self.photos[idx].categories = result.categories ?? []
                 self.photos[idx].status = .ready
                 self.triggerToast("Анализ ИИ успешно завершен!")
             } catch {
@@ -194,6 +198,7 @@ class QueueViewModel: ObservableObject {
                                 self.photos[idx].title = result.title
                                 self.photos[idx].description = result.description
                                 self.photos[idx].keywords = result.keywords
+                                self.photos[idx].categories = result.categories ?? []
                                 self.photos[idx].status = .ready
                             }
                         } catch {

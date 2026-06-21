@@ -26,5 +26,14 @@
     <string>Приложению нужен доступ к Фото для выбора изображений для загрузки на фотостоки.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Приложению нужен доступ для сохранения обработанных фотографий.</string>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>processing</string>
+    </array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.samvel.smartstock.backgroundRefresh</string>
+    </array>
 </dict>
 </plist>

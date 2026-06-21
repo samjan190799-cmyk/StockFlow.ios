@@ -10,6 +10,10 @@ struct SystemSettingsView: View {
     @AppStorage("sys_fps") private var sysFps: String = "120 FPS (Ультра-плавность)"
     @AppStorage("sys_bg_scheduler") private var bgScheduler: Bool = false
     
+    @AppStorage("sys_scheduler_folder_name") private var folderName: String = ""
+    @AppStorage("sys_scheduler_interval_hours") private var schedulerIntervalHours: Int = 1
+    @AppStorage("sys_scheduler_last_run") private var lastRunTimestamp: Double = 0.0
+    
     // Right Column settings
     @AppStorage("sys_auto_upscale") private var autoUpscale: Bool = false
     @AppStorage("sys_upscale_threshold") private var upscaleThreshold: String = "Меньше 4 МБ (Рекомендуется)"
@@ -34,6 +38,9 @@ struct SystemSettingsView: View {
     @State private var savedToastMessage = "Настройки сохранены!"
     @State private var showSimulatedAuthSheet = false
     @State private var selectedProviderForAuth = ""
+    
+    @State private var showFolderPicker = false
+    @State private var isRunningScheduler = false
     
     var body: some View {
         NavigationStack {
@@ -65,13 +72,102 @@ struct SystemSettingsView: View {
                         .glassCard()
                         
                         // SECTION 2: Scheduler
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 12) {
                             sectionHeader("Планировщик".localized)
                             
                             Toggle("Фоновый планировщик выгрузки".localized, isOn: $bgScheduler)
                                 .tint(Color(hex: "7C3AED"))
                             
-                            Text("При активации планировщика система будет проверять новые фото и отправлять их в фоновом режиме.".localized)
+                            if bgScheduler {
+                                Divider().background(Color.primary.opacity(0.08))
+                                
+                                // Выбор папки
+                                Button(action: {
+                                    HapticHelper.trigger(.light)
+                                    showFolderPicker = true
+                                }) {
+                                    HStack {
+                                        Text("Папка для импорта".localized)
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(.primary)
+                                        Spacer()
+                                        Text(folderName.isEmpty ? "Выбрать...".localized : folderName)
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                        Image(systemName: "folder.badge.gearshape")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(Color(hex: "7C3AED"))
+                                    }
+                                }
+                                
+                                Divider().background(Color.primary.opacity(0.08))
+                                
+                                // Интервал
+                                Menu {
+                                    Picker("", selection: $schedulerIntervalHours) {
+                                        ForEach([1, 2, 4, 8, 12, 24], id: \.self) { hr in
+                                            Text("Каждые".localized + " \(hr) " + getHoursWord(hr).localized).tag(hr)
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text("Интервал проверки".localized)
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(.primary)
+                                        Spacer()
+                                        Text("Каждые".localized + " \(schedulerIntervalHours) " + getHoursWord(schedulerIntervalHours).localized)
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(.secondary)
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                
+                                Divider().background(Color.primary.opacity(0.08))
+                                
+                                // Информация о последнем запуске
+                                HStack {
+                                    Text("Последний запуск".localized)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Text(lastRunText)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                }
+                                
+                                Divider().background(Color.primary.opacity(0.08))
+                                
+                                // Кнопка ручного запуска
+                                Button(action: {
+                                    HapticHelper.trigger(.medium)
+                                    runSchedulerNow()
+                                }) {
+                                    HStack {
+                                        if isRunningScheduler {
+                                            ProgressView()
+                                                .tint(.white)
+                                                .controlSize(.small)
+                                                .padding(.trailing, 6)
+                                        } else {
+                                            Image(systemName: "play.fill")
+                                                .font(.system(size: 12))
+                                        }
+                                        Text(isRunningScheduler ? "Запуск проверки...".localized : "Запустить проверку сейчас".localized)
+                                            .font(.system(size: 13, weight: .bold))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(AppleTheme.primaryGradient.opacity(isRunningScheduler ? 0.6 : 1.0))
+                                    .foregroundStyle(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
+                                .disabled(isRunningScheduler || folderName.isEmpty)
+                            }
+                            
+                            Text("При активации планировщика система будет проверять новые фото в выбранной папке и отправлять их в фоновом режиме.".localized)
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                         }
@@ -303,7 +399,16 @@ struct SystemSettingsView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .onChange(of: bgScheduler) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: bgScheduler) { newVal in
+                HapticHelper.trigger(.light)
+                SchedulerManager.shared.setSchedulerEnabled(newVal)
+            }
+            .onChange(of: schedulerIntervalHours) { _ in
+                HapticHelper.trigger(.light)
+                if bgScheduler {
+                    SchedulerManager.shared.scheduleNextBackgroundTask()
+                }
+            }
             .onChange(of: autoUpscale) { newVal in
                 HapticHelper.trigger(.light)
                 showToast(newVal ? "Авто-апскейл включён — работает при добавлении фото" : "Авто-апскейл отключён")
@@ -369,6 +474,28 @@ struct SystemSettingsView: View {
                         self.showToast("Успешный вход через \(selectedProviderForAuth)!")
                     }
                 )
+            }
+            .sheet(isPresented: $showFolderPicker) {
+                FolderPicker { url in
+                    do {
+                        guard url.startAccessingSecurityScopedResource() else {
+                            showToast("Не удалось получить доступ к папке".localized)
+                            return
+                        }
+                        defer { url.stopAccessingSecurityScopedResource() }
+                        
+                        let bookmarkData = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
+                        UserDefaults.standard.set(bookmarkData, forKey: "sys_scheduler_folder_bookmark")
+                        
+                        self.folderName = url.lastPathComponent
+                        
+                        showToast("Папка успешно выбрана: ".localized + url.lastPathComponent)
+                    } catch {
+                        showToast("Ошибка сохранения папки: ".localized + error.localizedDescription)
+                    }
+                } onCancel: {
+                    // Отмена
+                }
             }
         }
     }
@@ -460,6 +587,35 @@ struct SystemSettingsView: View {
     private func signInWithGoogle() {
         selectedProviderForAuth = "Google"
         showSimulatedAuthSheet = true
+    }
+    
+    
+    private var lastRunText: String {
+        if lastRunTimestamp == 0 {
+            return "Еще не запускался".localized
+        }
+        let date = Date(timeIntervalSince1970: lastRunTimestamp)
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .medium
+        return formatter.string(from: date)
+    }
+    
+    private func getHoursWord(_ count: Int) -> String {
+        switch count {
+        case 1: return "час"
+        case 2, 3, 4: return "часа"
+        default: return "часов"
+        }
+    }
+    
+    private func runSchedulerNow() {
+        isRunningScheduler = true
+        Task {
+            await SchedulerManager.shared.runSchedulerUploadCycle()
+            isRunningScheduler = false
+            showToast("Проверка папки завершена!")
+        }
     }
     
     private func signOut() {

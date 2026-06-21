@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import BackgroundTasks
 
 @main
 struct SmartStockApp: App {
@@ -46,6 +47,9 @@ struct SmartStockApp: App {
         if UserDefaults.standard.bool(forKey: "sys_notifications") {
             NotificationHelper.requestAuthorization()
         }
+        
+        // Регистрация фонового планировщика
+        SchedulerManager.shared.registerBackgroundTask()
     }
     
     @State private var displayLinkHelper = DisplayLinkHelper()
