@@ -317,7 +317,7 @@ struct InsightsView: View {
                     }
                     
                     path.addLine(to: CGPoint(x: width, y: height))
-                    path.close()
+                    path.closeSubpath()
                 }
                 .fill(
                     LinearGradient(
