@@ -288,7 +288,7 @@ struct AuthView: View {
         case .success(let authorization):
             if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
                 let email = appleIDCredential.email ?? "apple.user@icloud.com"
-                HapticHelper.trigger(.success)
+                HapticHelper.notification(.success)
                 isLoading = true
                 
                 Task {
@@ -316,7 +316,7 @@ struct AuthView: View {
         Task {
             do {
                 _ = try await authManager.loginWithGoogle()
-                HapticHelper.trigger(.success)
+                HapticHelper.notification(.success)
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -324,3 +324,4 @@ struct AuthView: View {
         }
     }
 }
+
