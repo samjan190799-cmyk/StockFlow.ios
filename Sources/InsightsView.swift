@@ -1,4 +1,5 @@
 import SwiftUI
+import SafariServices
 
 // MARK: - Модели данных для статистики
 struct EarningPoint: Identifiable, Sendable {
@@ -17,36 +18,38 @@ struct AgencyPerformance: Identifiable, Sendable {
     let isPositive: Bool
     let statusText: String
     let statusColor: Color
+    let loginUrl: String
 }
 
 struct InsightsView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedPeriod = "30D"
     @State private var animateChart = false
+    @State private var activeURL: URL? = nil
     
-    // Демонстрационные данные для разных периодов
+    // Обнуленные демонстрационные данные для разных периодов
     private let data7D = [
-        EarningPoint(date: "15 ИЮН", value: 120.0),
-        EarningPoint(date: "16 ИЮН", value: 180.0),
-        EarningPoint(date: "17 ИЮН", value: 140.0),
-        EarningPoint(date: "18 ИЮН", value: 290.0),
-        EarningPoint(date: "19 ИЮН", value: 210.0),
-        EarningPoint(date: "20 ИЮН", value: 340.0),
-        EarningPoint(date: "21 ИЮН", value: 310.0)
+        EarningPoint(date: "15 ИЮН", value: 0.0),
+        EarningPoint(date: "16 ИЮН", value: 0.0),
+        EarningPoint(date: "17 ИЮН", value: 0.0),
+        EarningPoint(date: "18 ИЮН", value: 0.0),
+        EarningPoint(date: "19 ИЮН", value: 0.0),
+        EarningPoint(date: "20 ИЮН", value: 0.0),
+        EarningPoint(date: "21 ИЮН", value: 0.0)
     ]
     
     private let data30D = [
-        EarningPoint(date: "01 MAY", value: 250.0),
-        EarningPoint(date: "08 MAY", value: 230.0),
-        EarningPoint(date: "15 MAY", value: 380.0),
-        EarningPoint(date: "22 MAY", value: 360.0),
-        EarningPoint(date: "31 MAY", value: 320.0)
+        EarningPoint(date: "01 MAY", value: 0.0),
+        EarningPoint(date: "08 MAY", value: 0.0),
+        EarningPoint(date: "15 MAY", value: 0.0),
+        EarningPoint(date: "22 MAY", value: 0.0),
+        EarningPoint(date: "31 MAY", value: 0.0)
     ]
     
     private let data90D = [
-        EarningPoint(date: "АПР", value: 950.0),
-        EarningPoint(date: "МАЙ", value: 1420.0),
-        EarningPoint(date: "ИЮН", value: 1890.0)
+        EarningPoint(date: "АПР", value: 0.0),
+        EarningPoint(date: "МАЙ", value: 0.0),
+        EarningPoint(date: "ИЮН", value: 0.0)
     ]
     
     // Текущие отображаемые точки в зависимости от выбранного периода
@@ -64,41 +67,45 @@ struct InsightsView: View {
             name: "Getty Images",
             iconName: "g.circle.fill",
             iconColor: Color(hex: "10B981"),
-            syncTime: "2 ч. назад",
-            amount: 120.0,
-            isPositive: true,
-            statusText: "Проверено",
-            statusColor: Color(hex: "10B981")
+            syncTime: "Еще не запускался",
+            amount: 0.0,
+            isPositive: false,
+            statusText: "Нужна настройка",
+            statusColor: Color(hex: "9CA3AF"),
+            loginUrl: "https://esp.gettyimages.com"
         ),
         AgencyPerformance(
             name: "Adobe Stock",
             iconName: "a.circle.fill",
             iconColor: Color(hex: "EF4444"),
-            syncTime: "5 ч. назад",
-            amount: 85.40,
+            syncTime: "Еще не запускался",
+            amount: 0.0,
             isPositive: false,
-            statusText: "В ожидании",
-            statusColor: Color(hex: "60A5FA")
+            statusText: "Нужна настройка",
+            statusColor: Color(hex: "9CA3AF"),
+            loginUrl: "https://contributor.adobestock.com"
         ),
         AgencyPerformance(
             name: "Shutterstock",
             iconName: "s.circle.fill",
             iconColor: Color(hex: "7C3AED"),
-            syncTime: "12 ч. назад",
-            amount: 245.15,
-            isPositive: true,
-            statusText: "Проверено",
-            statusColor: Color(hex: "10B981")
+            syncTime: "Еще не запускался",
+            amount: 0.0,
+            isPositive: false,
+            statusText: "Нужна настройка",
+            statusColor: Color(hex: "9CA3AF"),
+            loginUrl: "https://submit.shutterstock.com"
         ),
         AgencyPerformance(
-            name: "National Geographic",
-            iconName: "n.circle.fill",
+            name: "Alamy",
+            iconName: "a.circle",
             iconColor: Color(hex: "F59E0B"),
-            syncTime: "1 д. назад",
-            amount: 1420.0,
+            syncTime: "Еще не запускался",
+            amount: 0.0,
             isPositive: false,
-            statusText: "На удержании",
-            statusColor: Color(hex: "9CA3AF")
+            statusText: "Нужна настройка",
+            statusColor: Color(hex: "9CA3AF"),
+            loginUrl: "https://www.alamy.com/contributor"
         )
     ]
     
@@ -161,6 +168,15 @@ struct InsightsView: View {
                     }
                 }
             }
+            .sheet(isPresented: Binding(
+                get: { activeURL != nil },
+                set: { if !$0 { activeURL = nil } }
+            )) {
+                if let url = activeURL {
+                    SafariView(url: url)
+                        .ignoresSafeArea()
+                }
+            }
         }
     }
     
@@ -173,7 +189,7 @@ struct InsightsView: View {
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.secondary)
                     
-                    Text("$14,285.50")
+                    Text("$0.00")
                         .font(.system(size: 34, weight: .black))
                         .foregroundStyle(.primary)
                 }
@@ -200,7 +216,7 @@ struct InsightsView: View {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                     
-                    Text("+$2,410.20")
+                    Text("$0.00")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(Color(hex: "EC4899"))
                 }
@@ -213,13 +229,28 @@ struct InsightsView: View {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                     
-                    Text("$845.00")
+                    Text("$0.00")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.primary)
                 }
                 
                 Spacer()
             }
+            
+            Divider()
+                .background(Color.white.opacity(0.10))
+            
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color(hex: "7C3AED"))
+                Text("Нажмите на агентство ниже, чтобы зайти в личный кабинет через встроенный браузер.".localized)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+            }
+            .padding(.top, 2)
         }
         .glassCard(cornerRadius: 20, padding: 18)
         .neonShadow(color: Color(hex: "7C3AED").opacity(0.3), radius: 10)
@@ -374,58 +405,79 @@ struct InsightsView: View {
             
             VStack(spacing: 10) {
                 ForEach(agencies) { agency in
-                    HStack(spacing: 12) {
-                        // Логотип агентства в стеклянном стиле
-                        ZStack {
-                            Circle()
-                                .fill(agency.iconColor.opacity(0.12))
-                                .frame(width: 40, height: 40)
-                            
-                            Image(systemName: agency.iconName)
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundStyle(agency.iconColor)
+                    Button(action: {
+                        HapticHelper.trigger(.medium)
+                        if let url = URL(string: agency.loginUrl) {
+                            activeURL = url
                         }
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                        )
-                        .neonShadow(color: agency.iconColor, radius: 4)
-                        
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(agency.name)
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(.primary)
+                    }) {
+                        HStack(spacing: 12) {
+                            // Логотип агентства в стеклянном стиле
+                            ZStack {
+                                Circle()
+                                    .fill(agency.iconColor.opacity(0.12))
+                                    .frame(width: 40, height: 40)
+                                
+                                Image(systemName: agency.iconName)
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundStyle(agency.iconColor)
+                            }
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                            )
+                            .neonShadow(color: agency.iconColor, radius: 4)
                             
-                            Text("Синхронизация: ".localized + agency.syncTime.localized)
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        VStack(alignment: .trailing, spacing: 4) {
-                            // Сумма дохода
-                            Text((agency.isPositive ? "+" : "") + String(format: "$%.2f", agency.amount))
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(agency.isPositive ? Color(hex: "10B981") : .primary)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(agency.name)
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(.primary)
+                                
+                                Text("Синхронизация: ".localized + agency.syncTime.localized)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                            }
                             
-                            // Статус-плашка
-                            Text(agency.statusText.localized)
-                                .font(.system(size: 8, weight: .bold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(agency.statusColor.opacity(0.12))
-                                .foregroundStyle(agency.statusColor)
-                                .clipShape(Capsule())
-                                .overlay(
-                                    Capsule()
-                                        .stroke(agency.statusColor.opacity(0.3), lineWidth: 1)
-                                )
+                            Spacer()
+                            
+                            VStack(alignment: .trailing, spacing: 4) {
+                                // Сумма дохода
+                                Text((agency.isPositive ? "+" : "") + String(format: "$%.2f", agency.amount))
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(agency.isPositive ? Color(hex: "10B981") : .primary)
+                                
+                                // Статус-плашка
+                                Text(agency.statusText.localized)
+                                    .font(.system(size: 8, weight: .bold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(agency.statusColor.opacity(0.12))
+                                    .foregroundStyle(agency.statusColor)
+                                    .clipShape(Capsule())
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(agency.statusColor.opacity(0.3), lineWidth: 1)
+                                    )
+                            }
                         }
                     }
+                    .buttonStyle(PlainButtonStyle())
                     .glassCard(cornerRadius: 14, padding: 12)
                 }
             }
         }
     }
+}
+
+// MARK: - Встроенный браузер
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+    
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let controller = SFSafariViewController(url: url)
+        controller.preferredControlTintColor = UIColor(red: 124/255, green: 58/255, blue: 237/255, alpha: 1.0)
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
