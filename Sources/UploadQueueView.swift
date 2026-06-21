@@ -1224,7 +1224,7 @@ struct UploadQueueView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(photo.status == .success ? Color.white.opacity(0.04) : Color.white.opacity(0.08))
-                .foregroundStyle(photo.status == .success ? .secondary : .white)
+                .foregroundStyle(photo.status == .success ? Color.secondary : Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
