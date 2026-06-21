@@ -8,6 +8,7 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: Sources
+    entitlements: Sources/SmartStock.entitlements
     info:
       path: Sources/Info.plist
       properties:
