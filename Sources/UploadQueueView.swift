@@ -1105,68 +1105,85 @@ struct UploadQueueView: View {
     // MARK: - Photo Card Component (Макет 1)
     private func photoRow(_ photo: PhotoMetadata, index: Int) -> some View {
         VStack(spacing: 0) {
-            // Изображение с индикаторами статуса
-            ZStack(alignment: .topLeading) {
-                Group {
-                    if let uiImage = photo.uiImage {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: 200)
-                            .frame(maxWidth: .infinity)
-                            .clipped()
-                    } else {
-                        ZStack {
-                            Color.white.opacity(0.04)
-                            Image(systemName: "photo")
-                                .font(.system(size: 32))
-                                .foregroundStyle(.secondary)
-                        }
+            photoImage(photo)
+            photoProgressBar(photo)
+            photoButtons(photo, index: index)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color(hex: "0D0E15").opacity(0.55))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+    }
+    
+    private func photoImage(_ photo: PhotoMetadata) -> some View {
+        ZStack(alignment: .topLeading) {
+            Group {
+                if let uiImage = photo.uiImage {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
                         .frame(height: 200)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                } else {
+                    ZStack {
+                        Color.white.opacity(0.04)
+                        Image(systemName: "photo")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.secondary)
                     }
+                    .frame(height: 200)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                
-                // Статус READY (слева сверху)
-                if photo.status == .ready {
-                    Text("READY")
-                        .font(.system(size: 9, weight: .black))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color(hex: "223E4A").opacity(0.85))
-                        .foregroundStyle(Color(hex: "81E6D9"))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            
+            // Статус READY (слева сверху)
+            if photo.status == .ready {
+                Text("READY")
+                    .font(.system(size: 9, weight: .black))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color(hex: "223E4A").opacity(0.85))
+                    .foregroundStyle(Color(hex: "81E6D9"))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(12)
+            }
+            
+            // Иконка УСПЕШНО (справа сверху)
+            if photo.status == .success {
+                HStack {
+                    Spacer()
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Color(hex: "10B981"))
+                        .background(Color.black.clipShape(Circle()))
+                        .neonShadow(color: Color(hex: "10B981"), radius: 4)
                         .padding(12)
-                }
-                
-                // Иконка УСПЕШНО (справа сверху)
-                if photo.status == .success {
-                    HStack {
-                        Spacer()
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundStyle(Color(hex: "10B981"))
-                            .background(Color.black.clipShape(Circle()))
-                            .neonShadow(color: Color(hex: "10B981"), radius: 4)
-                            .padding(12)
-                    }
-                }
-                
-                // Иконка СИНХРОНИЗАЦИИ / ЗАГРУЗКИ (справа сверху)
-                if photo.status == .uploading {
-                    HStack {
-                        Spacer()
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(6)
-                            .background(Color.black.opacity(0.6).clipShape(Circle()))
-                            .padding(12)
-                    }
                 }
             }
             
-            // Тонкая линия прогресса непосредственно под картинкой
+            // Иконка СИНХРОНИЗАЦИИ / ЗАГРУЗКИ (справа сверху)
+            if photo.status == .uploading {
+                HStack {
+                    Spacer()
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(6)
+                        .background(Color.black.opacity(0.6).clipShape(Circle()))
+                        .padding(12)
+                }
+            }
+        }
+    }
+    
+    private func photoProgressBar(_ photo: PhotoMetadata) -> some View {
+        Group {
             if photo.status == .uploading {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -1187,97 +1204,89 @@ struct UploadQueueView: View {
                 }
                 .frame(height: 3)
             }
-            
-            // Панель кнопок под картинкой
-            HStack(spacing: 12) {
-                // Кнопка SEND / SENT
-                Button(action: {
-                    if photo.status != .success {
-                        HapticHelper.trigger(.medium)
-                        viewModel.uploadPhoto(photo.id)
-                    }
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: photo.status == .success ? "checkmark" : "paperplane")
-                        Text(photo.status == .success ? "SENT" : "SEND")
-                    }
-                    .font(.system(size: 10, weight: .bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(photo.status == .success ? Color.white.opacity(0.04) : Color.white.opacity(0.08))
-                    .foregroundStyle(photo.status == .success ? .secondary : .white)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                    )
-                }
-                .disabled(photo.status == .success)
-                
-                // Кнопка FILL DATA / VIEW DATA
-                Button(action: {
-                    HapticHelper.trigger(.medium)
-                    selectedDetailPhoto = photo
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: (photo.status == .ready || photo.status == .success) ? "eye" : "list.bullet.indent")
-                        Text((photo.status == .ready || photo.status == .success) ? "VIEW DATA" : "FILL DATA")
-                    }
-                    .font(.system(size: 10, weight: .bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.08))
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                    )
-                }
-                
-                // Кнопка STOCKS
-                Button(action: {
-                    HapticHelper.trigger(.medium)
-                    editingPhoto = ActiveSheetPhoto(id: photo.id, photos: viewModel.photos, index: index)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: photo.status == .success ? "folder" : "checkmark.square")
-                        Text("STOCKS")
-                    }
-                    .font(.system(size: 10, weight: .bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.08))
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                    )
-                }
-                
-                // Индикатор загрузки UPLOADING..
-                if photo.status == .uploading {
-                    Spacer()
-                    Text("UPLOADING..")
-                        .font(.system(size: 10, weight: .black))
-                        .foregroundStyle(Color(hex: "10B981"))
-                }
-                
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(Color(hex: "0D0E15").opacity(0.55))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+    }
+    
+    private func photoButtons(_ photo: PhotoMetadata, index: Int) -> some View {
+        HStack(spacing: 12) {
+            // Кнопка SEND / SENT
+            Button(action: {
+                if photo.status != .success {
+                    HapticHelper.trigger(.medium)
+                    viewModel.uploadPhoto(photo.id)
+                }
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: photo.status == .success ? "checkmark" : "paperplane")
+                    Text(photo.status == .success ? "SENT" : "SEND")
+                }
+                .font(.system(size: 10, weight: .bold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(photo.status == .success ? Color.white.opacity(0.04) : Color.white.opacity(0.08))
+                .foregroundStyle(photo.status == .success ? .secondary : .white)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+            }
+            .disabled(photo.status == .success)
+            
+            // Кнопка FILL DATA / VIEW DATA
+            Button(action: {
+                HapticHelper.trigger(.medium)
+                selectedDetailPhoto = photo
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: (photo.status == .ready || photo.status == .success) ? "eye" : "list.bullet.indent")
+                    Text((photo.status == .ready || photo.status == .success) ? "VIEW DATA" : "FILL DATA")
+                }
+                .font(.system(size: 10, weight: .bold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.08))
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+            }
+            
+            // Кнопка STOCKS
+            Button(action: {
+                HapticHelper.trigger(.medium)
+                editingPhoto = ActiveSheetPhoto(id: photo.id, photos: viewModel.photos, index: index)
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: photo.status == .success ? "folder" : "checkmark.square")
+                    Text("STOCKS")
+                }
+                .font(.system(size: 10, weight: .bold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.08))
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+            }
+            
+            // Индикатор загрузки UPLOADING..
+            if photo.status == .uploading {
+                Spacer()
+                Text("UPLOADING..")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(Color(hex: "10B981"))
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
     }
     
     // MARK: - Load Photos Logic
