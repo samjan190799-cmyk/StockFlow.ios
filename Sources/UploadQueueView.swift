@@ -644,7 +644,15 @@ class QueueViewModel: ObservableObject {
         var iptc = (properties[iptcKey] as? [String: Any]) ?? [:]
         iptc[kCGImagePropertyIPTCObjectName as String] = title
         iptc[kCGImagePropertyIPTCCaptionAbstract as String] = description
-        iptc[kCGImagePropertyIPTCKeywords as String] = keywords
+        
+        // Объединяем ключевые слова с категориями, чтобы они точно появились на сайте стока
+        var mergedKeywords = keywords
+        for category in categories {
+            if !mergedKeywords.contains(category) {
+                mergedKeywords.append(category)
+            }
+        }
+        iptc[kCGImagePropertyIPTCKeywords as String] = mergedKeywords
         
         if !categories.isEmpty {
             iptc[kCGImagePropertyIPTCCategory as String] = categories[0]
@@ -1106,6 +1114,10 @@ struct UploadQueueView: View {
     private func photoRow(_ photo: PhotoMetadata, index: Int) -> some View {
         VStack(spacing: 0) {
             photoImage(photo)
+                .onTapGesture {
+                    HapticHelper.trigger(.medium)
+                    selectedDetailPhoto = photo
+                }
             photoProgressBar(photo)
             photoButtons(photo, index: index)
         }
@@ -1124,12 +1136,26 @@ struct UploadQueueView: View {
         ZStack(alignment: .topLeading) {
             Group {
                 if let uiImage = photo.uiImage {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(height: 200)
-                        .frame(maxWidth: .infinity)
-                        .clipped()
+                    ZStack {
+                        // Размытый фон для заполнения пропорций по краям
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(height: 200)
+                            .frame(maxWidth: .infinity)
+                            .blur(radius: 16)
+                            .opacity(0.35)
+                            .clipped()
+                        
+                        // Полное изображение без обрезки
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 200)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .background(Color.black.opacity(0.2))
+                    .frame(height: 200)
                 } else {
                     ZStack {
                         Color.white.opacity(0.04)
@@ -1230,26 +1256,29 @@ struct UploadQueueView: View {
                 )
             }
             
-            // Кнопка FILL DATA / VIEW DATA
+            // Кнопка ИИ АНАЛИЗ
             Button(action: {
                 HapticHelper.trigger(.medium)
-                selectedDetailPhoto = photo
+                viewModel.runAIForPhoto(photo.id)
             }) {
                 HStack(spacing: 6) {
-                    Image(systemName: (photo.status == .ready || photo.status == .success) ? "eye" : "list.bullet.indent")
-                    Text((photo.status == .ready || photo.status == .success) ? "VIEW DATA" : "FILL DATA")
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(photo.status == .aiAnalyzing ? Color.secondary : Color(hex: "A78BFA"))
+                    Text(photo.status == .aiAnalyzing ? "Анализируем...".localized : "ИИ АНАЛИЗ".localized)
                 }
                 .font(.system(size: 10, weight: .bold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color.white.opacity(0.08))
-                .foregroundStyle(.white)
+                .background(photo.status == .aiAnalyzing ? Color.white.opacity(0.04) : Color.white.opacity(0.08))
+                .foregroundStyle(photo.status == .aiAnalyzing ? Color.secondary : Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(photo.status == .aiAnalyzing ? Color.white.opacity(0.04) : Color.white.opacity(0.12), lineWidth: 1)
                 )
             }
+            .disabled(photo.status == .aiAnalyzing)
             
             // Кнопка SEND / SENT
             Button(action: {
