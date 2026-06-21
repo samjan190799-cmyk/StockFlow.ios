@@ -1209,6 +1209,48 @@ struct UploadQueueView: View {
     
     private func photoButtons(_ photo: PhotoMetadata, index: Int) -> some View {
         HStack(spacing: 12) {
+            // Кнопка DELETE
+            Button(action: {
+                HapticHelper.trigger(.medium)
+                viewModel.removePhoto(photo.id)
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "trash")
+                    Text("DELETE")
+                }
+                .font(.system(size: 10, weight: .bold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.red.opacity(0.12))
+                .foregroundStyle(.red)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                )
+            }
+            
+            // Кнопка FILL DATA / VIEW DATA
+            Button(action: {
+                HapticHelper.trigger(.medium)
+                selectedDetailPhoto = photo
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: (photo.status == .ready || photo.status == .success) ? "eye" : "list.bullet.indent")
+                    Text((photo.status == .ready || photo.status == .success) ? "VIEW DATA" : "FILL DATA")
+                }
+                .font(.system(size: 10, weight: .bold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.08))
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+            }
+            
             // Кнопка SEND / SENT
             Button(action: {
                 if photo.status != .success {
@@ -1232,48 +1274,6 @@ struct UploadQueueView: View {
                 )
             }
             .disabled(photo.status == .success)
-            
-            // Кнопка FILL DATA / VIEW DATA
-            Button(action: {
-                HapticHelper.trigger(.medium)
-                selectedDetailPhoto = photo
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: (photo.status == .ready || photo.status == .success) ? "eye" : "list.bullet.indent")
-                    Text((photo.status == .ready || photo.status == .success) ? "VIEW DATA" : "FILL DATA")
-                }
-                .font(.system(size: 10, weight: .bold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.08))
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-            }
-            
-            // Кнопка STOCKS
-            Button(action: {
-                HapticHelper.trigger(.medium)
-                editingPhoto = ActiveSheetPhoto(id: photo.id, photos: viewModel.photos, index: index)
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: photo.status == .success ? "folder" : "checkmark.square")
-                    Text("STOCKS")
-                }
-                .font(.system(size: 10, weight: .bold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.08))
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-            }
             
             // Индикатор загрузки UPLOADING..
             if photo.status == .uploading {
