@@ -35,6 +35,9 @@ struct SystemSettingsView: View {
     @State private var showFolderPicker = false
     @State private var isRunningScheduler = false
     
+    @State private var showingSavedToast = false
+    @State private var savedToastMessage = ""
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -391,33 +394,7 @@ struct SystemSettingsView: View {
             .onChange(of: upscaleFactor) { _ in HapticHelper.trigger(.light) }
             .onChange(of: pcServerEnabled) { _ in HapticHelper.trigger(.light) }
             .onChange(of: pcServerAddress) { _ in HapticHelper.trigger(.light) }
-            .overlay {
-                if isSigningIn {
-                    Color.black.opacity(0.4)
-                        .ignoresSafeArea()
-                        .overlay(
-                            VStack(spacing: 12) {
-                                ProgressView()
-                                    .tint(.primary)
-                                Text("Авторизация...".localized)
-                                    .font(.system(size: 14, weight: .medium))
-                            }
-                            .glassCard(cornerRadius: 16, padding: 24)
-                        )
-                }
-            }
-            .sheet(isPresented: $showSimulatedAuthSheet) {
-                SimulatedSignInView(
-                    provider: selectedProviderForAuth,
-                    isPresented: $showSimulatedAuthSheet,
-                    onCompletion: { email in
-                        self.userEmail = email
-                        self.userProvider = selectedProviderForAuth
-                        self.isUserSignedIn = true
-                        self.showToast("Успешный вход через \(selectedProviderForAuth)!")
-                    }
-                )
-            }
+
             .sheet(isPresented: $showFolderPicker) {
                 FolderPicker { url in
                     do {
