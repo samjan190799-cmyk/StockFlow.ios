@@ -90,19 +90,22 @@ struct LiquidBackgroundView: View {
                 }
             }
             
-            // Retro dot-grid texture overlay for premium feel
+            // Retro dot-grid texture overlay for premium feel (Optimized)
             Canvas { context, size in
+                var path = Path()
                 let dotSize: CGFloat = 1.2
                 let spacing: CGFloat = 18.0
                 for x in stride(from: 0, to: size.width, by: spacing) {
                     for y in stride(from: 0, to: size.height, by: spacing) {
-                        context.fill(Path(CGRect(x: x, y: y, width: dotSize, height: dotSize)), with: .color(dotColor))
+                        path.addRect(CGRect(x: x, y: y, width: dotSize, height: dotSize))
                     }
                 }
+                context.fill(path, with: .color(dotColor))
             }
             .allowsHitTesting(false)
         }
         .ignoresSafeArea()
+        .drawingGroup() // GPU-rendered texture to guarantee smooth 120 FPS
         .onAppear {
             withAnimation(.easeInOut(duration: 16).repeatForever(autoreverses: true)) {
                 animateBlobs = true
