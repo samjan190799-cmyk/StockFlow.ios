@@ -29,15 +29,8 @@ struct SystemSettingsView: View {
     @AppStorage("sys_pc_server_address") private var pcServerAddress: String = "192.168.1.50:5000"
     
     // Auth settings
-    @AppStorage("user_signed_in") private var isUserSignedIn: Bool = false
-    @AppStorage("user_email") private var userEmail: String = ""
-    @AppStorage("user_provider") private var userProvider: String = ""
-    
-    @State private var isSigningIn = false
-    @State private var showingSavedToast = false
-    @State private var savedToastMessage = "Настройки сохранены!"
-    @State private var showSimulatedAuthSheet = false
-    @State private var selectedProviderForAuth = ""
+    @StateObject private var authManager = AuthManager.shared
+    @State private var showingLogoutAlert = false
     
     @State private var showFolderPicker = false
     @State private var isRunningScheduler = false
@@ -267,92 +260,42 @@ struct SystemSettingsView: View {
                         }
                         .glassCard()
                         
-                        // SECTION 0: Cloud Sync
+                        // SECTION 0: Профиль пользователя
                         VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Облачная синхронизация".localized)
+                            sectionHeader("Мой аккаунт".localized)
                             
-                            if isUserSignedIn {
-                                HStack(spacing: 12) {
-                                    Image(systemName: userProvider == "Apple" ? "applelogo" : "g.circle.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundStyle(userProvider == "Apple" ? Color.primary : Color.orange)
-                                    
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(userEmail)
-                                            .font(.system(size: 14, weight: .bold))
-                                        Text("Синхронизация профиля активна".localized)
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(.green)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Button("Выйти".localized, action: signOut)
+                            HStack(spacing: 12) {
+                                Image(systemName: "person.crop.circle.fill")
+                                    .font(.system(size: 36))
+                                    .foregroundStyle(AppleTheme.primaryGradient)
+                                    .neonShadow(color: Color(hex: "7C3AED"), radius: 4)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(authManager.currentUserEmail ?? "apple.user@icloud.com")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(.white)
+                                    Text("Синхронизация профиля активна".localized)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.green)
+                                }
+                                
+                                Spacer()
+                                
+                                Button(action: {
+                                    HapticHelper.trigger(.medium)
+                                    showingLogoutAlert = true
+                                }) {
+                                    Text("Выйти".localized)
                                         .font(.system(size: 12, weight: .semibold))
                                         .foregroundStyle(.red)
-                                        .padding(.horizontal, 10)
+                                        .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
-                                        .background(Color.red.opacity(0.1))
+                                        .background(Color.red.opacity(0.12))
                                         .clipShape(Capsule())
-                                }
-                            } else {
-                                Text("Войдите в аккаунт, чтобы синхронизировать ваши настройки стоков и ключи API в облаке.".localized)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                                
-                                Divider().background(Color.primary.opacity(0.08))
-                                
-                                HStack(spacing: 12) {
-                                    // Apple Sign In Button
-                                    SignInWithAppleButton(
-                                        .signIn,
-                                        onRequest: { request in
-                                            request.requestedScopes = [.fullName, .email]
-                                        },
-                                        onCompletion: { result in
-                                            Task { @MainActor in
-                                                switch result {
-                                                case .success(let authorization):
-                                                    if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
-                                                        self.userEmail = appleIDCredential.email ?? "samvel.dev@icloud.com"
-                                                        self.userProvider = "Apple"
-                                                        self.isUserSignedIn = true
-                                                        self.showToast("Успешный вход через Apple!")
-                                                    }
-                                                case .failure(let error):
-                                                    print("Apple Sign In failed: \(error.localizedDescription)")
-                                                    self.selectedProviderForAuth = "Apple"
-                                                    self.showSimulatedAuthSheet = true
-                                                }
-                                            }
-                                        }
-                                    )
-                                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                                    .frame(height: 38)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    
-                                    // Google Sign In Button
-                                    Button(action: {
-                                        HapticHelper.trigger(.medium)
-                                        signInWithGoogle()
-                                    }) {
-                                        HStack {
-                                            Image(systemName: "g.circle.fill")
-                                                .font(.system(size: 14))
-                                            Text("Вход с Google".localized)
-                                                .font(.system(size: 13, weight: .semibold))
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
-                                        .background(Color.primary.opacity(0.08))
-                                        .foregroundStyle(.primary)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                                            Capsule()
+                                                .stroke(Color.red.opacity(0.3), lineWidth: 1)
                                         )
-                                    }
-                                    .buttonStyle(PremiumButtonStyle())
                                 }
                             }
                         }
@@ -497,6 +440,14 @@ struct SystemSettingsView: View {
                     // Отмена
                 }
             }
+            .alert("Выйти из аккаунта".localized, isPresented: $showingLogoutAlert) {
+                Button("Выйти".localized, role: .destructive) {
+                    authManager.logout()
+                }
+                Button("Отмена".localized, role: .cancel) {}
+            } message: {
+                Text("Вы уверены, что хотите выйти из аккаунта?".localized)
+            }
         }
     }
     
@@ -584,11 +535,6 @@ struct SystemSettingsView: View {
         }
     }
     
-    private func signInWithGoogle() {
-        selectedProviderForAuth = "Google"
-        showSimulatedAuthSheet = true
-    }
-    
     
     private var lastRunText: String {
         if lastRunTimestamp == 0 {
@@ -616,12 +562,6 @@ struct SystemSettingsView: View {
             isRunningScheduler = false
             showToast("Проверка папки завершена!")
         }
-    }
-    
-    private func signOut() {
-        userEmail = ""
-        userProvider = ""
-        isUserSignedIn = false
     }
 }
 

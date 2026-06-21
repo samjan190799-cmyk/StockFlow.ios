@@ -8,6 +8,7 @@ struct SmartStockApp: App {
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @AppStorage("sys_fps") private var sysFps: String = "120 FPS (Ультра-плавность)"
     @StateObject private var viewModel = QueueViewModel()
+    @StateObject private var authManager = AuthManager.shared
     @State private var tabViewID = UUID()
     
     var colorScheme: ColorScheme? {
@@ -56,47 +57,52 @@ struct SmartStockApp: App {
     
     var body: some Scene {
         WindowGroup {
-            // id(sysLanguage) перестраивает всё дерево при смене языка — это единственный
-            // надёжный способ перерендерить .tabItem labels, которые вычисляются при инициализации
-            TabView {
-                UploadQueueView(viewModel: viewModel)
-                    .tabItem {
-                        Label("Галерея".localized, systemImage: "photo.on.rectangle")
-                    }
-                
-                AIAssistantView()
-                     .tabItem {
-                         Label("ИИ".localized, systemImage: "brain")
-                     }
-                
-                InsightsView()
-                     .tabItem {
-                         Label("Статистика".localized, systemImage: "chart.line.uptrend.xyaxis")
-                     }
-                
-                StockSettingsView()
-                    .tabItem {
-                        Label("Агентства".localized, systemImage: "arrow.left.and.right")
-                    }
-                
-                SystemSettingsView()
-                    .tabItem {
-                        Label("Настройки".localized, systemImage: "gearshape")
-                    }
-            }
-            .id(tabViewID) // Перестраивает UI при смене языка
-            .preferredColorScheme(colorScheme)
-            .tint(Color(hex: "7C3AED"))
-            .onChange(of: sysLanguage) { _ in
-                DispatchQueue.main.async {
-                    tabViewID = UUID()
+            if authManager.isAuthenticated {
+                // id(sysLanguage) перестраивает всё дерево при смене языка — это единственный
+                // надёжный способ перерендерить .tabItem labels, которые вычисляются при инициализации
+                TabView {
+                    UploadQueueView(viewModel: viewModel)
+                        .tabItem {
+                            Label("Галерея".localized, systemImage: "photo.on.rectangle")
+                        }
+                    
+                    AIAssistantView()
+                         .tabItem {
+                             Label("ИИ".localized, systemImage: "brain")
+                         }
+                    
+                    InsightsView()
+                         .tabItem {
+                             Label("Статистика".localized, systemImage: "chart.line.uptrend.xyaxis")
+                         }
+                    
+                    StockSettingsView()
+                        .tabItem {
+                            Label("Агентства".localized, systemImage: "arrow.left.and.right")
+                        }
+                    
+                    SystemSettingsView()
+                        .tabItem {
+                            Label("Настройки".localized, systemImage: "gearshape")
+                        }
                 }
-            }
-            .onChange(of: sysFps) { newFps in
-                applyFrameRate(newFps)
-            }
-            .onAppear {
-                applyFrameRate(sysFps)
+                .id(tabViewID) // Перестраивает UI при смене языка
+                .preferredColorScheme(colorScheme)
+                .tint(Color(hex: "7C3AED"))
+                .onChange(of: sysLanguage) { _ in
+                    DispatchQueue.main.async {
+                        tabViewID = UUID()
+                    }
+                }
+                .onChange(of: sysFps) { newFps in
+                    applyFrameRate(newFps)
+                }
+                .onAppear {
+                    applyFrameRate(sysFps)
+                }
+            } else {
+                AuthView(authManager: authManager)
+                    .preferredColorScheme(.dark)
             }
         }
     }
