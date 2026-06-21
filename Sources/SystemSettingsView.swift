@@ -120,8 +120,8 @@ struct SystemSettingsView: View {
                                         }
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 6)
-                                        .background(Color(hex: "7C3AED").opacity(colorScheme == .dark ? 0.15 : 0.08))
-                                        .foregroundStyle(Color(hex: "7C3AED"))
+                                        .background(Color(hex: "7C3AED"))
+                                        .foregroundStyle(.white)
                                         .clipShape(Capsule())
                                     }
                                 }
@@ -469,8 +469,8 @@ struct SystemSettingsView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color(hex: "7C3AED").opacity(colorScheme == .dark ? 0.15 : 0.08))
-                .foregroundStyle(Color(hex: "7C3AED"))
+                .background(Color(hex: "7C3AED"))
+                .foregroundStyle(.white)
                 .clipShape(Capsule())
             }
         }
@@ -516,8 +516,8 @@ struct SystemSettingsView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color(hex: "7C3AED").opacity(colorScheme == .dark ? 0.15 : 0.08))
-                .foregroundStyle(Color(hex: "7C3AED"))
+                .background(Color(hex: "7C3AED"))
+                .foregroundStyle(.white)
                 .clipShape(Capsule())
             }
         }
