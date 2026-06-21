@@ -266,6 +266,7 @@ struct PlatformDetailSheet: View {
     var onSave: () -> Void
     var testConnection: (StockPlatform) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var showingOAuthHelp = false
     
     var body: some View {
         NavigationStack {
@@ -294,6 +295,37 @@ struct PlatformDetailSheet: View {
                             customInputField(title: "Имя пользователя (логин)".localized, placeholder: "Username", text: $platform.username, isSecure: false)
                             
                             customInputField(title: "Пароль".localized, placeholder: "••••••••", text: $platform.passwordHash, isSecure: true)
+                            
+                            // Кнопка помощи для входа через Google / Apple
+                            Button(action: {
+                                HapticHelper.trigger(.light)
+                                showingOAuthHelp = true
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "questionmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(Color(hex: "7C3AED"))
+                                    
+                                    Text("Вошли через Google или Apple?".localized)
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(Color(hex: "7C3AED"))
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color(hex: "7C3AED").opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                            .buttonStyle(PremiumButtonStyle())
+                            .padding(.top, 2)
+                            .sheet(isPresented: $showingOAuthHelp) {
+                                OAuthHelpSheet()
+                            }
                             
                             HStack {
                                 Text("Сервер выгрузки:".localized + " \(platform.host)")
@@ -395,6 +427,120 @@ struct PlatformDetailSheet: View {
                     .stroke(Color.primary.opacity(0.12), lineWidth: 1.2)
             )
             .textInputAutocapitalization(.never)
+        }
+    }
+}
+
+// MARK: - OAuthHelpSheet (Инструкции для входа через Google / Apple)
+struct OAuthHelpSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                LiquidBackgroundView()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Важное предупреждение
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                Text("Важно для Google / Apple".localized)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                            
+                            Text("Если вы регистрировались на фотостоках через аккаунт Google или Apple, прямой вход по паролю этих сервисов не поддерживается для FTP/SFTP загрузки (это техническое ограничение самих стоков).".localized)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .lineSpacing(4)
+                            
+                            Text("Для выгрузки из приложения вам необходимо использовать специальный FTP-пароль, сгенерированный в личном кабинете автора.".localized)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.primary)
+                                .lineSpacing(4)
+                        }
+                        .glassCard(cornerRadius: 18, padding: 16)
+                        
+                        // Раздел Adobe Stock
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Инструкция для Adobe Stock".localized)
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("1. Войдите в личный кабинет автора на contributor.adobestock.com.".localized)
+                                Text("2. Перейдите в 'Настройки учетной записи' (нажав на свой профиль в правом верхнем углу).".localized)
+                                Text("3. В подразделе 'Настройки FTP' вы увидите ваш персональный логин (ID) и сгенерированный FTP-пароль.".localized)
+                                Text("4. Вставьте эти данные в настройки Adobe Stock в приложении.".localized)
+                            }
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(3)
+                            
+                            Link(destination: URL(string: "https://contributor.adobestock.com/")!) {
+                                HStack {
+                                    Image(systemName: "safari")
+                                    Text("Открыть Adobe Stock Contributor".localized)
+                                }
+                                .font(.system(size: 13, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(hex: "FF0000"))
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                            .buttonStyle(PremiumButtonStyle())
+                        }
+                        .glassCard(cornerRadius: 18, padding: 16)
+                        
+                        // Раздел Shutterstock
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Инструкция для Shutterstock".localized)
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("1. Войдите в кабинет автора на submit.shutterstock.com.".localized)
+                                Text("2. Перейдите в настройки аккаунта 'Account Settings'.".localized)
+                                Text("3. Найдите раздел FTP и скопируйте предоставленные учетные данные (обычно логином является ваш email).".localized)
+                                Text("4. Введите их в настройки Shutterstock в приложении.".localized)
+                            }
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(3)
+                            
+                            Link(destination: URL(string: "https://submit.shutterstock.com/")!) {
+                                HStack {
+                                    Image(systemName: "safari")
+                                    Text("Открыть submit.shutterstock.com".localized)
+                                }
+                                .font(.system(size: 13, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(hex: "FF6600"))
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                            .buttonStyle(PremiumButtonStyle())
+                        }
+                        .glassCard(cornerRadius: 18, padding: 16)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Вход через Google / Apple".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Готово".localized) {
+                        dismiss()
+                    }
+                    .font(.system(size: 14, weight: .bold))
+                }
+            }
         }
     }
 }

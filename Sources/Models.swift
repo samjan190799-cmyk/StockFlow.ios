@@ -24,7 +24,7 @@ enum PhotoStatus: String, Codable, CaseIterable, Sendable {
 }
 
 // MARK: - Photo Metadata Model
-struct PhotoMetadata: Identifiable, Sendable {
+struct PhotoMetadata: Identifiable, Sendable, Codable {
     let id: UUID
     var filename: String
     var fileSize: String
@@ -34,10 +34,14 @@ struct PhotoMetadata: Identifiable, Sendable {
     var categories: [String]
     var status: PhotoStatus
     var selectedStocks: Set<String>
-    var imageData: Data?
+    var imageData: Data? = nil
     
     var uploadProgress: Double = 0.0
     var errorMessage: String? = nil
+    
+    enum CodingKeys: String, CodingKey {
+        case id, filename, fileSize, title, keywords, description, categories, status, selectedStocks, uploadProgress, errorMessage
+    }
     
     init(
         id: UUID = UUID(),

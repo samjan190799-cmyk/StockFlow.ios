@@ -6,10 +6,85 @@ import UIKit
 // MARK: - Queue View Model (MainActor Isolated, Safe Concurrency)
 @MainActor
 class QueueViewModel: ObservableObject {
-    @Published var photos: [PhotoMetadata] = []
+    @Published var photos: [PhotoMetadata] = [] {
+        didSet {
+            savePhotosToDisk()
+        }
+    }
     @Published var isAnalyzingAll = false
     @Published var toastMessage = ""
     @Published var showToast = false
+    
+    private var metadataURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("queue_photos.json")
+    }
+    
+    private var photosDirectoryURL: URL {
+        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Photos")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: nil)
+        return url
+    }
+    
+    init() {
+        loadPhotosFromDisk()
+    }
+    
+    func savePhotosToDisk() {
+        let photosCopy = self.photos
+        let metaURL = self.metadataURL
+        let dirURL = self.photosDirectoryURL
+        
+        Task.detached(priority: .background) {
+            do {
+                for photo in photosCopy {
+                    if let data = photo.imageData {
+                        let fileURL = dirURL.appendingPathComponent("\(photo.id.uuidString).jpg")
+                        try data.write(to: fileURL, options: .atomic)
+                    }
+                }
+                
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = .prettyPrinted
+                let data = try encoder.encode(photosCopy)
+                try data.write(to: metaURL, options: .atomic)
+                
+                let idsInQueue = Set(photosCopy.map { "\($0.id.uuidString).jpg" })
+                let existingFiles = try FileManager.default.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: nil)
+                for file in existingFiles {
+                    if !idsInQueue.contains(file.lastPathComponent) {
+                        try? FileManager.default.removeItem(at: file)
+                    }
+                }
+            } catch {
+                print("Error saving photos to disk: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func loadPhotosFromDisk() {
+        do {
+            let metaURL = self.metadataURL
+            let dirURL = self.photosDirectoryURL
+            
+            guard FileManager.default.fileExists(atPath: metaURL.path) else { return }
+            let data = try Data(contentsOf: metaURL)
+            let decoded = try JSONDecoder().decode([PhotoMetadata].self, from: data)
+            
+            var loadedPhotos: [PhotoMetadata] = []
+            for var photo in decoded {
+                let fileURL = dirURL.appendingPathComponent("\(photo.id.uuidString).jpg")
+                if FileManager.default.fileExists(atPath: fileURL.path) {
+                    photo.imageData = try? Data(contentsOf: fileURL)
+                }
+                loadedPhotos.append(photo)
+            }
+            self.photos = loadedPhotos
+        } catch {
+            print("Error loading photos from disk: \(error.localizedDescription)")
+        }
+    }
     
     func runAIForPhoto(_ id: UUID) {
         guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
@@ -612,14 +687,17 @@ class QueueViewModel: ObservableObject {
     
     func removePhoto(_ id: UUID) {
         photos.removeAll(where: { $0.id == id })
+        savePhotosToDisk()
     }
     
     func deletePhoto(at offsets: IndexSet) {
         photos.remove(atOffsets: offsets)
+        savePhotosToDisk()
     }
     
     func addPhoto(_ photo: PhotoMetadata) {
         photos.append(photo)
+        savePhotosToDisk()
     }
     
     func toggleStockForPhoto(_ photoId: UUID, stockName: String) {
@@ -629,6 +707,7 @@ class QueueViewModel: ObservableObject {
             } else {
                 photos[idx].selectedStocks.insert(stockName)
             }
+            savePhotosToDisk()
         }
     }
     
