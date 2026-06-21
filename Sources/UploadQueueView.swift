@@ -862,7 +862,7 @@ struct UploadQueueView: View {
                             HStack {
                                 Text("Недавние".localized)
                                     .font(.system(size: 20, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.primary)
                                 Spacer()
                                 Button("Выбрать".localized) {
                                     HapticHelper.trigger(.light)
@@ -1038,7 +1038,7 @@ struct UploadQueueView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Text("Галерея".localized)
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -1056,7 +1056,7 @@ struct UploadQueueView: View {
                         }) {
                             Image(systemName: "bell")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.primary)
                         }
                     }
                 }

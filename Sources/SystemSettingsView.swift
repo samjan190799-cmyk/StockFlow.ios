@@ -48,7 +48,7 @@ struct SystemSettingsView: View {
                         
                         // SECTION 1: Interface
                         VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Интерфейс".localized)
+                            sectionHeader("Интерфейс".localized, icon: "paintpalette.fill")
                             
                             pickerRow("Язык интерфейса".localized, selection: $sysLanguage, options: ["Русский", "English", "Հայերեն"])
                             
@@ -69,7 +69,7 @@ struct SystemSettingsView: View {
                         
                         // SECTION 2: Scheduler
                         VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Планировщик".localized)
+                            sectionHeader("Планировщик".localized, icon: "clock.fill")
                             
                             Toggle("Фоновый планировщик выгрузки".localized, isOn: $bgScheduler)
                                 .tint(Color(hex: "7C3AED"))
@@ -112,14 +112,20 @@ struct SystemSettingsView: View {
                                             .font(.system(size: 14))
                                             .foregroundStyle(.primary)
                                         Spacer()
-                                        Text("Каждые".localized + " \(schedulerIntervalHours) " + getHoursWord(schedulerIntervalHours).localized)
-                                            .font(.system(size: 13))
-                                            .foregroundStyle(.secondary)
-                                        Image(systemName: "chevron.up.chevron.down")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundStyle(.secondary)
+                                        HStack(spacing: 4) {
+                                            Text("Каждые".localized + " \(schedulerIntervalHours) " + getHoursWord(schedulerIntervalHours).localized)
+                                                .font(.system(size: 12, weight: .semibold))
+                                            Image(systemName: "chevron.down")
+                                                .font(.system(size: 9, weight: .bold))
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Color(hex: "7C3AED").opacity(colorScheme == .dark ? 0.15 : 0.08))
+                                        .foregroundStyle(Color(hex: "7C3AED"))
+                                        .clipShape(Capsule())
                                     }
                                 }
+                                .buttonStyle(.plain)
                                 
                                 Divider().background(Color.primary.opacity(0.08))
                                 
@@ -171,7 +177,7 @@ struct SystemSettingsView: View {
                         
                         // SECTION 3: Auto Upscaling
                         VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Автоматический Апскейл".localized)
+                            sectionHeader("Автоматический Апскейл".localized, icon: "wand.and.stars")
                             
                             Toggle("Включить авто-апскейл".localized, isOn: $autoUpscale)
                                 .tint(Color(hex: "7C3AED"))
@@ -197,7 +203,7 @@ struct SystemSettingsView: View {
                         
                         // SECTION 4: Upload parameters
                         VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Параметры выгрузки".localized)
+                            sectionHeader("Параметры выгрузки".localized, icon: "arrow.up.forward.app.fill")
                             
                             pickerIntRow("Потоки параллельной загрузки".localized, selection: $parallelStreams, options: [1, 3, 5])
                             
@@ -220,7 +226,7 @@ struct SystemSettingsView: View {
                         
                         // SECTION 5: Local PC Server
                         VStack(alignment: .leading, spacing: 10) {
-                            sectionHeader("Локальный ПК-сервер".localized)
+                            sectionHeader("Локальный ПК-сервер".localized, icon: "server.rack")
                             
                             Toggle("Загрузка через ПК-сервер".localized, isOn: $pcServerEnabled)
                                 .tint(Color(hex: "7C3AED"))
@@ -265,7 +271,7 @@ struct SystemSettingsView: View {
                         
                         // SECTION 0: Профиль пользователя
                         VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Мой аккаунт".localized)
+                            sectionHeader("Мой аккаунт".localized, icon: "person.crop.circle.fill")
                             
                             HStack(spacing: 12) {
                                 Image(systemName: "person.crop.circle.fill")
@@ -276,7 +282,7 @@ struct SystemSettingsView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(authManager.currentUserEmail ?? "apple.user@icloud.com")
                                         .font(.system(size: 14, weight: .bold))
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(.primary)
                                     Text("Синхронизация профиля активна".localized)
                                         .font(.system(size: 11))
                                         .foregroundStyle(.green)
@@ -429,12 +435,17 @@ struct SystemSettingsView: View {
     }
     
     // MARK: - Row Helpers
-    private func sectionHeader(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(.secondary)
-            .textCase(.uppercase)
-            .padding(.bottom, 2)
+    private func sectionHeader(_ text: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color(hex: "7C3AED"))
+            Text(text)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+        }
+        .padding(.bottom, 2)
     }
     
     private func pickerRow(_ label: String, selection: Binding<String>, options: [String]) -> some View {
@@ -445,22 +456,25 @@ struct SystemSettingsView: View {
                 }
             }
         } label: {
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .center) {
                 Text(label)
                     .font(.system(size: 14))
                     .foregroundStyle(.primary)
                 Spacer()
-                Text(selection.wrappedValue.localized)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .multilineTextAlignment(.trailing)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(selection.wrappedValue.localized)
+                        .font(.system(size: 12, weight: .semibold))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(hex: "7C3AED").opacity(colorScheme == .dark ? 0.15 : 0.08))
+                .foregroundStyle(Color(hex: "7C3AED"))
+                .clipShape(Capsule())
             }
         }
+        .buttonStyle(.plain)
     }
     
     private func saveSettings() {
@@ -489,19 +503,25 @@ struct SystemSettingsView: View {
                 }
             }
         } label: {
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .center) {
                 Text(label)
                     .font(.system(size: 14))
                     .foregroundStyle(.primary)
                 Spacer()
-                Text("\(selection.wrappedValue) \(getStreamWord(selection.wrappedValue).localized)")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text("\(selection.wrappedValue) \(getStreamWord(selection.wrappedValue).localized)")
+                        .font(.system(size: 12, weight: .semibold))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(hex: "7C3AED").opacity(colorScheme == .dark ? 0.15 : 0.08))
+                .foregroundStyle(Color(hex: "7C3AED"))
+                .clipShape(Capsule())
             }
         }
+        .buttonStyle(.plain)
     }
     
     private func getStreamWord(_ count: Int) -> String {
