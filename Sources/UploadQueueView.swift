@@ -1064,7 +1064,7 @@ struct PhotoRowView: View, Equatable {
     let index: Int
     @ObservedObject var viewModel: QueueViewModel
     
-    static func == (lhs: PhotoRowView, rhs: PhotoRowView) -> Bool {
+    nonisolated static func == (lhs: PhotoRowView, rhs: PhotoRowView) -> Bool {
         return lhs.photo.id == rhs.photo.id &&
                lhs.photo.status == rhs.photo.status &&
                lhs.photo.uploadProgress == rhs.photo.uploadProgress &&
@@ -1554,17 +1554,7 @@ struct DetailCardView: View {
             // Раздел 1: Превью и Ключевые слова
             HStack(alignment: .top, spacing: 14) {
                 // Превью
-                Group {
-                    LazyImageView(photoId: photo.id, maxPixelSize: 300, contentMode: .fill)
-                    } else {
-                        ZStack {
-                            Color.primary.opacity(0.04)
-                            Image(systemName: "photo")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
+                LazyImageView(photoId: photo.id, maxPixelSize: 300, contentMode: .fill)
                 .frame(width: 100, height: 135)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
