@@ -184,6 +184,7 @@ struct StockSettingsView: View {
 }
 @MainActor
 struct PlatformRowView: View {
+    @Environment(\.colorScheme) var colorScheme
     let platform: StockPlatform
     let onToggle: (Bool) -> Void
     let onTap: () -> Void
@@ -242,8 +243,18 @@ struct PlatformRowView: View {
             .tint(Color(hex: "7C3AED"))
         }
         .padding(16)
-        .background(platform.isEnabled ? color.opacity(0.06) : Color.clear)
-        .glassCard(cornerRadius: 22, padding: 0)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(
+                    platform.isEnabled 
+                    ? color.opacity(0.08) 
+                    : (colorScheme == .dark ? Color(hex: "0D0E15").opacity(0.60) : Color.white.opacity(0.60))
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.18), lineWidth: 1.2)
+        )
         .shadow(color: color.opacity(platform.isEnabled ? 0.12 : 0.0), radius: 10, x: 0, y: 5)
         .contentShape(Rectangle())
         .onTapGesture {

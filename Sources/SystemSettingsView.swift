@@ -7,7 +7,6 @@ struct SystemSettingsView: View {
     // Left Column settings
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @AppStorage("sys_theme") private var sysTheme: String = "Темная"
-    @AppStorage("sys_fps") private var sysFps: String = "120 FPS (Ультра-плавность)"
     @AppStorage("sys_bg_scheduler") private var bgScheduler: Bool = false
     
     @AppStorage("sys_scheduler_folder_name") private var folderName: String = ""
@@ -56,14 +55,6 @@ struct SystemSettingsView: View {
 
                             
                             pickerRow("Тема оформления".localized, selection: $sysTheme, options: ["Темная", "Светлая", "Системная"])
-                            
-                            Divider().background(Color.primary.opacity(0.08))
-                            
-                            pickerRow("Предел частоты кадров".localized, selection: $sysFps, options: [
-                                "120 FPS (Ультра-плавность)",
-                                "60 FPS (Стандартный)",
-                                "30 FPS (Энергосбережение)"
-                            ])
                         }
                         .glassCard()
                         
@@ -386,11 +377,6 @@ struct SystemSettingsView: View {
                     message = "Язык изменён на Русский"
                 }
                 showToast(message)
-            }
-            .onChange(of: sysFps) { newFps in
-                HapticHelper.trigger(.light)
-                let label = newFps.contains("120") ? "120 FPS" : newFps.contains("30") ? "30 FPS" : "60 FPS"
-                showToast("Частота кадров изменена на ".localized + label)
             }
             .onChange(of: parallelStreams) { newVal in
                 HapticHelper.trigger(.light)

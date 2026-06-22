@@ -6,7 +6,6 @@ import BackgroundTasks
 struct SmartStockApp: App {
     @AppStorage("sys_theme") private var sysTheme: String = "Темная"
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
-    @AppStorage("sys_fps") private var sysFps: String = "120 FPS (Ультра-плавность)"
     @StateObject private var viewModel = QueueViewModel()
     @StateObject private var authManager = AuthManager.shared
     @State private var tabViewID = UUID()
@@ -53,8 +52,6 @@ struct SmartStockApp: App {
         SchedulerManager.shared.registerBackgroundTask()
     }
     
-    @State private var displayLinkHelper = DisplayLinkHelper()
-    
     var body: some Scene {
         WindowGroup {
             if authManager.isAuthenticated {
@@ -94,59 +91,11 @@ struct SmartStockApp: App {
                         tabViewID = UUID()
                     }
                 }
-                .onChange(of: sysFps) { newFps in
-                    applyFrameRate(newFps)
-                }
-                .onAppear {
-                    applyFrameRate(sysFps)
-                }
             } else {
                 AuthView(authManager: authManager)
                     .preferredColorScheme(.dark)
             }
         }
-    }
-    
-    /// Применяет ограничение FPS через CADisplayLink
-    private func applyFrameRate(_ fpsSetting: String) {
-        let targetFps: Int
-        if fpsSetting.contains("120") {
-            targetFps = 120
-        } else if fpsSetting.contains("30") {
-            targetFps = 30
-        } else {
-            targetFps = 60
-        }
-        
-        displayLinkHelper.setup(fps: targetFps)
-    }
-}
-
-// MARK: - DisplayLinkHelper
-/// Вспомогательный класс для динамической адаптации частоты кадров (ProMotion) на iOS
-final class DisplayLinkHelper: NSObject {
-    private var displayLink: CADisplayLink?
-    
-    func setup(fps: Int) {
-        displayLink?.invalidate()
-        
-        let link = CADisplayLink(target: self, selector: #selector(step))
-        if #available(iOS 15.0, *) {
-            let rate = Float(fps)
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: rate, maximum: rate, preferred: rate)
-        } else {
-            link.preferredFramesPerSecond = fps
-        }
-        link.add(to: .main, forMode: .common)
-        self.displayLink = link
-    }
-    
-    @objc private func step() {
-        // Пустая функция-обработчик
-    }
-    
-    deinit {
-        displayLink?.invalidate()
     }
 }
 
