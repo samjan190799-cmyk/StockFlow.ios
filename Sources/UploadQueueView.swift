@@ -69,7 +69,6 @@ class QueueViewModel: ObservableObject {
     func loadPhotosFromDisk() {
         do {
             let metaURL = self.metadataURL
-            let dirURL = self.photosDirectoryURL
             
             guard FileManager.default.fileExists(atPath: metaURL.path) else { return }
             let data = try Data(contentsOf: metaURL)
@@ -77,10 +76,7 @@ class QueueViewModel: ObservableObject {
             
             var loadedPhotos: [PhotoMetadata] = []
             for var photo in decoded {
-                let fileURL = dirURL.appendingPathComponent("\(photo.id.uuidString).jpg")
-                if FileManager.default.fileExists(atPath: fileURL.path) {
-                    photo.imageData = try? Data(contentsOf: fileURL)
-                }
+                photo.imageData = nil // Не загружаем тяжелые оригинальные байты в ОЗУ при старте
                 loadedPhotos.append(photo)
             }
             self.photos = loadedPhotos
@@ -128,7 +124,9 @@ class QueueViewModel: ObservableObject {
         
         Task {
             do {
-                let imageData = self.photos[idx].imageData ?? Data()
+                let photoId = self.photos[idx].id
+                let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).jpg")
+                let imageData = (try? Data(contentsOf: fileURL)) ?? Data()
                 let result = try await AIManager.shared.analyzePhoto(
                     imageData: imageData,
                     customPrompt: customPrompt,
@@ -187,7 +185,9 @@ class QueueViewModel: ObservableObject {
                     } else {
                         // Real analysis
                         do {
-                            let data = self.photos[idx].imageData ?? Data()
+                            let photoId = self.photos[idx].id
+                            let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).jpg")
+                            let data = (try? Data(contentsOf: fileURL)) ?? Data()
                             let result = try await AIManager.shared.analyzePhoto(
                                 imageData: data,
                                 customPrompt: customPrompt,
@@ -347,20 +347,18 @@ class QueueViewModel: ObservableObject {
     }
     
     private func performRealUpload(for photo: PhotoMetadata, progress: (@Sendable (Double) -> Void)? = nil) async throws {
-        guard let data = photo.imageData else {
-            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Изображение пустое"])
+        let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).jpg")
+        guard let data = try? Data(contentsOf: fileURL) else {
+            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Изображение не найдено на диске"])
         }
         
-        // Embed metadata (Title, Description, Keywords, Categories) into the image bytes
-        let preparedData = writeMetadata(to: data, title: photo.title, description: photo.description, keywords: photo.keywords, categories: photo.categories) ?? data
-        
-        var finalData = preparedData
-        if UserDefaults.standard.bool(forKey: "sys_compress_jpeg") {
-            if let uiImage = UIImage(data: preparedData),
-               let compressed = uiImage.jpegData(compressionQuality: 0.85) {
-                finalData = writeMetadata(to: compressed, title: photo.title, description: photo.description, keywords: photo.keywords, categories: photo.categories) ?? compressed
-            }
-        }
+        // Переносим обработку метаданных и сжатие в фоновый актор ImageProcessor
+        let compress = UserDefaults.standard.bool(forKey: "sys_compress_jpeg")
+        let finalData = await ImageProcessor.shared.prepareImageForUpload(
+            imageData: data,
+            photo: photo,
+            compress: compress
+        )
         
         // Load active platforms
         guard let platformsData = UserDefaults.standard.data(forKey: "stock_platforms"),
@@ -630,58 +628,7 @@ class QueueViewModel: ObservableObject {
     }
     
     
-    private func writeMetadata(to imageData: Data, title: String, description: String, keywords: [String], categories: [String]) -> Data? {
-        guard let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return nil }
-        guard let type = CGImageSourceGetType(source) else { return nil }
-        
-        let destinationData = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(destinationData, type, 1, nil) else { return nil }
-        
-        var properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]) ?? [:]
-        
-        // IPTC Dictionary
-        let iptcKey = kCGImagePropertyIPTCDictionary as String
-        var iptc = (properties[iptcKey] as? [String: Any]) ?? [:]
-        iptc[kCGImagePropertyIPTCObjectName as String] = title
-        iptc[kCGImagePropertyIPTCCaptionAbstract as String] = description
-        
-        // Объединяем ключевые слова с категориями, чтобы они точно появились на сайте стока
-        var mergedKeywords = keywords
-        for category in categories {
-            if !mergedKeywords.contains(category) {
-                mergedKeywords.append(category)
-            }
-        }
-        iptc[kCGImagePropertyIPTCKeywords as String] = mergedKeywords
-        
-        if !categories.isEmpty {
-            iptc[kCGImagePropertyIPTCCategory as String] = categories[0]
-            if categories.count > 1 {
-                iptc[kCGImagePropertyIPTCSupplementalCategory as String] = Array(categories.dropFirst())
-            }
-        }
-        
-        properties[iptcKey] = iptc
-        
-        // TIFF Dictionary
-        let tiffKey = kCGImagePropertyTIFFDictionary as String
-        var tiff = (properties[tiffKey] as? [String: Any]) ?? [:]
-        tiff[kCGImagePropertyTIFFImageDescription as String] = description
-        properties[tiffKey] = tiff
-        
-        // EXIF Dictionary
-        let exifKey = kCGImagePropertyExifDictionary as String
-        var exif = (properties[exifKey] as? [String: Any]) ?? [:]
-        exif[kCGImagePropertyExifUserComment as String] = description
-        properties[exifKey] = exif
-        
-        CGImageDestinationAddImageFromSource(destination, source, 0, properties as CFDictionary)
-        
-        if CGImageDestinationFinalize(destination) {
-            return destinationData as Data
-        }
-        return nil
-    }
+
 
     
     private func checkStockCredentials() -> Bool {
@@ -709,7 +656,15 @@ class QueueViewModel: ObservableObject {
     }
     
     func addPhoto(_ photo: PhotoMetadata) {
-        photos.append(photo)
+        var photoCopy = photo
+        if let data = photo.imageData {
+            let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).jpg")
+            Task.detached(priority: .background) {
+                try? data.write(to: fileURL, options: .atomic)
+            }
+            photoCopy.imageData = nil // Освобождаем ОЗУ
+        }
+        photos.append(photoCopy)
         savePhotosToDisk()
     }
     
@@ -892,7 +847,7 @@ struct UploadQueueView: View {
                             } else {
                                 LazyVStack(spacing: 16) {
                                     ForEach(Array(filteredPhotos.enumerated()), id: \.element.id) { index, photo in
-                                        photoRow(photo, index: index)
+                                        PhotoRowView(photo: photo, index: index, viewModel: viewModel)
                                             .onTapGesture {
                                                 HapticHelper.selection()
                                                 selectedDetailPhoto = photo
@@ -1103,14 +1058,25 @@ struct UploadQueueView: View {
         }
     }
     
-    // MARK: - Photo Card Component (Макет 1)
-    private func photoRow(_ photo: PhotoMetadata, index: Int) -> some View {
+// MARK: - Photo Row View (Equatable)
+struct PhotoRowView: View, Equatable {
+    let photo: PhotoMetadata
+    let index: Int
+    @ObservedObject var viewModel: QueueViewModel
+    
+    static func == (lhs: PhotoRowView, rhs: PhotoRowView) -> Bool {
+        return lhs.photo.id == rhs.photo.id &&
+               lhs.photo.status == rhs.photo.status &&
+               lhs.photo.uploadProgress == rhs.photo.uploadProgress &&
+               lhs.photo.title == rhs.photo.title &&
+               lhs.photo.filename == rhs.photo.filename &&
+               lhs.photo.fileSize == rhs.photo.fileSize &&
+               lhs.photo.selectedStocks == rhs.photo.selectedStocks
+    }
+    
+    var body: some View {
         VStack(spacing: 0) {
             photoImage(photo)
-                .onTapGesture {
-                    HapticHelper.trigger(.medium)
-                    selectedDetailPhoto = photo
-                }
             photoProgressBar(photo)
             photoButtons(photo, index: index)
         }
@@ -1127,38 +1093,22 @@ struct UploadQueueView: View {
     
     private func photoImage(_ photo: PhotoMetadata) -> some View {
         ZStack(alignment: .topLeading) {
-            Group {
-                if let uiImage = photo.uiImage {
-                    ZStack {
-                        // Размытый фон для заполнения пропорций по краям
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: 200)
-                            .frame(maxWidth: .infinity)
-                            .blur(radius: 16)
-                            .opacity(0.35)
-                            .clipped()
-                        
-                        // Полное изображение без обрезки
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 200)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .background(Color.black.opacity(0.2))
+            ZStack {
+                // Размытый фон для заполнения пропорций по краям
+                LazyImageView(photoId: photo.id, maxPixelSize: 150, contentMode: .fill)
                     .frame(height: 200)
-                } else {
-                    ZStack {
-                        Color.white.opacity(0.04)
-                        Image(systemName: "photo")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.secondary)
-                    }
+                    .frame(maxWidth: .infinity)
+                    .blur(radius: 16)
+                    .opacity(0.35)
+                    .clipped()
+                
+                // Полное изображение без обрезки
+                LazyImageView(photoId: photo.id, maxPixelSize: 400, contentMode: .fit)
                     .frame(height: 200)
-                }
+                    .frame(maxWidth: .infinity)
             }
+            .background(Color.black.opacity(0.2))
+            .frame(height: 200)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             
             // Статус READY (слева сверху)
@@ -1310,6 +1260,7 @@ struct UploadQueueView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
     }
+}
     
     // MARK: - Load Photos Logic
     private func loadSelectedPhotos(from items: [PhotosPickerItem]) {
@@ -1604,10 +1555,7 @@ struct DetailCardView: View {
             HStack(alignment: .top, spacing: 14) {
                 // Превью
                 Group {
-                    if let uiImage = photo.uiImage {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
+                    LazyImageView(photoId: photo.id, maxPixelSize: 300, contentMode: .fill)
                     } else {
                         ZStack {
                             Color.primary.opacity(0.04)

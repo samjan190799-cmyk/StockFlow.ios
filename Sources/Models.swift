@@ -67,12 +67,6 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         self.imageData = imageData
     }
     
-    var uiImage: UIImage? {
-        if let data = imageData {
-            return UIImage(data: data)
-        }
-        return nil
-    }
 }
 
 // MARK: - AI Provider

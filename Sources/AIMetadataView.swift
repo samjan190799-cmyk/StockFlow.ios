@@ -69,33 +69,25 @@ struct AIMetadataView: View {
     // MARK: Sections
 
     private var imagePreviewHeader: some View {
-        Group {
-            if let uiImage = photos[currentIndex].uiImage {
-                ZStack {
-                    // Soft blurred shadow projection
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(height: 150)
-                        .blur(radius: 24)
-                        .opacity(0.35)
-                        .scaleEffect(0.94)
-                    
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 150)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(LinearGradient(colors: [Color.white.opacity(0.3), Color.white.opacity(0.08)], startPoint: .top, endPoint: .bottom), lineWidth: 1.2)
-                        )
-                        .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 4)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-            }
+        ZStack {
+            // Soft blurred shadow projection
+            LazyImageView(photoId: photos[currentIndex].id, maxPixelSize: 150, contentMode: .fill)
+                .frame(height: 150)
+                .blur(radius: 24)
+                .opacity(0.35)
+                .scaleEffect(0.94)
+            
+            LazyImageView(photoId: photos[currentIndex].id, maxPixelSize: 400, contentMode: .fit)
+                .frame(height: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(LinearGradient(colors: [Color.white.opacity(0.3), Color.white.opacity(0.08)], startPoint: .top, endPoint: .bottom), lineWidth: 1.2)
+                )
+                .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 4)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
     }
 
     private var photoNavigator: some View {
@@ -384,7 +376,9 @@ struct AIMetadataView: View {
             return
         }
         
-        let data = photos[curIdx].imageData ?? Data()
+        let dirURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Photos")
+        let fileURL = dirURL.appendingPathComponent("\(photos[curIdx].id.uuidString).jpg")
+        let data = (try? Data(contentsOf: fileURL)) ?? Data()
         
         Task {
             do {
