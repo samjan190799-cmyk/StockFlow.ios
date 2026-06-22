@@ -1079,6 +1079,12 @@ struct PhotoRowView: View, Equatable {
             photoImage(photo)
             photoProgressBar(photo)
             photoButtons(photo, index: index)
+            if photo.status == .uploading {
+                Text("UPLOADING...")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(Color(hex: "10B981"))
+                    .padding(.bottom, 12)
+            }
         }
         .background(
             RoundedRectangle(cornerRadius: 18)
@@ -1246,14 +1252,6 @@ struct PhotoRowView: View, Equatable {
                 )
             }
             .disabled(photo.status == .success)
-            
-            // Индикатор загрузки UPLOADING..
-            if photo.status == .uploading {
-                Spacer()
-                Text("UPLOADING..")
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundStyle(Color(hex: "10B981"))
-            }
             
             Spacer()
         }
