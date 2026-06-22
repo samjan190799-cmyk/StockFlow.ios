@@ -45,9 +45,9 @@ extension Color {
 }
 
 // MARK: - Liquid Ambient Background (Fixed Layout with Drifting Blobs & Grid Texture)
+// MARK: - Liquid Ambient Background (Fixed Layout with Drifting Blobs & Grid Texture)
 struct LiquidBackgroundView: View {
     @Environment(\.colorScheme) var colorScheme
-    @State private var animateBlobs = false
     
     var body: some View {
         let isDark = colorScheme == .dark
@@ -57,60 +57,74 @@ struct LiquidBackgroundView: View {
         return ZStack {
             bgColor
             
-            // Plasma blobs
-            if isDark {
-                // Dark mode neon glow circles
-                ZStack {
-                    Circle()
-                        .fill(Color(hex: "4F46E5").opacity(0.18))
-                        .frame(width: 320, height: 320)
-                        .blur(radius: 65)
-                        .offset(x: animateBlobs ? -90 : 100, y: animateBlobs ? -110 : 90)
-                    
-                    Circle()
-                        .fill(Color(hex: "EC4899").opacity(0.15))
-                        .frame(width: 280, height: 280)
-                        .blur(radius: 65)
-                        .offset(x: animateBlobs ? 100 : -90, y: animateBlobs ? 90 : -110)
-                }
-            } else {
-                // Light mode soft pastel circles
-                ZStack {
-                    Circle()
-                        .fill(Color(hex: "A5B4FC").opacity(0.30))
-                        .frame(width: 350, height: 350)
-                        .blur(radius: 70)
-                        .offset(x: animateBlobs ? -80 : 90, y: animateBlobs ? -100 : 80)
-                    
-                    Circle()
-                        .fill(Color(hex: "FBCFE8").opacity(0.30))
-                        .frame(width: 300, height: 300)
-                        .blur(radius: 70)
-                        .offset(x: animateBlobs ? 90 : -80, y: animateBlobs ? 80 : -100)
-                }
-            }
+            // Анимированные сферы (вынесены в отдельный View для изоляции 120 FPS анимации)
+            AnimatedBlobsView(isDark: isDark)
             
-            // Retro dot-grid texture overlay for premium feel (Optimized)
-            Canvas { context, size in
-                var path = Path()
-                let dotSize: CGFloat = 1.2
-                let spacing: CGFloat = 18.0
-                for x in stride(from: 0, to: size.width, by: spacing) {
-                    for y in stride(from: 0, to: size.height, by: spacing) {
-                        path.addRect(CGRect(x: x, y: y, width: dotSize, height: dotSize))
-                    }
-                }
-                context.fill(path, with: .color(dotColor))
-            }
-            .allowsHitTesting(false)
+            // Статическая сетка (никогда не перерисовывается, экономя CPU)
+            StaticDotGridView(dotColor: dotColor)
         }
         .ignoresSafeArea()
-        .drawingGroup() // GPU-rendered texture to guarantee smooth 120 FPS
+    }
+}
+
+// MARK: - Вспомогательные оптимизированные подпредставления фона
+struct AnimatedBlobsView: View {
+    let isDark: Bool
+    @State private var animateBlobs = false
+    
+    var body: some View {
+        ZStack {
+            if isDark {
+                Circle()
+                    .fill(Color(hex: "4F46E5").opacity(0.18))
+                    .frame(width: 320, height: 320)
+                    .blur(radius: 65)
+                    .offset(x: animateBlobs ? -90 : 100, y: animateBlobs ? -110 : 90)
+                
+                Circle()
+                    .fill(Color(hex: "EC4899").opacity(0.15))
+                    .frame(width: 280, height: 280)
+                    .blur(radius: 65)
+                    .offset(x: animateBlobs ? 100 : -90, y: animateBlobs ? 90 : -110)
+            } else {
+                Circle()
+                    .fill(Color(hex: "A5B4FC").opacity(0.30))
+                    .frame(width: 350, height: 350)
+                    .blur(radius: 70)
+                    .offset(x: animateBlobs ? -80 : 90, y: animateBlobs ? -100 : 80)
+                
+                Circle()
+                    .fill(Color(hex: "FBCFE8").opacity(0.30))
+                    .frame(width: 300, height: 300)
+                    .blur(radius: 70)
+                    .offset(x: animateBlobs ? 90 : -80, y: animateBlobs ? 80 : -100)
+            }
+        }
+        .drawingGroup()
         .onAppear {
             withAnimation(.easeInOut(duration: 16).repeatForever(autoreverses: true)) {
                 animateBlobs = true
             }
         }
+    }
+}
+
+struct StaticDotGridView: View {
+    let dotColor: Color
+    
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            let dotSize: CGFloat = 1.2
+            let spacing: CGFloat = 18.0
+            for x in stride(from: 0, to: size.width, by: spacing) {
+                for y in stride(from: 0, to: size.height, by: spacing) {
+                    path.addRect(CGRect(x: x, y: y, width: dotSize, height: dotSize))
+                }
+            }
+            context.fill(path, with: .color(dotColor))
+        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -164,15 +178,15 @@ extension View {
 }
 
 // MARK: - SwiftUI Vector 3D Glass Logo
+// MARK: - SwiftUI Vector 3D Glass Logo
 struct SmartStockLogoView: View {
     @Environment(\.colorScheme) var colorScheme
     var size: CGFloat = 72
-    @State private var rotateLogo = false
     
     var body: some View {
         let isDark = colorScheme == .dark
         return ZStack {
-            // Glass base panel
+            // Glass base panel (статичный размытый контейнер, не перерисовывается при вращении)
             RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .frame(width: size, height: size)
@@ -192,11 +206,8 @@ struct SmartStockLogoView: View {
                 )
                 .shadow(color: Color.black.opacity(isDark ? 0.20 : 0.06), radius: 8, x: 0, y: 4)
             
-            // Aperture blades & Lens symbol
-            Image(systemName: "camera.aperture")
-                .font(.system(size: size * 0.48, weight: .light))
-                .foregroundStyle(AppleTheme.primaryGradient)
-                .rotationEffect(Angle(degrees: rotateLogo ? 360 : 0))
+            // Анимированный вращающийся элемент (вынесен отдельно, чтобы не ререндерить ultraThinMaterial)
+            RotatingApertureView(size: size)
             
             // Central Sparkle
             Image(systemName: "sparkles")
@@ -204,11 +215,23 @@ struct SmartStockLogoView: View {
                 .foregroundStyle(Color(hex: "F59E0B"))
                 .offset(x: size * 0.16, y: -size * 0.16)
         }
-        .onAppear {
-            withAnimation(.linear(duration: 25).repeatForever(autoreverses: false)) {
-                rotateLogo = true
+    }
+}
+
+struct RotatingApertureView: View {
+    var size: CGFloat
+    @State private var rotateLogo = false
+    
+    var body: some View {
+        Image(systemName: "camera.aperture")
+            .font(.system(size: size * 0.48, weight: .light))
+            .foregroundStyle(AppleTheme.primaryGradient)
+            .rotationEffect(Angle(degrees: rotateLogo ? 360 : 0))
+            .onAppear {
+                withAnimation(.linear(duration: 25).repeatForever(autoreverses: false)) {
+                    rotateLogo = true
+                }
             }
-        }
     }
 }
 
