@@ -27,29 +27,29 @@ struct InsightsView: View {
     @State private var animateChart = false
     @State private var activeURL: URL? = nil
     
-    // Обнуленные демонстрационные данные для разных периодов
+    // Демонстрационные данные для разных периодов с плавным ростом доходов
     private let data7D = [
-        EarningPoint(date: "15 ИЮН", value: 0.0),
-        EarningPoint(date: "16 ИЮН", value: 0.0),
-        EarningPoint(date: "17 ИЮН", value: 0.0),
-        EarningPoint(date: "18 ИЮН", value: 0.0),
-        EarningPoint(date: "19 ИЮН", value: 0.0),
-        EarningPoint(date: "20 ИЮН", value: 0.0),
-        EarningPoint(date: "21 ИЮН", value: 0.0)
+        EarningPoint(date: "15 ИЮН", value: 12.40),
+        EarningPoint(date: "16 ИЮН", value: 18.50),
+        EarningPoint(date: "17 ИЮН", value: 15.20),
+        EarningPoint(date: "18 ИЮН", value: 24.80),
+        EarningPoint(date: "19 ИЮН", value: 32.10),
+        EarningPoint(date: "20 ИЮН", value: 28.90),
+        EarningPoint(date: "21 ИЮН", value: 45.30)
     ]
     
     private let data30D = [
-        EarningPoint(date: "01 MAY", value: 0.0),
-        EarningPoint(date: "08 MAY", value: 0.0),
-        EarningPoint(date: "15 MAY", value: 0.0),
-        EarningPoint(date: "22 MAY", value: 0.0),
-        EarningPoint(date: "31 MAY", value: 0.0)
+        EarningPoint(date: "01 MAY", value: 45.0),
+        EarningPoint(date: "08 MAY", value: 85.0),
+        EarningPoint(date: "15 MAY", value: 120.0),
+        EarningPoint(date: "22 MAY", value: 180.0),
+        EarningPoint(date: "31 MAY", value: 215.0)
     ]
     
     private let data90D = [
-        EarningPoint(date: "АПР", value: 0.0),
-        EarningPoint(date: "МАЙ", value: 0.0),
-        EarningPoint(date: "ИЮН", value: 0.0)
+        EarningPoint(date: "АПР", value: 320.0),
+        EarningPoint(date: "МАЙ", value: 480.0),
+        EarningPoint(date: "ИЮН", value: 650.0)
     ]
     
     // Текущие отображаемые точки в зависимости от выбранного периода
@@ -67,33 +67,33 @@ struct InsightsView: View {
             name: "Getty Images",
             iconName: "g.circle.fill",
             iconColor: Color(hex: "10B981"),
-            syncTime: "Еще не запускался",
-            amount: 0.0,
-            isPositive: false,
-            statusText: "Нужна настройка",
-            statusColor: Color(hex: "9CA3AF"),
+            syncTime: "2 ч назад",
+            amount: 145.20,
+            isPositive: true,
+            statusText: "Активно",
+            statusColor: Color(hex: "10B981"),
             loginUrl: "https://esp.gettyimages.com"
         ),
         AgencyPerformance(
             name: "Adobe Stock",
             iconName: "a.circle.fill",
             iconColor: Color(hex: "EF4444"),
-            syncTime: "Еще не запускался",
-            amount: 0.0,
-            isPositive: false,
-            statusText: "Нужна настройка",
-            statusColor: Color(hex: "9CA3AF"),
+            syncTime: "1 ч назад",
+            amount: 280.50,
+            isPositive: true,
+            statusText: "Активно",
+            statusColor: Color(hex: "10B981"),
             loginUrl: "https://contributor.adobestock.com"
         ),
         AgencyPerformance(
             name: "Shutterstock",
             iconName: "s.circle.fill",
             iconColor: Color(hex: "7C3AED"),
-            syncTime: "Еще не запускался",
-            amount: 0.0,
-            isPositive: false,
-            statusText: "Нужна настройка",
-            statusColor: Color(hex: "9CA3AF"),
+            syncTime: "30 мин назад",
+            amount: 224.30,
+            isPositive: true,
+            statusText: "Активно",
+            statusColor: Color(hex: "10B981"),
             loginUrl: "https://submit.shutterstock.com"
         ),
         AgencyPerformance(
@@ -189,7 +189,7 @@ struct InsightsView: View {
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.secondary)
                     
-                    Text("$0.00")
+                    Text("$650.00")
                         .font(.system(size: 34, weight: .black))
                         .foregroundStyle(.primary)
                 }
@@ -216,7 +216,7 @@ struct InsightsView: View {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                     
-                    Text("$0.00")
+                    Text("$215.00")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(Color(hex: "EC4899"))
                 }
@@ -229,7 +229,7 @@ struct InsightsView: View {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                     
-                    Text("$0.00")
+                    Text("$45.50")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.primary)
                 }

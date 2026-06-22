@@ -27,6 +27,18 @@ struct AIAssistantView: View {
             text: "Analyze this image for a stock photo agency. Provide: 1. A commercially viable Title (max 70 characters), 2. A detailed Description (max 200 characters), 3. A list of 25-35 highly relevant Keywords (comma separated). Output strictly in JSON format matching this schema: {\"title\": \"string\", \"description\": \"string\", \"keywords\": [\"keyword1\", \"keyword2\", ...]}"
         ),
         PromptTemplate(
+            id: "commercial",
+            name: "Коммерческий",
+            icon: "briefcase.fill",
+            text: "Analyze this image for commercial stock photography. Focus on marketability, clean composition, business/lifestyle value, and clear concept. Provide: 1. A highly marketable Title (max 70 characters), 2. A detailed Description highlighting commercial applications (max 200 characters), 3. A list of 25-35 highly relevant commercial keywords (comma separated) like 'concept', 'lifestyle', 'professional'. Output strictly in JSON format matching this schema: {\"title\": \"string\", \"description\": \"string\", \"keywords\": [\"keyword1\", \"keyword2\", ...]}"
+        ),
+        PromptTemplate(
+            id: "editorial",
+            name: "Репортажный",
+            icon: "newspaper.fill",
+            text: "Analyze this image as a documentary or editorial/news photo. Focus on authentic storytelling, context, real emotions, and action. Provide: 1. An editorial/documentary Title (max 80 characters), 2. A factual Description explaining who, what, when and where (max 250 characters), 3. A list of 25-35 documentary and context keywords (comma separated) including editorial terms. Output strictly in JSON format matching this schema: {\"title\": \"string\", \"description\": \"string\", \"keywords\": [\"keyword1\", \"keyword2\", ...]}"
+        ),
+        PromptTemplate(
             id: "creative",
             name: "Креативный",
             icon: "paintpalette.fill",

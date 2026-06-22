@@ -817,6 +817,23 @@ class FTPSecureClient {
     }
 
     private static func ftpError(_ message: String) -> NSError {
-        NSError(domain: "FTPSecureClient", code: -1, userInfo: [NSLocalizedDescriptionKey: message])
+        var friendlyMessage = message
+        let lowerMessage = message.lowercased()
+        
+        if lowerMessage.contains("530") || lowerMessage.contains("not logged in") || lowerMessage.contains("user cannot log in") {
+            friendlyMessage = "Ошибка авторизации (530): Неверный логин или пароль. Пожалуйста, проверьте имя пользователя и FTP-пароль/код доступа в настройках агентства."
+        } else if lowerMessage.contains("timeout") || lowerMessage.contains("таймаут") || lowerMessage.contains("errno 60") || lowerMessage.contains("timed out") {
+            friendlyMessage = "Превышено время ожидания: Сервер не отвечает. Возможно, порт 21 (или 22) заблокирован вашим провайдером или сток временно недоступен. Попробуйте включить опцию 'Загрузка через ПК-сервер' в настройках."
+        } else if lowerMessage.contains("connection refused") || lowerMessage.contains("errno 61") {
+            friendlyMessage = "Соединение отклонено (61): Сервер отклонил подключение. Проверьте правильность адреса хоста в настройках агентства."
+        } else if lowerMessage.contains("dns") || lowerMessage.contains("getaddrinfo") || lowerMessage.contains("host not found") {
+            friendlyMessage = "Ошибка DNS: Не удалось найти сервер с таким именем. Проверьте подключение к интернету и адрес хоста."
+        } else if lowerMessage.contains("421") || lowerMessage.contains("too many connections") {
+            friendlyMessage = "Ошибка сервера (421): Слишком много одновременных подключений к стоку. Пожалуйста, подождите 5 минут или уменьшите количество параллельных потоков загрузки в настройках."
+        } else if lowerMessage.contains("no route to host") || lowerMessage.contains("errno 64") {
+            friendlyMessage = "Нет маршрута к хосту (64): Сервер недоступен. Проверьте настройки сети или VPN-подключения."
+        }
+        
+        return NSError(domain: "FTPSecureClient", code: -1, userInfo: [NSLocalizedDescriptionKey: friendlyMessage])
     }
 }
