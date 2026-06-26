@@ -87,7 +87,9 @@ struct SmartStockApp: App {
                 .preferredColorScheme(colorScheme)
                 .tint(Color(hex: "7C3AED"))
                 .onChange(of: sysLanguage) { _ in
-                    DispatchQueue.main.async {
+                    // Небольшая задержка (0.25с), чтобы дать системному Menu полностью закрыться
+                    // и завершить анимацию до уничтожения всей иерархии TabView
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                         tabViewID = UUID()
                     }
                 }
