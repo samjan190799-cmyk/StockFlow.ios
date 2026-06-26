@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 import SafariServices
 
 // MARK: - Модели данных для графика
@@ -858,7 +858,7 @@ struct InsightsView: View {
             VStack(spacing: 6) {
                 Text("Нет подключённых стоков")
                     .font(.system(size: 18, weight: .black))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)  // Адаптивный
 
                 Text("Перейдите в раздел «Агентства» и настройте учётные данные для Shutterstock, Adobe Stock или других стоков — статистика загрузок появится здесь автоматически.")
                     .font(.system(size: 12))
@@ -876,11 +876,11 @@ struct InsightsView: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 24)
-                .fill(Color(hex: "0D0E15").opacity(0.88))
+                .fill(.regularMaterial)  // Адаптивный: тёмный/светлый
         )
         .overlay(
             RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+                .stroke(Color.primary.opacity(0.10), lineWidth: 1.2)  // Адаптивная обводка
         )
         .padding(.horizontal, 24)
     }

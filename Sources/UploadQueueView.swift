@@ -773,7 +773,7 @@ struct UploadQueueView: View {
                                     VStack(spacing: 4) {
                                         Text("Загрузить новый контент".localized)
                                             .font(.system(size: 15, weight: .bold))
-                                            .foregroundStyle(.white)
+                                            .foregroundStyle(.primary)  // Адаптивный цвет
                                         Text("Нажмите для выбора или перетащите".localized)
                                             .font(.system(size: 11))
                                             .foregroundStyle(.secondary)
@@ -783,20 +783,20 @@ struct UploadQueueView: View {
                                 .frame(height: 140)
                                 .background(
                                     RoundedRectangle(cornerRadius: 18)
-                                        .fill(Color(hex: "0D0E15").opacity(0.55))
+                                        .fill(.ultraThinMaterial)  // Адаптивный фон вместо тёмного
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 18)
                                         .strokeBorder(
                                             LinearGradient(
-                                                colors: [Color(hex: "7C3AED").opacity(0.45), Color(hex: "EC4899").opacity(0.2)],
+                                                colors: [Color(hex: "7C3AED").opacity(colorScheme == .dark ? 0.45 : 0.35), Color(hex: "EC4899").opacity(colorScheme == .dark ? 0.2 : 0.15)],
                                                 startPoint: .topLeading,
                                                 endPoint: .bottomTrailing
                                             ),
                                             style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 4])
                                         )
                                 )
-                                .neonShadow(color: Color(hex: "7C3AED").opacity(0.2), radius: 8)
+                                .neonShadow(color: Color(hex: "7C3AED").opacity(0.15), radius: 8)
                             }
                             .buttonStyle(PremiumButtonStyle())
                             .onChange(of: selectedItems) { newItems in
@@ -806,26 +806,26 @@ struct UploadQueueView: View {
                                 loadSelectedPhotos(from: newItems)
                             }
                             
-                            // Строка поиска (Белая подложка с черным текстом)
+                            // Строка поиска (адаптивная для тёмной и светлой темы)
                             HStack {
                                 Image(systemName: "magnifyingglass")
                                     .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(.gray)
+                                    .foregroundStyle(.secondary)
                                 TextField("Поиск фото, альбомов...".localized, text: $searchText)
                                     .font(.system(size: 13))
-                                    .foregroundColor(.black)
+                                    .foregroundStyle(.primary)
                             }
                             .padding(.horizontal, 14)
                             .frame(height: 46)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.white)
+                                    .fill(colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.04))
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                                    .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08), lineWidth: 1)
                             )
-                            .neonShadow(color: .black.opacity(0.2), radius: 5)
+                            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.15 : 0.04), radius: 4, x: 0, y: 2)
                             
                             // Заголовок Recents и кнопка Select
                             HStack {
@@ -962,12 +962,12 @@ struct UploadQueueView: View {
                                 .font(.system(size: 11, weight: .black))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
-                                .background(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.06))
+                                .background(colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08))
                                 .foregroundStyle(.primary)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.white.opacity(0.18), lineWidth: 1.2)
+                                        .stroke(colorScheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.12), lineWidth: 1.2)
                                 )
                             }
                             .buttonStyle(PremiumButtonStyle())
@@ -1102,11 +1102,11 @@ struct PhotoRowView: View, Equatable {
         }
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(Color(hex: "0D0E15").opacity(0.55))
+                .fill(.ultraThinMaterial)  // Адаптивный фон
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+                .stroke(Color.primary.opacity(0.10), lineWidth: 1.2)  // Адаптивная обводка
         )
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
