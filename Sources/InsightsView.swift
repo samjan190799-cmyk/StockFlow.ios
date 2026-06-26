@@ -13,6 +13,7 @@ enum MetricType: String, CaseIterable, Identifiable, Sendable {
     case uploads  = "Загрузки"
     case success  = "Успешно"
     case failed   = "Ошибки"
+    case sales    = "Покупки"
 
     var id: String { self.rawValue }
 
@@ -21,6 +22,7 @@ enum MetricType: String, CaseIterable, Identifiable, Sendable {
         case .uploads: return "arrow.up.circle.fill"
         case .success: return "checkmark.circle.fill"
         case .failed:  return "xmark.circle.fill"
+        case .sales:   return "bag.circle.fill"
         }
     }
 
@@ -29,6 +31,7 @@ enum MetricType: String, CaseIterable, Identifiable, Sendable {
         case .uploads: return Color(hex: "7C3AED")
         case .success: return Color(hex: "10B981")
         case .failed:  return Color(hex: "EF4444")
+        case .sales:   return Color(hex: "F59E0B")
         }
     }
 }
@@ -118,6 +121,7 @@ struct InsightsView: View {
         case .uploads: return stats.successUploads(for: stock) + stats.failedUploads(for: stock)
         case .success: return stats.successUploads(for: stock)
         case .failed:  return stats.failedUploads(for: stock)
+        case .sales:   return stats.salesCount(for: stock)
         }
     }
 
@@ -126,25 +130,31 @@ struct InsightsView: View {
         if isDemoMode {
             return demoChartData
         }
-        // Для метрики загрузок — реальный chart, для успеха/ошибок — фильтруем
-        return stats.chartData(for: selectedStock, period: selectedPeriod)
+        return stats.chartData(for: selectedStock, period: selectedPeriod, metric: selectedMetric)
     }
 
     private var demoChartData: [EarningPoint] {
+        let mult: Double
+        switch selectedMetric {
+        case .sales:  mult = 0.35 // Продаж меньше, чем успешных загрузок
+        case .failed: mult = 0.08
+        default:      mult = 1.0
+        }
+        
         switch selectedPeriod {
         case "7D":
             return zip(
                 ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"],
                 [3.0, 5.0, 4.0, 8.0, 12.0, 7.0, 15.0]
-            ).map { EarningPoint(date: $0, value: $1) }
+            ).map { EarningPoint(date: $0, value: $1 * mult) }
         case "90D":
             return zip(["АПР", "МАЙ", "ИЮН"], [42.0, 78.0, 120.0])
-                .map { EarningPoint(date: $0, value: $1) }
+                .map { EarningPoint(date: $0, value: $1 * mult) }
         default:
             return zip(
                 ["01 МАЙ", "08 МАЙ", "15 МАЙ", "22 МАЙ", "31 МАЙ"],
                 [8.0, 14.0, 22.0, 31.0, 45.0]
-            ).map { EarningPoint(date: $0, value: $1) }
+            ).map { EarningPoint(date: $0, value: $1 * mult) }
         }
     }
 
@@ -553,7 +563,7 @@ struct InsightsView: View {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                     Text(isDemoMode ? "—" : "\(successVal)")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(Color(hex: "10B981"))
                         .contentTransition(.numericText())
                 }
@@ -566,8 +576,21 @@ struct InsightsView: View {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                     Text(isDemoMode ? "—" : "\(failedVal)")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(failedVal > 0 ? Color(hex: "EF4444") : .secondary)
+                        .contentTransition(.numericText())
+                }
+
+                Spacer()
+
+                // Покупки
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Покупки".localized)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(isDemoMode ? "—" : "\(stats.salesCount(for: selectedStock))")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color(hex: "F59E0B"))
                         .contentTransition(.numericText())
                 }
 

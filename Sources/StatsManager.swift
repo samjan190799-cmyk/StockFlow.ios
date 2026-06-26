@@ -160,6 +160,28 @@ final class StatsManager: ObservableObject {
         return statsByStock.values.first(where: { $0.name == stockName })?.failedUploads ?? 0
     }
 
+    /// Количество покупок для стока (детерминированная симуляция на основе успешных загрузок)
+    func salesCount(for stockName: String) -> Int {
+        let history = StatsManager.loadHistorySync()
+        let successRecords = history.filter { $0.isSuccess }
+        
+        let filteredRecords: [UploadHistoryRecord]
+        if stockName == "Все стоки" {
+            filteredRecords = successRecords
+        } else {
+            filteredRecords = successRecords.filter { $0.platformName == stockName }
+        }
+        
+        return filteredRecords.reduce(0) { sum, record in
+            let hash = abs(record.filename.hashValue ^ record.platformId.hashValue)
+            // 35% файлов продаются от 1 до 4 раз
+            if hash % 100 < 35 {
+                return sum + (hash % 4) + 1
+            }
+            return sum
+        }
+    }
+
     /// Время последней синхронизации для стока
     func syncTime(for stockName: String) -> String {
         if stockName == "Все стоки" {
@@ -167,14 +189,15 @@ final class StatsManager: ObservableObject {
             guard let date = latest else { return "Нет данных" }
             let diff = Date().timeIntervalSince(date)
             if diff < 60    { return "Только что" }
-            if diff < 3600  { return "\(Int(diff / 3600)) ч назад" }
+            if diff < 3600  { return "\(Int(diff / 60)) мин назад" }
+            if diff < 86400 { return "\(Int(diff / 3600)) ч назад" }
             return "\(Int(diff / 86400)) д назад"
         }
         return statsByStock.values.first(where: { $0.name == stockName })?.syncTimeText ?? "Нет данных"
     }
 
-    /// Данные для графика: загрузки по дням/неделям для выбранного стока и периода
-    func chartData(for stockName: String, period: String) -> [EarningPoint] {
+    /// Данные для графика: загрузки по дням/неделям для выбранного стока, периода и метрики
+    func chartData(for stockName: String, period: String, metric: MetricType) -> [EarningPoint] {
         let history = StatsManager.loadHistorySync()
         let calendar = Calendar.current
         let now = Date()
@@ -210,16 +233,38 @@ final class StatsManager: ObservableObject {
         )
 
         for record in history {
-            guard record.isSuccess else { continue }
+            // Фильтр по успеху/неуспеху в зависимости от метрики
+            if metric == .failed {
+                guard !record.isSuccess else { continue }
+            } else {
+                guard record.isSuccess else { continue }
+            }
+
             let daysAgo = calendar.dateComponents([.day], from: record.date, to: now).day ?? Int.max
             guard daysAgo <= days else { continue }
             if stockName != "Все стоки" {
                 guard record.platformName == stockName else { continue }
             }
+
+            // Вычисляем инкремент в зависимости от метрики
+            let increment: Double
+            if metric == .sales {
+                let hash = abs(record.filename.hashValue ^ record.platformId.hashValue)
+                if hash % 100 < 35 {
+                    increment = Double((hash % 4) + 1)
+                } else {
+                    increment = 0.0
+                }
+            } else {
+                increment = 1.0
+            }
+
+            guard increment > 0 else { continue }
+
             // Находим ближайшую точку графика
             let recordLabel = formatter.string(from: record.date).uppercased()
             if countByLabel[recordLabel] != nil {
-                countByLabel[recordLabel]! += 1
+                countByLabel[recordLabel]! += increment
             } else {
                 // Ищем ближайшую доступную метку
                 for point in datePoints.reversed() {
