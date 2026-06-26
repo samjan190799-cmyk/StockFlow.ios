@@ -9,6 +9,7 @@ struct SmartStockApp: App {
     @StateObject private var viewModel = QueueViewModel()
     @StateObject private var authManager = AuthManager.shared
     @State private var tabViewID = UUID()
+    @State private var isReloadingLanguage = false
     
     var colorScheme: ColorScheme? {
         switch sysTheme {
@@ -54,9 +55,18 @@ struct SmartStockApp: App {
     
     var body: some Scene {
         WindowGroup {
-            if authManager.isAuthenticated {
-                // id(sysLanguage) перестраивает всё дерево при смене языка — это единственный
-                // надёжный способ перерендерить .tabItem labels, которые вычисляются при инициализации
+            if isReloadingLanguage {
+                ZStack {
+                    LiquidBackgroundView()
+                    VStack(spacing: 20) {
+                        SmartStockLogoView(size: 80)
+                        ProgressView()
+                            .tint(Color(hex: "7C3AED"))
+                    }
+                }
+                .preferredColorScheme(colorScheme)
+                .transition(.opacity)
+            } else if authManager.isAuthenticated {
                 TabView {
                     UploadQueueView(viewModel: viewModel)
                         .tabItem {
@@ -87,10 +97,15 @@ struct SmartStockApp: App {
                 .preferredColorScheme(colorScheme)
                 .tint(Color(hex: "7C3AED"))
                 .onChange(of: sysLanguage) { _ in
-                    // Небольшая задержка (0.25с), чтобы дать системному Menu полностью закрыться
-                    // и завершить анимацию до уничтожения всей иерархии TabView
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isReloadingLanguage = true
+                    }
+                    // Даем 0.35 секунды на закрытие системного меню и плавную анимацию скрытия TabView
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         tabViewID = UUID()
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isReloadingLanguage = false
+                        }
                     }
                 }
             } else {

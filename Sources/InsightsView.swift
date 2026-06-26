@@ -83,11 +83,17 @@ struct InsightsView: View {
     }
 
     private var isDemoMode: Bool {
-        connectedPlatforms.isEmpty
+        connectedPlatforms.isEmpty && StatsManager.loadHistorySync().isEmpty
     }
 
     private var availableStocks: [String] {
-        ["Все стоки"] + connectedPlatforms.map { $0.name }
+        let platforms = connectedPlatforms
+        if platforms.isEmpty {
+            let history = StatsManager.loadHistorySync()
+            let historyStocks = Array(Set(history.map { $0.platformName })).sorted()
+            return ["Все стоки"] + (historyStocks.isEmpty ? ["Shutterstock", "Adobe Stock"] : historyStocks)
+        }
+        return ["Все стоки"] + platforms.map { $0.name }
     }
 
     // Иконка для выбранного стока

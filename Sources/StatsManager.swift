@@ -71,15 +71,24 @@ final class StatsManager: ObservableObject {
         saveHistorySync(history)
     }
 
+    private var refreshTask: Task<Void, Never>? = nil
+
+    deinit {
+        let task = refreshTask
+        task?.cancel()
+    }
+
     // MARK: - Обновление статистики (фоновая загрузка)
     func refresh() {
-        guard !isLoading else { return }
+        refreshTask?.cancel()
         isLoading = true
 
-        Task {
+        refreshTask = Task {
             // Захватываем данные на MainActor, потом отпускаем для обработки
             let history = StatsManager.loadHistorySync()
             let connectedPlatforms = StatsManager.getConnectedPlatforms()
+
+            if Task.isCancelled { return }
 
             // Вычисляем агрегацию (тяжёлая работа в фоне)
             let result: [String: StockStats] = await Task.detached(priority: .userInitiated) {
@@ -120,6 +129,8 @@ final class StatsManager: ObservableObject {
                 }
                 return res
             }.value
+
+            if Task.isCancelled { return }
 
             // Обновляем UI на MainActor (мы уже на нём)
             self.statsByStock = result
