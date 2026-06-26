@@ -423,6 +423,13 @@ class QueueViewModel: ObservableObject {
                     )
                     successCount += 1
                     uploadError = nil
+                    // Записываем успешную загрузку в историю статистики
+                    StatsManager.recordUpload(
+                        platformId: platform.id,
+                        platformName: platform.name,
+                        filename: photo.filename,
+                        isSuccess: true
+                    )
                     break
                 } catch {
                     attempts += 1
@@ -435,6 +442,13 @@ class QueueViewModel: ObservableObject {
             
             if let error = uploadError {
                 uploadErrors.append("\(platform.name): \(error.localizedDescription)")
+                // Записываем ошибку в историю статистики (только после всех попыток)
+                StatsManager.recordUpload(
+                    platformId: platform.id,
+                    platformName: platform.name,
+                    filename: photo.filename,
+                    isSuccess: false
+                )
             }
         }
         

@@ -1,169 +1,230 @@
-import SwiftUI
+﻿import SwiftUI
 import SafariServices
 
-// MARK: - Модели данных для статистики
+// MARK: - Модели данных для графика
 struct EarningPoint: Identifiable, Sendable {
     let id = UUID()
     let date: String
     let value: Double
 }
 
-struct AgencyPerformance: Identifiable, Sendable {
-    let id = UUID()
-    let name: String
-    let iconName: String
-    let iconColor: Color
-    let syncTime: String
-    let amount: Double
-    let isPositive: Bool
-    let statusText: String
-    let statusColor: Color
-    let loginUrl: String
-}
+// MARK: - Metric Type
+enum MetricType: String, CaseIterable, Identifiable, Sendable {
+    case uploads  = "Загрузки"
+    case success  = "Успешно"
+    case failed   = "Ошибки"
 
-struct InsightsView: View {
-    @Environment(\.colorScheme) var colorScheme
-    @State private var selectedPeriod = "30D"
-    @State private var animateChart = false
-    @State private var activeURL: URL? = nil
-    
-    // Демонстрационные данные для разных периодов с плавным ростом доходов
-    private let data7D = [
-        EarningPoint(date: "15 ИЮН", value: 12.40),
-        EarningPoint(date: "16 ИЮН", value: 18.50),
-        EarningPoint(date: "17 ИЮН", value: 15.20),
-        EarningPoint(date: "18 ИЮН", value: 24.80),
-        EarningPoint(date: "19 ИЮН", value: 32.10),
-        EarningPoint(date: "20 ИЮН", value: 28.90),
-        EarningPoint(date: "21 ИЮН", value: 45.30)
-    ]
-    
-    private let data30D = [
-        EarningPoint(date: "01 MAY", value: 45.0),
-        EarningPoint(date: "08 MAY", value: 85.0),
-        EarningPoint(date: "15 MAY", value: 120.0),
-        EarningPoint(date: "22 MAY", value: 180.0),
-        EarningPoint(date: "31 MAY", value: 215.0)
-    ]
-    
-    private let data90D = [
-        EarningPoint(date: "АПР", value: 320.0),
-        EarningPoint(date: "МАЙ", value: 480.0),
-        EarningPoint(date: "ИЮН", value: 650.0)
-    ]
-    
-    // Текущие отображаемые точки в зависимости от выбранного периода
-    var currentData: [EarningPoint] {
-        switch selectedPeriod {
-        case "7D": return data7D
-        case "90D": return data90D
-        default: return data30D
+    var id: String { self.rawValue }
+
+    var icon: String {
+        switch self {
+        case .uploads: return "arrow.up.circle.fill"
+        case .success: return "checkmark.circle.fill"
+        case .failed:  return "xmark.circle.fill"
         }
     }
-    
-    // Эффективность по агентствам
-    private let agencies = [
-        AgencyPerformance(
-            name: "Getty Images",
-            iconName: "g.circle.fill",
-            iconColor: Color(hex: "10B981"),
-            syncTime: "2 ч назад",
-            amount: 145.20,
-            isPositive: true,
-            statusText: "Активно",
-            statusColor: Color(hex: "10B981"),
-            loginUrl: "https://esp.gettyimages.com"
-        ),
-        AgencyPerformance(
-            name: "Adobe Stock",
-            iconName: "a.circle.fill",
-            iconColor: Color(hex: "EF4444"),
-            syncTime: "1 ч назад",
-            amount: 280.50,
-            isPositive: true,
-            statusText: "Активно",
-            statusColor: Color(hex: "10B981"),
-            loginUrl: "https://contributor.adobestock.com"
-        ),
-        AgencyPerformance(
-            name: "Shutterstock",
-            iconName: "s.circle.fill",
-            iconColor: Color(hex: "7C3AED"),
-            syncTime: "30 мин назад",
-            amount: 224.30,
-            isPositive: true,
-            statusText: "Активно",
-            statusColor: Color(hex: "10B981"),
-            loginUrl: "https://submit.shutterstock.com"
-        ),
-        AgencyPerformance(
-            name: "Alamy",
-            iconName: "a.circle",
-            iconColor: Color(hex: "F59E0B"),
-            syncTime: "Еще не запускался",
-            amount: 0.0,
-            isPositive: false,
-            statusText: "Нужна настройка",
-            statusColor: Color(hex: "9CA3AF"),
-            loginUrl: "https://www.alamy.com/contributor"
-        )
-    ]
-    
+
+    var color: Color {
+        switch self {
+        case .uploads: return Color(hex: "7C3AED")
+        case .success: return Color(hex: "10B981")
+        case .failed:  return Color(hex: "EF4444")
+        }
+    }
+}
+
+// MARK: - Shimmer модификатор
+struct ShimmerModifier: ViewModifier {
+    @State private var phase: CGFloat = -1
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geo in
+                    LinearGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: .clear,                              location: 0),
+                            .init(color: .white.opacity(0.18),                location: 0.4),
+                            .init(color: .clear,                              location: 1),
+                        ]),
+                        startPoint: .init(x: phase, y: 0),
+                        endPoint:   .init(x: phase + 0.6, y: 0)
+                    )
+                }
+            )
+            .onAppear {
+                withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+                    phase = 1.5
+                }
+            }
+    }
+}
+
+extension View {
+    func shimmer() -> some View {
+        modifier(ShimmerModifier())
+    }
+}
+
+// MARK: - InsightsView
+struct InsightsView: View {
+    @Environment(\.colorScheme) var colorScheme
+    @StateObject private var stats = StatsManager()
+
+    @State private var selectedPeriod  = "30D"
+    @State private var selectedMetric: MetricType = .uploads
+    @State private var selectedStock   = "Все стоки"
+    @State private var activeURL: URL? = nil
+    @State private var showStockPicker = false
+
+    // MARK: - Computed
+    private var connectedPlatforms: [StockPlatform] {
+        StatsManager.getConnectedPlatforms()
+    }
+
+    private var isDemoMode: Bool {
+        connectedPlatforms.isEmpty
+    }
+
+    private var availableStocks: [String] {
+        ["Все стоки"] + connectedPlatforms.map { $0.name }
+    }
+
+    // Иконка для выбранного стока
+    private func stockIcon(_ name: String) -> (sfSymbol: String, color: Color) {
+        switch name {
+        case "Shutterstock":       return ("s.circle.fill",  Color(hex: "7C3AED"))
+        case "Adobe Stock":        return ("a.circle.fill",  Color(hex: "EF4444"))
+        case "iStock / Getty":     return ("g.circle.fill",  Color(hex: "10B981"))
+        case "Alamy":              return ("a.circle",       Color(hex: "F59E0B"))
+        case "Dreamstime":         return ("d.circle.fill",  Color(hex: "3B82F6"))
+        case "Freepik":            return ("f.circle.fill",  Color(hex: "EC4899"))
+        case "Depositphotos":      return ("d.circle",       Color(hex: "06B6D4"))
+        case "123RF":              return ("1.circle.fill",  Color(hex: "F97316"))
+        case "Pond5":              return ("p.circle.fill",  Color(hex: "8B5CF6"))
+        default:                   return ("chart.bar.fill", Color(hex: "7C3AED"))
+        }
+    }
+
+    // Значение метрики для выбранного стока
+    private func metricValue(for metric: MetricType, stock: String) -> Int {
+        switch metric {
+        case .uploads: return stats.successUploads(for: stock) + stats.failedUploads(for: stock)
+        case .success: return stats.successUploads(for: stock)
+        case .failed:  return stats.failedUploads(for: stock)
+        }
+    }
+
+    // Данные графика
+    private var currentChartData: [EarningPoint] {
+        if isDemoMode {
+            return demoChartData
+        }
+        // Для метрики загрузок — реальный chart, для успеха/ошибок — фильтруем
+        return stats.chartData(for: selectedStock, period: selectedPeriod)
+    }
+
+    private var demoChartData: [EarningPoint] {
+        switch selectedPeriod {
+        case "7D":
+            return zip(
+                ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"],
+                [3.0, 5.0, 4.0, 8.0, 12.0, 7.0, 15.0]
+            ).map { EarningPoint(date: $0, value: $1) }
+        case "90D":
+            return zip(["АПР", "МАЙ", "ИЮН"], [42.0, 78.0, 120.0])
+                .map { EarningPoint(date: $0, value: $1) }
+        default:
+            return zip(
+                ["01 МАЙ", "08 МАЙ", "15 МАЙ", "22 МАЙ", "31 МАЙ"],
+                [8.0, 14.0, 22.0, 31.0, 45.0]
+            ).map { EarningPoint(date: $0, value: $1) }
+        }
+    }
+
+    // MARK: - Body
     var body: some View {
         NavigationStack {
             ZStack {
                 LiquidBackgroundView()
-                
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // Карточка общего баланса
-                        balanceCard
+
+                VStack(spacing: 0) {
+                    // Выпадающий пикер стоков
+                    if !isDemoMode {
+                        stockPickerSection
                             .padding(.horizontal)
-                            .padding(.top, 12)
-                        
-                        // Карточка истории доходов (график)
-                        earningsHistoryCard
-                            .padding(.horizontal)
-                        
-                        // Раздел эффективности по агентствам
-                        performanceSection
-                            .padding(.horizontal)
-                            .padding(.bottom, 24)
+                            .padding(.top, 8)
+                            .zIndex(10)
                     }
+
+                    ScrollView {
+                        VStack(spacing: 14) {
+                            // Вкладки метрик
+                            metricsTabs
+                                .padding(.horizontal)
+                                .padding(.top, isDemoMode ? 12 : 8)
+
+                            if stats.isLoading {
+                                // Shimmer-скелетон
+                                skeletonCards
+                                    .padding(.horizontal)
+                            } else {
+                                // Карточки статистики
+                                statsCard
+                                    .padding(.horizontal)
+
+                                // График
+                                chartCard
+                                    .padding(.horizontal)
+
+                                // Список стоков
+                                if !isDemoMode {
+                                    performanceSection
+                                        .padding(.horizontal)
+                                        .padding(.bottom, 24)
+                                }
+                            }
+                        }
+                    }
+                    .blur(radius: isDemoMode ? 3.0 : 0.0)
+                    .allowsHitTesting(!isDemoMode)
+                }
+
+                // Демо-оверлей
+                if isDemoMode {
+                    demoModeOverlay
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    HStack(spacing: 10) {
-                        // Аватарка пользователя
-                        Image(systemName: "person.crop.circle.fill")
-                            .font(.system(size: 32))
+                    HStack(spacing: 8) {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(AppleTheme.primaryGradient)
-                            .neonShadow(color: Color(hex: "7C3AED"), radius: 4)
-                        
+
                         Text("Статистика".localized)
-                            .font(.system(size: 20, weight: .bold))
+                            .font(.system(size: 18, weight: .black))
                             .foregroundStyle(.primary)
                     }
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 12) {
+                    if !isDemoMode {
                         Button(action: {
-                            HapticHelper.trigger(.medium)
+                            HapticHelper.selection()
+                            stats.refresh()
                         }) {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.primary)
-                        }
-                        
-                        Button(action: {
-                            HapticHelper.trigger(.medium)
-                        }) {
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.primary)
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(stats.isLoading ? 360 : 0))
+                                .animation(
+                                    stats.isLoading
+                                        ? .linear(duration: 1).repeatForever(autoreverses: false)
+                                        : .default,
+                                    value: stats.isLoading
+                                )
                         }
                     }
                 }
@@ -177,95 +238,368 @@ struct InsightsView: View {
                         .ignoresSafeArea()
                 }
             }
+            .onAppear {
+                stats.refresh()
+                // Сбрасываем выбор если выбранный сток больше не настроен
+                if selectedStock != "Все стоки" && !connectedPlatforms.map({ $0.name }).contains(selectedStock) {
+                    selectedStock = "Все стоки"
+                }
+            }
         }
     }
-    
-    // MARK: - Карточка общего баланса
-    private var balanceCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Общий баланс".localized.uppercased())
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.secondary)
-                    
-                    Text("$650.00")
-                        .font(.system(size: 34, weight: .black))
+
+    // MARK: - Выпадающий пикер стоков
+    private var stockPickerSection: some View {
+        VStack(spacing: 0) {
+            // Кнопка-заголовок пикера
+            Button(action: {
+                HapticHelper.selection()
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                    showStockPicker.toggle()
+                }
+            }) {
+                HStack(spacing: 10) {
+                    let icon = stockIcon(selectedStock)
+                    ZStack {
+                        Circle()
+                            .fill(icon.color.opacity(0.15))
+                            .frame(width: 28, height: 28)
+                        Image(systemName: icon.sfSymbol)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(icon.color)
+                    }
+
+                    Text(selectedStock)
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.primary)
-                }
-                
-                Spacer()
-                
-                // Зеленая светящаяся точка
-                Circle()
-                    .fill(Color(hex: "10B981"))
-                    .frame(width: 8, height: 8)
-                    .neonShadow(color: Color(hex: "10B981"), radius: 6)
-                    .padding(8)
-                    .background(Color(hex: "10B981").opacity(0.12))
-                    .clipShape(Circle())
-            }
-            
-            Divider()
-                .background(Color.white.opacity(0.10))
-            
-            HStack {
-                // Колонка за последние 30 дней
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("За последние 30 дней".localized)
-                        .font(.system(size: 10, weight: .medium))
+
+                    Spacer()
+
+                    // Счётчик файлов
+                    if selectedStock != "Все стоки" {
+                        let count = stats.successUploads(for: selectedStock)
+                        Text("\(count) загрузок")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("\(stats.totalSuccessUploads) всего")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.secondary)
-                    
-                    Text("$215.00")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(Color(hex: "EC4899"))
+                        .rotationEffect(.degrees(showStockPicker ? 180 : 0))
                 }
-                
-                Spacer()
-                
-                // Колонка ожидания подтверждения
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Ожидает подтверждения".localized)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    
-                    Text("$45.50")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            // Выпадающий список
+            if showStockPicker {
+                VStack(spacing: 4) {
+                    ForEach(availableStocks, id: \.self) { stock in
+                        Button(action: {
+                            HapticHelper.selection()
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                selectedStock = stock
+                                showStockPicker = false
+                            }
+                        }) {
+                            let icon = stockIcon(stock)
+                            let isSelected = stock == selectedStock
+                            HStack(spacing: 10) {
+                                ZStack {
+                                    Circle()
+                                        .fill(icon.color.opacity(isSelected ? 0.2 : 0.08))
+                                        .frame(width: 28, height: 28)
+                                    Image(systemName: icon.sfSymbol)
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundStyle(icon.color)
+                                }
+
+                                Text(stock)
+                                    .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                                    .foregroundStyle(isSelected ? .primary : .secondary)
+
+                                Spacer()
+
+                                if isSelected {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(Color(hex: "7C3AED"))
+                                }
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .background(
+                                isSelected
+                                    ? Color(hex: "7C3AED").opacity(0.08)
+                                    : Color.clear
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
                 }
-                
-                Spacer()
+                .padding(6)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                )
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.95, anchor: .top).combined(with: .opacity),
+                    removal:   .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
+                ))
+                .padding(.top, 6)
+                .shadow(color: .black.opacity(0.18), radius: 16, x: 0, y: 8)
             }
-            
-            Divider()
-                .background(Color.white.opacity(0.10))
-            
-            HStack(spacing: 8) {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color(hex: "7C3AED"))
-                Text("Нажмите на агентство ниже, чтобы зайти в личный кабинет через встроенный браузер.".localized)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-            }
-            .padding(.top, 2)
         }
-        .glassCard(cornerRadius: 20, padding: 18)
-        .neonShadow(color: Color(hex: "7C3AED").opacity(0.3), radius: 10)
     }
-    
-    // MARK: - Карточка истории доходов
-    private var earningsHistoryCard: some View {
+
+    // MARK: - Shimmer-скелетон
+    private var skeletonCards: some View {
+        VStack(spacing: 14) {
+            // Скелетон вкладок метрик
+            HStack(spacing: 10) {
+                ForEach(0..<3, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.06))
+                        .frame(height: 60)
+                        .shimmer()
+                }
+            }
+
+            // Скелетон карточки статистики
+            VStack(alignment: .leading, spacing: 12) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(0.08))
+                    .frame(width: 140, height: 16)
+                    .shimmer()
+
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(0.12))
+                    .frame(width: 90, height: 32)
+                    .shimmer()
+
+                Divider().background(Color.white.opacity(0.08))
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 6) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.06))
+                            .frame(width: 100, height: 12)
+                            .shimmer()
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.10))
+                            .frame(width: 60, height: 20)
+                            .shimmer()
+                    }
+                    Spacer()
+                    VStack(alignment: .leading, spacing: 6) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.06))
+                            .frame(width: 100, height: 12)
+                            .shimmer()
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.10))
+                            .frame(width: 60, height: 20)
+                            .shimmer()
+                    }
+                    Spacer()
+                }
+            }
+            .padding(16)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.08), lineWidth: 1))
+
+            // Скелетон графика
+            VStack(alignment: .leading, spacing: 12) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(0.08))
+                    .frame(width: 100, height: 16)
+                    .shimmer()
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(0.06))
+                    .frame(height: 120)
+                    .shimmer()
+            }
+            .padding(14)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        }
+    }
+
+    // MARK: - Вкладки метрик
+    private var metricsTabs: some View {
+        HStack(spacing: 10) {
+            ForEach(MetricType.allCases) { metric in
+                let isSelected = selectedMetric == metric
+                let value = metricValue(for: metric, stock: selectedStock)
+
+                Button(action: {
+                    HapticHelper.selection()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        selectedMetric = metric
+                    }
+                }) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 4) {
+                            Image(systemName: metric.icon)
+                                .font(.system(size: 8, weight: .bold))
+                            Text(metric.rawValue.uppercased())
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        .foregroundStyle(isSelected ? .white.opacity(0.85) : .secondary)
+
+                        if stats.isLoading && !isDemoMode {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.white.opacity(0.15))
+                                .frame(width: 40, height: 18)
+                                .shimmer()
+                        } else {
+                            Text(isDemoMode ? "—" : "\(value)")
+                                .font(.system(size: 16, weight: .black))
+                                .foregroundStyle(isSelected ? .white : .primary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(
+                        isSelected
+                            ? LinearGradient(colors: [metric.color, metric.color.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            : LinearGradient(colors: [Color.white.opacity(0.04)], startPoint: .top, endPoint: .bottom)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isSelected ? Color.clear : Color.white.opacity(0.08), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+
+    // MARK: - Карточка статистики (реальные данные)
+    private var statsCard: some View {
+        let totalVal    = metricValue(for: selectedMetric, stock: selectedStock)
+        let successVal  = stats.successUploads(for: selectedStock)
+        let failedVal   = stats.failedUploads(for: selectedStock)
+        let syncText    = stats.syncTime(for: selectedStock)
+        let hasData     = totalVal > 0
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text((selectedMetric.rawValue + (selectedStock == "Все стоки" ? "" : " — " + selectedStock)).uppercased())
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+
+                    if isDemoMode {
+                        Text("—")
+                            .font(.system(size: 32, weight: .black))
+                            .foregroundStyle(.primary)
+                    } else {
+                        Text("\(totalVal)")
+                            .font(.system(size: 32, weight: .black))
+                            .foregroundStyle(.primary)
+                            .contentTransition(.numericText())
+                    }
+                }
+
+                Spacer()
+
+                VStack(spacing: 6) {
+                    Circle()
+                        .fill(hasData ? Color(hex: "10B981") : Color(hex: "9CA3AF"))
+                        .frame(width: 8, height: 8)
+                        .neonShadow(color: hasData ? Color(hex: "10B981") : .clear, radius: 6)
+
+                    Text(isDemoMode ? "Демо" : (hasData ? "Активно" : "Нет данных"))
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(hasData && !isDemoMode ? Color(hex: "10B981") : .secondary)
+                }
+                .padding(10)
+                .background((hasData && !isDemoMode ? Color(hex: "10B981") : Color.gray).opacity(0.1))
+                .clipShape(Circle())
+            }
+
+            Divider().background(Color.white.opacity(0.10))
+
+            HStack {
+                // Успешных
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Успешно".localized)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(isDemoMode ? "—" : "\(successVal)")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Color(hex: "10B981"))
+                        .contentTransition(.numericText())
+                }
+
+                Spacer()
+
+                // Ошибок
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Ошибок".localized)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(isDemoMode ? "—" : "\(failedVal)")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(failedVal > 0 ? Color(hex: "EF4444") : .secondary)
+                        .contentTransition(.numericText())
+                }
+
+                Spacer()
+
+                // Последняя синхронизация
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Синхронизация".localized)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(isDemoMode ? "—" : syncText)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .glassCard(cornerRadius: 18, padding: 16)
+    }
+
+    // MARK: - График
+    private var chartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("История доходов".localized)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.primary)
-                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Динамика загрузок".localized)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.primary)
+
+                    if !isDemoMode {
+                        Text(selectedStock == "Все стоки" ? "Все стоки" : selectedStock)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Spacer()
-                
+
                 // Переключатель периодов
                 HStack(spacing: 4) {
                     ForEach(["7D", "30D", "90D"], id: \.self) { period in
@@ -276,187 +610,210 @@ struct InsightsView: View {
                             }
                         }) {
                             Text(period)
-                                .font(.system(size: 10, weight: .bold))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
+                                .font(.system(size: 9, weight: .bold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
                                 .background {
                                     if selectedPeriod == period {
-                                        Color(hex: "7C3AED")
+                                        selectedMetric.color
                                     } else {
                                         Color.white.opacity(0.06)
                                     }
                                 }
                                 .foregroundStyle(selectedPeriod == period ? .white : .secondary)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
                     }
                 }
                 .padding(2)
                 .background(Color.black.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
-            
-            // График
+
             chartView
-                .frame(height: 140)
-                .padding(.top, 10)
-            
-            // Подписи дат
+                .frame(height: 120)
+                .padding(.top, 8)
+
             HStack {
-                ForEach(currentData) { point in
+                ForEach(currentChartData) { point in
                     Text(point.date)
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.system(size: 8, weight: .medium))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                 }
             }
             .padding(.top, 4)
         }
-        .glassCard(cornerRadius: 20, padding: 16)
+        .glassCard(cornerRadius: 18, padding: 14)
     }
-    
+
     // MARK: - Построение графика
     private var chartView: some View {
         GeometryReader { geo in
-            let width = geo.size.width
+            let width  = geo.size.width
             let height = geo.size.height
-            let points = currentData.map { $0.value }
-            let maxVal = points.max() ?? 1.0
+            let points = currentChartData.map { $0.value }
+            let maxVal = max(points.max() ?? 1.0, 1.0)
             let minVal = points.min() ?? 0.0
-            let diff = maxVal - minVal == 0 ? 1.0 : maxVal - minVal
-            
-            // Координаты для рисования
+            let diff   = maxVal - minVal == 0 ? 1.0 : maxVal - minVal
+
             let coordinates: [CGPoint] = points.enumerated().map { idx, val in
-                let x = width * CGFloat(idx) / CGFloat(points.count - 1)
-                let y = height - (height * CGFloat((val - minVal) / diff) * 0.7 + height * 0.15)
+                let x = points.count > 1
+                    ? width * CGFloat(idx) / CGFloat(points.count - 1)
+                    : width / 2
+                let y = height - (height * CGFloat((val - minVal) / diff) * 0.72 + height * 0.12)
                 return CGPoint(x: x, y: y)
             }
-            
+
+            let fillColor  = selectedMetric.color
+            let lineColor2 = selectedMetric == .failed ? Color(hex: "EF4444") : Color(hex: "EC4899")
+
             ZStack {
-                // Градиент под графиком
+                // Заливка под линией
                 Path { path in
                     guard !coordinates.isEmpty else { return }
                     path.move(to: CGPoint(x: 0, y: height))
                     path.addLine(to: coordinates[0])
-                    
                     for i in 1..<coordinates.count {
                         let p1 = coordinates[i - 1]
                         let p2 = coordinates[i]
-                        let control1 = CGPoint(x: p1.x + (p2.x - p1.x) / 2, y: p1.y)
-                        let control2 = CGPoint(x: p1.x + (p2.x - p1.x) / 2, y: p2.y)
-                        path.addCurve(to: p2, control1: control1, control2: control2)
+                        let c1 = CGPoint(x: p1.x + (p2.x - p1.x) / 2, y: p1.y)
+                        let c2 = CGPoint(x: p1.x + (p2.x - p1.x) / 2, y: p2.y)
+                        path.addCurve(to: p2, control1: c1, control2: c2)
                     }
-                    
                     path.addLine(to: CGPoint(x: width, y: height))
                     path.closeSubpath()
                 }
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: "7C3AED").opacity(0.24), Color(hex: "EC4899").opacity(0.02), .clear],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                
-                // Сама линия графика
+                .fill(LinearGradient(
+                    colors: [fillColor.opacity(0.28), fillColor.opacity(0.02), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ))
+
+                // Линия графика
                 Path { path in
                     guard !coordinates.isEmpty else { return }
                     path.move(to: coordinates[0])
-                    
                     for i in 1..<coordinates.count {
                         let p1 = coordinates[i - 1]
                         let p2 = coordinates[i]
-                        let control1 = CGPoint(x: p1.x + (p2.x - p1.x) / 2, y: p1.y)
-                        let control2 = CGPoint(x: p1.x + (p2.x - p1.x) / 2, y: p2.y)
-                        path.addCurve(to: p2, control1: control1, control2: control2)
+                        let c1 = CGPoint(x: p1.x + (p2.x - p1.x) / 2, y: p1.y)
+                        let c2 = CGPoint(x: p1.x + (p2.x - p1.x) / 2, y: p2.y)
+                        path.addCurve(to: p2, control1: c1, control2: c2)
                     }
                 }
                 .stroke(
                     LinearGradient(
-                        colors: [Color(hex: "7C3AED"), Color(hex: "EC4899")],
+                        colors: [fillColor, lineColor2],
                         startPoint: .leading,
                         endPoint: .trailing
                     ),
                     style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
                 )
-                .neonShadow(color: Color(hex: "EC4899"), radius: 4)
+                .neonShadow(color: fillColor, radius: 4)
+
+                // Точки данных
+                ForEach(Array(coordinates.enumerated()), id: \.offset) { _, pt in
+                    Circle()
+                        .fill(fillColor)
+                        .frame(width: 6, height: 6)
+                        .position(pt)
+                        .neonShadow(color: fillColor, radius: 3)
+                }
             }
         }
     }
-    
-    // MARK: - Эффективность агентств
+
+    // MARK: - Эффективность по стокам
     private var performanceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Эффективность агентств".localized)
-                    .font(.system(size: 16, weight: .bold))
+                Text("По стокам".localized)
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.primary)
-                
+
                 Spacer()
-                
-                Button(action: {
-                    HapticHelper.trigger(.medium)
-                }) {
-                    Text("Показать все".localized)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(hex: "7C3AED"))
-                }
+
+                Text("\(connectedPlatforms.count) подключено")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
             }
-            
+
             VStack(spacing: 10) {
-                ForEach(agencies) { agency in
+                ForEach(connectedPlatforms) { platform in
+                    let icon        = stockIcon(platform.name)
+                    let stokStats   = stats.statsByStock[platform.id]
+                    let uploads     = stokStats?.successUploads ?? 0
+                    let errors      = stokStats?.failedUploads  ?? 0
+                    let syncText    = stokStats?.syncTimeText   ?? "Нет данных"
+                    let loginUrl    = platformLoginUrl(platform.id)
+
                     Button(action: {
                         HapticHelper.trigger(.medium)
-                        if let url = URL(string: agency.loginUrl) {
+                        if let url = URL(string: loginUrl) {
                             activeURL = url
                         }
                     }) {
                         HStack(spacing: 12) {
-                            // Логотип агентства в стеклянном стиле
+                            // Иконка стока
                             ZStack {
                                 Circle()
-                                    .fill(agency.iconColor.opacity(0.12))
-                                    .frame(width: 40, height: 40)
-                                
-                                Image(systemName: agency.iconName)
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundStyle(agency.iconColor)
+                                    .fill(icon.color.opacity(0.12))
+                                    .frame(width: 38, height: 38)
+                                Image(systemName: icon.sfSymbol)
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(icon.color)
                             }
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                            )
-                            .neonShadow(color: agency.iconColor, radius: 4)
-                            
+                            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
+
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(agency.name)
+                                Text(platform.name)
                                     .font(.system(size: 13, weight: .bold))
                                     .foregroundStyle(.primary)
-                                
-                                Text("Синхронизация: ".localized + agency.syncTime.localized)
-                                    .font(.system(size: 10))
+                                Text("Синхронизация: ".localized + syncText)
+                                    .font(.system(size: 9))
                                     .foregroundStyle(.secondary)
                             }
-                            
+
                             Spacer()
-                            
-                            VStack(alignment: .trailing, spacing: 4) {
-                                // Сумма дохода
-                                Text((agency.isPositive ? "+" : "") + String(format: "$%.2f", agency.amount))
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(agency.isPositive ? Color(hex: "10B981") : .primary)
-                                
-                                // Статус-плашка
-                                Text(agency.statusText.localized)
+
+                            VStack(alignment: .trailing, spacing: 5) {
+                                HStack(spacing: 6) {
+                                    // Успешных
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(Color(hex: "10B981"))
+                                        Text("\(uploads)")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundStyle(Color(hex: "10B981"))
+                                    }
+
+                                    // Ошибок (только если есть)
+                                    if errors > 0 {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 9))
+                                                .foregroundStyle(Color(hex: "EF4444"))
+                                            Text("\(errors)")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundStyle(Color(hex: "EF4444"))
+                                        }
+                                    }
+                                }
+
+                                Text(uploads > 0 ? "Активно" : "Нет загрузок")
                                     .font(.system(size: 8, weight: .bold))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(agency.statusColor.opacity(0.12))
-                                    .foregroundStyle(agency.statusColor)
+                                    .background((uploads > 0 ? Color(hex: "10B981") : Color.gray).opacity(0.12))
+                                    .foregroundStyle(uploads > 0 ? Color(hex: "10B981") : .secondary)
                                     .clipShape(Capsule())
                                     .overlay(
-                                        Capsule()
-                                            .stroke(agency.statusColor.opacity(0.3), lineWidth: 1)
+                                        Capsule().stroke(
+                                            (uploads > 0 ? Color(hex: "10B981") : Color.gray).opacity(0.3),
+                                            lineWidth: 1
+                                        )
                                     )
                             }
                         }
@@ -467,17 +824,78 @@ struct InsightsView: View {
             }
         }
     }
+
+    // URL личного кабинета стока
+    private func platformLoginUrl(_ id: String) -> String {
+        switch id {
+        case "shutterstock":   return "https://submit.shutterstock.com"
+        case "adobe":          return "https://contributor.adobestock.com"
+        case "istock":         return "https://esp.gettyimages.com"
+        case "alamy":          return "https://www.alamy.com/contributor"
+        case "dreamstime":     return "https://www.dreamstime.com/sell-stock-photos"
+        case "freepik":        return "https://contributor.freepik.com"
+        case "depositphotos":  return "https://depositphotos.com/contributor"
+        case "123rf":          return "https://www.123rf.com/contributor"
+        case "pond5":          return "https://www.pond5.com/sell-stock"
+        default:               return "https://google.com"
+        }
+    }
+
+    // MARK: - Демо оверлей
+    private var demoModeOverlay: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(Color(hex: "7C3AED").opacity(0.12))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(AppleTheme.primaryGradient)
+            }
+            .neonShadow(color: Color(hex: "7C3AED"), radius: 10)
+
+            VStack(spacing: 6) {
+                Text("Нет подключённых стоков")
+                    .font(.system(size: 18, weight: .black))
+                    .foregroundStyle(.white)
+
+                Text("Перейдите в раздел «Агентства» и настройте учётные данные для Shutterstock, Adobe Stock или других стоков — статистика загрузок появится здесь автоматически.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+
+            Text("Перейти в настройки агентств →")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Color(hex: "7C3AED"))
+                .padding(.top, 4)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color(hex: "0D0E15").opacity(0.88))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+        )
+        .padding(.horizontal, 24)
+    }
 }
 
 // MARK: - Встроенный браузер
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
-    
+
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let controller = SFSafariViewController(url: url)
         controller.preferredControlTintColor = UIColor(red: 124/255, green: 58/255, blue: 237/255, alpha: 1.0)
         return controller
     }
-    
+
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
+
