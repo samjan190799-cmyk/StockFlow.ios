@@ -16,8 +16,8 @@ struct StockStats: Identifiable, Sendable {
     var syncTimeText: String {
         guard let date = lastUploadDate else { return "Нет данных" }
         let diff = Date().timeIntervalSince(date)
-        if diff < 60 { return "Только что" }
-        if diff < 3600 { return "\(Int(diff / 60)) мин назад" }
+        if diff < 60    { return "Только что" }
+        if diff < 3600  { return "\(Int(diff / 60)) мин назад" }
         if diff < 86400 { return "\(Int(diff / 3600)) ч назад" }
         return "\(Int(diff / 86400)) д назад"
     }
@@ -48,8 +48,8 @@ final class StatsManager: ObservableObject {
     init() {}
 
     // MARK: - Публичный метод: записать факт загрузки
-    /// Вызывается из QueueViewModel при смене статуса фото на .success или .error
-    static func recordUpload(
+    /// nonisolated — может вызываться из любого async-контекста без MainActor
+    nonisolated static func recordUpload(
         platformId: String,
         platformName: String,
         filename: String,
@@ -62,13 +62,13 @@ final class StatsManager: ObservableObject {
             date: Date(),
             isSuccess: isSuccess
         )
-        var history = StatsManager.loadHistory()
+        var history = loadHistorySync()
         history.append(record)
         // Храним не более 2000 последних записей
         if history.count > 2000 {
             history = Array(history.suffix(2000))
         }
-        StatsManager.saveHistory(history)
+        saveHistorySync(history)
     }
 
     // MARK: - Обновление статистики (фоновая загрузка)
@@ -76,50 +76,55 @@ final class StatsManager: ObservableObject {
         guard !isLoading else { return }
         isLoading = true
 
-        Task.detached(priority: .userInitiated) { [weak self] in
-            let history = StatsManager.loadHistory()
+        Task {
+            // Захватываем данные на MainActor, потом отпускаем для обработки
+            let history = StatsManager.loadHistorySync()
             let connectedPlatforms = StatsManager.getConnectedPlatforms()
-            var result: [String: StockStats] = [:]
 
-            // Инициализируем пустую статистику для каждого настроенного стока
-            for platform in connectedPlatforms {
-                result[platform.id] = StockStats(
-                    id: platform.id,
-                    name: platform.name,
-                    totalUploads: 0,
-                    successUploads: 0,
-                    failedUploads: 0,
-                    lastUploadDate: nil,
-                    lastUploadFilename: nil
-                )
-            }
+            // Вычисляем агрегацию (тяжёлая работа в фоне)
+            let result: [String: StockStats] = await Task.detached(priority: .userInitiated) {
+                var res: [String: StockStats] = [:]
 
-            // Суммируем по истории
-            for record in history {
-                guard result[record.platformId] != nil else { continue }
-                result[record.platformId]!.totalUploads += 1
-                if record.isSuccess {
-                    result[record.platformId]!.successUploads += 1
-                } else {
-                    result[record.platformId]!.failedUploads += 1
+                // Инициализируем пустую статистику для каждого настроенного стока
+                for platform in connectedPlatforms {
+                    res[platform.id] = StockStats(
+                        id: platform.id,
+                        name: platform.name,
+                        totalUploads: 0,
+                        successUploads: 0,
+                        failedUploads: 0,
+                        lastUploadDate: nil,
+                        lastUploadFilename: nil
+                    )
                 }
-                // Обновляем время последней загрузки
-                if let existing = result[record.platformId]!.lastUploadDate {
-                    if record.date > existing {
-                        result[record.platformId]!.lastUploadDate = record.date
-                        result[record.platformId]!.lastUploadFilename = record.filename
+
+                // Суммируем по истории
+                for record in history {
+                    guard res[record.platformId] != nil else { continue }
+                    res[record.platformId]!.totalUploads += 1
+                    if record.isSuccess {
+                        res[record.platformId]!.successUploads += 1
+                    } else {
+                        res[record.platformId]!.failedUploads += 1
                     }
-                } else {
-                    result[record.platformId]!.lastUploadDate = record.date
-                    result[record.platformId]!.lastUploadFilename = record.filename
+                    // Обновляем время последней загрузки
+                    if let existing = res[record.platformId]!.lastUploadDate {
+                        if record.date > existing {
+                            res[record.platformId]!.lastUploadDate = record.date
+                            res[record.platformId]!.lastUploadFilename = record.filename
+                        }
+                    } else {
+                        res[record.platformId]!.lastUploadDate = record.date
+                        res[record.platformId]!.lastUploadFilename = record.filename
+                    }
                 }
-            }
+                return res
+            }.value
 
-            await MainActor.run { [weak self] in
-                self?.statsByStock = result
-                self?.lastRefreshDate = Date()
-                self?.isLoading = false
-            }
+            // Обновляем UI на MainActor (мы уже на нём)
+            self.statsByStock = result
+            self.lastRefreshDate = Date()
+            self.isLoading = false
         }
     }
 
@@ -150,8 +155,8 @@ final class StatsManager: ObservableObject {
             let latest = statsByStock.values.compactMap { $0.lastUploadDate }.max()
             guard let date = latest else { return "Нет данных" }
             let diff = Date().timeIntervalSince(date)
-            if diff < 60 { return "Только что" }
-            if diff < 3600 { return "\(Int(diff / 3600)) ч назад" }
+            if diff < 60    { return "Только что" }
+            if diff < 3600  { return "\(Int(diff / 3600)) ч назад" }
             return "\(Int(diff / 86400)) д назад"
         }
         return statsByStock.values.first(where: { $0.name == stockName })?.syncTimeText ?? "Нет данных"
@@ -159,7 +164,7 @@ final class StatsManager: ObservableObject {
 
     /// Данные для графика: загрузки по дням/неделям для выбранного стока и периода
     func chartData(for stockName: String, period: String) -> [EarningPoint] {
-        let history = StatsManager.loadHistory()
+        let history = StatsManager.loadHistorySync()
         let calendar = Calendar.current
         let now = Date()
 
@@ -220,10 +225,10 @@ final class StatsManager: ObservableObject {
         }
     }
 
-    // MARK: - Приватные хелперы
+    // MARK: - Приватные хелперы (nonisolated — работают без MainActor)
 
     /// Список настроенных стоков из UserDefaults
-    static func getConnectedPlatforms() -> [StockPlatform] {
+    nonisolated static func getConnectedPlatforms() -> [StockPlatform] {
         guard let data = UserDefaults.standard.data(forKey: "stock_platforms"),
               let platforms = try? JSONDecoder().decode([StockPlatform].self, from: data) else {
             return []
@@ -231,7 +236,7 @@ final class StatsManager: ObservableObject {
         return platforms.filter { $0.isEnabled && !$0.username.isEmpty }
     }
 
-    static func loadHistory() -> [UploadHistoryRecord] {
+    nonisolated static func loadHistorySync() -> [UploadHistoryRecord] {
         guard let data = UserDefaults.standard.data(forKey: historyKey),
               let decoded = try? JSONDecoder().decode([UploadHistoryRecord].self, from: data) else {
             return []
@@ -239,7 +244,7 @@ final class StatsManager: ObservableObject {
         return decoded
     }
 
-    private static func saveHistory(_ history: [UploadHistoryRecord]) {
+    private nonisolated static func saveHistorySync(_ history: [UploadHistoryRecord]) {
         guard let data = try? JSONEncoder().encode(history) else { return }
         UserDefaults.standard.set(data, forKey: historyKey)
     }
