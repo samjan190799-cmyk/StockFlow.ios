@@ -219,7 +219,13 @@ struct Localizer {
         "Выйти": "Sign Out",
         "Отмена": "Cancel",
         "Войти с Google": "Sign In with Google",
-        "Частота кадров изменена на ": "Frame rate changed to "
+        "Частота кадров изменена на ": "Frame rate changed to ",
+        "Статистика очереди": "Queue Stats",
+        "Всего": "Total",
+        "Готово": "Ready",
+        "Загружено": "Uploaded",
+        "Ошибки": "Errors",
+        "Offline": "Offline"
     ]
     
     private static let hyTranslations: [String: String] = [
@@ -430,7 +436,13 @@ struct Localizer {
         "Выйти": "Դուրս գալ",
         "Отмена": "Չեղարկել",
         "Войти с Google": "Մուտք Google-ով",
-        "Частота кадров изменена на ": "Կադրերի հաճախականությունը փոխվել է՝ "
+        "Частота кадров изменена на ": "Կադրերի հաճախականությունը փոխվել է՝ ",
+        "Статистика очереди": "Հերթի վիճակագրություն",
+        "Всего": "Ընդամենը",
+        "Готово": "Պատրաստ է",
+        "Загружено": "Վերբեռնված է",
+        "Ошибки": "Սխալներ",
+        "Offline": "Անցանց"
     ]
     
     static func translate(_ text: String, to lang: String) -> String {

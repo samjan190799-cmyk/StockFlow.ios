@@ -751,60 +751,8 @@ struct UploadQueueView: View {
                 VStack(spacing: 0) {
                     ScrollView {
                         VStack(spacing: 16) {
-                            // Блок "Upload New Content" (Зона сброса/добавления фото)
-                            PhotosPicker(
-                                selection: $selectedItems,
-                                maxSelectionCount: 50,
-                                matching: .images,
-                                photoLibrary: .shared()
-                            ) {
-                                VStack(spacing: 12) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(Color(hex: "7C3AED").opacity(0.12))
-                                            .frame(width: 50, height: 50)
-                                        
-                                        Image(systemName: "camera.badge.ellipsis")
-                                            .font(.system(size: 24, weight: .bold))
-                                            .foregroundStyle(AppleTheme.primaryGradient)
-                                    }
-                                    .neonShadow(color: Color(hex: "7C3AED"), radius: 6)
-                                    
-                                    VStack(spacing: 4) {
-                                        Text("Загрузить новый контент".localized)
-                                            .font(.system(size: 15, weight: .bold))
-                                            .foregroundStyle(.primary)  // Адаптивный цвет
-                                        Text("Нажмите для выбора или перетащите".localized)
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 140)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .fill(.ultraThinMaterial)  // Адаптивный фон вместо тёмного
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .strokeBorder(
-                                            LinearGradient(
-                                                colors: [Color(hex: "7C3AED").opacity(colorScheme == .dark ? 0.45 : 0.35), Color(hex: "EC4899").opacity(colorScheme == .dark ? 0.2 : 0.15)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 4])
-                                        )
-                                )
-                                .neonShadow(color: Color(hex: "7C3AED").opacity(0.15), radius: 8)
-                            }
-                            .buttonStyle(PremiumButtonStyle())
-                            .onChange(of: selectedItems) { newItems in
-                                if !newItems.isEmpty {
-                                    HapticHelper.trigger(.medium)
-                                }
-                                loadSelectedPhotos(from: newItems)
-                            }
+                            // Виджет статистики и сети вместо зоны добавления файлов
+                            QueueStatsWidget(viewModel: viewModel)
                             
                             // Строка поиска (адаптивная для тёмной и светлой темы)
                             HStack {
@@ -916,6 +864,12 @@ struct UploadQueueView: View {
                                     .font(.system(size: 24, weight: .bold))
                                     .foregroundStyle(.white)
                             }
+                        }
+                        .onChange(of: selectedItems) { newItems in
+                            if !newItems.isEmpty {
+                                HapticHelper.trigger(.medium)
+                            }
+                            loadSelectedPhotos(from: newItems)
                         }
                         .padding(.trailing, 20)
                         .padding(.bottom, viewModel.photos.isEmpty ? 20 : 94) // Сдвигаем вверх, если виден Floating Action Bar
@@ -1492,6 +1446,99 @@ actor UploadSemaphore {
             let next = waiters.removeFirst()
             next.resume()
         }
+    }
+}
+
+// MARK: - Network Status Indicator Component
+struct NetworkStatusIndicator: View {
+    @StateObject private var monitor = NetworkMonitor.shared
+    
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(monitor.isConnected ? Color(hex: "10B981") : Color.red)
+                .frame(width: 8, height: 8)
+                .neonShadow(color: monitor.isConnected ? Color(hex: "10B981") : Color.red, radius: 2)
+            
+            Text(monitor.isConnected ? monitor.connectionType.rawValue : "Offline".localized)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.primary.opacity(0.04))
+        .clipShape(Capsule())
+    }
+}
+
+// MARK: - Queue Stats Widget
+struct QueueStatsWidget: View {
+    @ObservedObject var viewModel: QueueViewModel
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        let total = viewModel.photos.count
+        let success = viewModel.photos.filter { $0.status == .success }.count
+        let ready = viewModel.photos.filter { $0.status == .ready }.count
+        let uploading = viewModel.photos.filter { $0.status == .uploading }.count
+        let error = viewModel.photos.filter { $0.status == .error }.count
+        
+        HStack(spacing: 16) {
+            DashboardProgressRing(total: total, completed: success, ready: ready)
+                .padding(.vertical, 4)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Статистика очереди".localized)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.primary)
+                
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Всего".localized)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text("\(total)")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.primary)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Готово".localized)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text("\(ready)")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color(hex: "A855F7"))
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Загружено".localized)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text("\(success)")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color(hex: "10B981"))
+                    }
+                    
+                    if error > 0 {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Ошибки".localized)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            Text("\(error)")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            NetworkStatusIndicator()
+        }
+        .frame(maxWidth: .infinity)
+        .glassCard(cornerRadius: 18, padding: 14)
     }
 }
 // MARK: - Photo Detail Sheet

@@ -76,25 +76,25 @@ struct AnimatedBlobsView: View {
         ZStack {
             if isDark {
                 Circle()
-                    .fill(Color(hex: "4F46E5").opacity(0.18))
+                    .fill(Color(hex: "4F46E5").opacity(0.12))
                     .frame(width: 320, height: 320)
                     .blur(radius: 65)
                     .offset(x: animateBlobs ? -90 : 100, y: animateBlobs ? -110 : 90)
                 
                 Circle()
-                    .fill(Color(hex: "EC4899").opacity(0.15))
+                    .fill(Color(hex: "EC4899").opacity(0.10))
                     .frame(width: 280, height: 280)
                     .blur(radius: 65)
                     .offset(x: animateBlobs ? 100 : -90, y: animateBlobs ? 90 : -110)
             } else {
                 Circle()
-                    .fill(Color(hex: "A5B4FC").opacity(0.30))
+                    .fill(Color(hex: "A5B4FC").opacity(0.08))
                     .frame(width: 350, height: 350)
                     .blur(radius: 70)
                     .offset(x: animateBlobs ? -80 : 90, y: animateBlobs ? -100 : 80)
                 
                 Circle()
-                    .fill(Color(hex: "FBCFE8").opacity(0.30))
+                    .fill(Color(hex: "FBCFE8").opacity(0.06))
                     .frame(width: 300, height: 300)
                     .blur(radius: 70)
                     .offset(x: animateBlobs ? 90 : -80, y: animateBlobs ? 80 : -100)
