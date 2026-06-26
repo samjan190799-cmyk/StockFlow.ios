@@ -1,6 +1,7 @@
 import Foundation
 import Network
 
+@MainActor
 class NetworkMonitor: ObservableObject {
     static let shared = NetworkMonitor()
     
@@ -18,25 +19,28 @@ class NetworkMonitor: ObservableObject {
     }
     
     private init() {
-        // Откладываем запуск на следующий цикл главного потока,
-        // чтобы гарантировать полную готовность объекта NetworkMonitor в памяти
+        // Избегаем дедлока в swift_once, запуская мониторинг на следующем цикле RunLoop
         DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.monitor.pathUpdateHandler = { [weak self] path in
-                Task { @MainActor in
-                    self?.isConnected = path.status == .satisfied
-                    if path.usesInterfaceType(.wifi) {
-                        self?.connectionType = .wifi
-                    } else if path.usesInterfaceType(.cellular) {
-                        self?.connectionType = .cellular
-                    } else if path.usesInterfaceType(.wiredEthernet) {
-                        self?.connectionType = .ethernet
-                    } else {
-                        self?.connectionType = .unknown
-                    }
+            self?.startMonitoring()
+        }
+    }
+    
+    private func startMonitoring() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                guard let self = self else { return }
+                self.isConnected = path.status == .satisfied
+                if path.usesInterfaceType(.wifi) {
+                    self.connectionType = .wifi
+                } else if path.usesInterfaceType(.cellular) {
+                    self.connectionType = .cellular
+                } else if path.usesInterfaceType(.wiredEthernet) {
+                    self.connectionType = .ethernet
+                } else {
+                    self.connectionType = .unknown
                 }
             }
-            self.monitor.start(queue: self.queue)
         }
+        monitor.start(queue: queue)
     }
 }

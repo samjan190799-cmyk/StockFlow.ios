@@ -446,6 +446,9 @@ struct Localizer {
     ]
     
     static func translate(_ text: String, to lang: String) -> String {
+        if lang == "Русский" {
+            return text
+        }
         let dict = lang == "Հայերեն" ? hyTranslations : enTranslations
         if let translation = dict[text] {
             return translation

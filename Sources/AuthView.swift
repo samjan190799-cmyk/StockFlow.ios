@@ -268,7 +268,7 @@ struct AuthView: View {
         isLoading = true
         errorMessage = nil
         
-        Task {
+        Task { @MainActor in
             do {
                 if isRegisterMode {
                     _ = try await authManager.register(email: email, password: password)
@@ -291,7 +291,7 @@ struct AuthView: View {
                 HapticHelper.notification(.success)
                 isLoading = true
                 
-                Task {
+                Task { @MainActor in
                     do {
                         _ = try await authManager.loginWithApple(email: email)
                     } catch {
@@ -313,7 +313,7 @@ struct AuthView: View {
         isLoading = true
         errorMessage = nil
         
-        Task {
+        Task { @MainActor in
             do {
                 _ = try await authManager.loginWithGoogle()
                 HapticHelper.notification(.success)
