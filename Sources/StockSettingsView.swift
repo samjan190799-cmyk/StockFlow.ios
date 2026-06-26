@@ -3,6 +3,7 @@ import SwiftUI
 @MainActor
 struct StockSettingsView: View {
     @State private var platforms: [StockPlatform] = []
+    @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @State private var selectedPlatformId: String? = nil
     
     // For connection verification

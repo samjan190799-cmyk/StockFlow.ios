@@ -9,6 +9,7 @@ struct PromptTemplate: Identifiable, Hashable {
 
 struct AIAssistantView: View {
     @AppStorage("ai_provider") private var selectedProvider: String = AIProvider.gemini.rawValue
+    @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @AppStorage("api_key_gemini") private var apiKeyGemini: String = ""
     @AppStorage("api_key_openai") private var apiKeyOpenAI: String = ""
     @AppStorage("api_key_claude") private var apiKeyClaude: String = ""

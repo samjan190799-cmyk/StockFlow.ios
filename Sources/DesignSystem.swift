@@ -51,19 +51,10 @@ struct LiquidBackgroundView: View {
     
     var body: some View {
         let isDark = colorScheme == .dark
-        let dotColor: Color = isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)
-        let bgColor = isDark ? Color(hex: "060608") : Color(hex: "F8F9FA")
+        let bgColor = isDark ? Color.black : Color.white
         
-        return ZStack {
-            bgColor
-            
-            // Анимированные сферы (вынесены в отдельный View для изоляции 120 FPS анимации)
-            AnimatedBlobsView(isDark: isDark)
-            
-            // Статическая сетка (никогда не перерисовывается, экономя CPU)
-            StaticDotGridView(dotColor: dotColor)
-        }
-        .ignoresSafeArea()
+        return bgColor
+            .ignoresSafeArea()
     }
 }
 

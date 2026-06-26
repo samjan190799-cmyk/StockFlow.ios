@@ -73,6 +73,7 @@ extension View {
 struct InsightsView: View {
     @Environment(\.colorScheme) var colorScheme
     @StateObject private var stats = StatsManager()
+    @AppStorage("sys_language") private var sysLanguage: String = "Русский"
 
     @State private var selectedPeriod  = "30D"
     @State private var selectedMetric: MetricType = .uploads

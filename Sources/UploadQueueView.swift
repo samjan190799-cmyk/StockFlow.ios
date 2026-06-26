@@ -721,6 +721,7 @@ class QueueViewModel: ObservableObject {
 @MainActor
 struct UploadQueueView: View {
     @Environment(\.colorScheme) var colorScheme
+    @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @ObservedObject var viewModel: QueueViewModel
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var searchText = ""
