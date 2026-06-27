@@ -278,31 +278,39 @@ class QueueViewModel: ObservableObject {
         let tracker = UploadSpeedTracker()
         let fileSize = Double(photos[idx].fileSize.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "MB", with: "").replacingOccurrences(of: "KB", with: "").replacingOccurrences(of: "GB", with: "")) ?? 0
         
+        let (progressStream, progressContinuation) = AsyncStream<Double>.makeStream()
+        
+        // Потребляем прогресс на @MainActor
+        Task { @MainActor in
+            for await prog in progressStream {
+                if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                    self.photos[index].uploadProgress = prog
+                    
+                    // Замер скорости KB/s
+                    let now = Date()
+                    let dt = now.timeIntervalSince(tracker.lastTime)
+                    if dt > 0.4 {
+                        let dprog = prog - tracker.lastProgress
+                        if dprog > 0 {
+                            // Примерный размер файла в байтах (из uploadProgress * totalBytes)
+                            let totalBytes = max(fileSize * 1024 * 1024, 1.0)
+                            let bytesPerSec = (dprog * totalBytes) / dt
+                            self.uploadSpeedKBps[id] = bytesPerSec / 1024.0
+                        }
+                        tracker.lastProgress = prog
+                        tracker.lastTime = now
+                    }
+                }
+            }
+        }
+        
         Task {
             do {
                 let photo = self.photos[idx]
                 try await performRealUpload(for: photo) { prog in
-                    _ = Task { @MainActor in
-                        if let index = self.photos.firstIndex(where: { $0.id == id }) {
-                            self.photos[index].uploadProgress = prog
-                            
-                            // Замер скорости KB/s
-                            let now = Date()
-                            let dt = now.timeIntervalSince(tracker.lastTime)
-                            if dt > 0.4 {
-                                let dprog = prog - tracker.lastProgress
-                                if dprog > 0 {
-                                    // Примерный размер файла в байтах (из uploadProgress * totalBytes)
-                                    let totalBytes = max(fileSize * 1024 * 1024, 1.0)
-                                    let bytesPerSec = (dprog * totalBytes) / dt
-                                    self.uploadSpeedKBps[id] = bytesPerSec / 1024.0
-                                }
-                                tracker.lastProgress = prog
-                                tracker.lastTime = now
-                            }
-                        }
-                    }
+                    progressContinuation.yield(prog)
                 }
+                progressContinuation.finish()
                 
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].status = .success
@@ -315,6 +323,7 @@ class QueueViewModel: ObservableObject {
                     )
                 }
             } catch {
+                progressContinuation.finish()
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].status = .error
                     self.photos[index].errorMessage = error.localizedDescription
@@ -375,8 +384,10 @@ class QueueViewModel: ObservableObject {
                             let tracker = UploadSpeedTracker()
                             let fileSize = Double(currentPhoto.fileSize.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "MB", with: "").replacingOccurrences(of: "KB", with: "").replacingOccurrences(of: "GB", with: "")) ?? 0
                             
-                            try await self.performRealUpload(for: currentPhoto) { prog in
-                                _ = Task { @MainActor in
+                            let (progressStream, progressContinuation) = AsyncStream<Double>.makeStream()
+                            
+                            let progressTask = Task { @MainActor in
+                                for await prog in progressStream {
                                     if let index = self.photos.firstIndex(where: { $0.id == pId }) {
                                         self.photos[index].uploadProgress = prog
                                         
@@ -396,6 +407,12 @@ class QueueViewModel: ObservableObject {
                                     }
                                 }
                             }
+                            
+                            try await self.performRealUpload(for: currentPhoto) { prog in
+                                progressContinuation.yield(prog)
+                            }
+                            progressContinuation.finish()
+                            _ = await progressTask.result
                             
                             if let index = self.photos.firstIndex(where: { $0.id == pId }) {
                                 self.photos[index].status = .success
