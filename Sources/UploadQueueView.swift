@@ -791,6 +791,8 @@ struct UploadQueueView: View {
     @State private var selectedErrorMsg: String? = nil
     @State private var showingErrorAlert = false
     @State private var selectedDetailPhoto: PhotoMetadata? = nil
+    @State private var isSelectionMode = false
+    @State private var selectedPhotoIds = Set<UUID>()
     
     var filteredPhotos: [PhotoMetadata] {
         viewModel.photos.filter { photo in
@@ -842,8 +844,10 @@ struct UploadQueueView: View {
                                     .font(.system(size: 20, weight: .bold))
                                     .foregroundStyle(.primary)
                                 Spacer()
-                                Button("Выбрать".localized) {
+                                Button(isSelectionMode ? "Отмена".localized : "Выбрать".localized) {
                                     HapticHelper.trigger(.light)
+                                    isSelectionMode.toggle()
+                                    selectedPhotoIds.removeAll()
                                 }
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(Color(hex: "A855F7"))
@@ -870,11 +874,38 @@ struct UploadQueueView: View {
                             } else {
                                 LazyVStack(spacing: 16) {
                                     ForEach(Array(filteredPhotos.enumerated()), id: \.element.id) { index, photo in
-                                        PhotoRowView(photo: photo, index: index, viewModel: viewModel)
-                                            .onTapGesture {
-                                                HapticHelper.selection()
-                                                selectedDetailPhoto = photo
+                                        HStack(spacing: 12) {
+                                            if isSelectionMode {
+                                                Button(action: {
+                                                    HapticHelper.trigger(.light)
+                                                    if selectedPhotoIds.contains(photo.id) {
+                                                        selectedPhotoIds.remove(photo.id)
+                                                    } else {
+                                                        selectedPhotoIds.insert(photo.id)
+                                                    }
+                                                }) {
+                                                    Image(systemName: selectedPhotoIds.contains(photo.id) ? "checkmark.circle.fill" : "circle")
+                                                        .font(.system(size: 24, weight: .bold))
+                                                        .foregroundStyle(selectedPhotoIds.contains(photo.id) ? Color(hex: "A855F7") : .secondary)
+                                                }
+                                                .transition(.move(edge: .leading).combined(with: .opacity))
                                             }
+                                            
+                                            PhotoRowView(photo: photo, index: index, viewModel: viewModel)
+                                                .onTapGesture {
+                                                    if isSelectionMode {
+                                                        HapticHelper.trigger(.light)
+                                                        if selectedPhotoIds.contains(photo.id) {
+                                                            selectedPhotoIds.remove(photo.id)
+                                                        } else {
+                                                            selectedPhotoIds.insert(photo.id)
+                                                        }
+                                                    } else {
+                                                        HapticHelper.selection()
+                                                        selectedDetailPhoto = photo
+                                                    }
+                                                }
+                                        }
                                             .contextMenu {
                                                 Button {
                                                     viewModel.runAIForPhoto(photo.id)
@@ -942,50 +973,107 @@ struct UploadQueueView: View {
                     VStack {
                         Spacer()
                         HStack(spacing: 14) {
-                            Button(action: {
-                                HapticHelper.trigger(.medium)
-                                viewModel.runAIForAll()
-                            }) {
-                                HStack(spacing: 6) {
-                                    if #available(iOS 17.0, *) {
-                                        Image(systemName: "sparkles")
-                                            .symbolEffect(.pulse, options: .repeating, value: viewModel.isAnalyzingAll)
-                                    } else {
-                                        Image(systemName: "sparkles")
+                            if isSelectionMode {
+                                Button(action: {
+                                    HapticHelper.trigger(.medium)
+                                    let selectedIdsArray = Array(selectedPhotoIds)
+                                    Task {
+                                        for id in selectedIdsArray {
+                                            viewModel.runAIForPhoto(id)
+                                        }
                                     }
-                                    Text("Заполнить все ИИ")
+                                    isSelectionMode = false
+                                    selectedPhotoIds.removeAll()
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "sparkles")
+                                        Text("ИИ для выбранных")
+                                    }
+                                    .font(.system(size: 11, weight: .black))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(AppleTheme.primaryGradient)
+                                    .foregroundStyle(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .neonShadow(color: Color(hex: "7C3AED"), radius: 5)
                                 }
-                                .font(.system(size: 11, weight: .black))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(AppleTheme.primaryGradient)
-                                .foregroundStyle(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .neonShadow(color: Color(hex: "7C3AED"), radius: 5)
-                            }
-                            .buttonStyle(PremiumButtonStyle())
-                            .disabled(viewModel.isAnalyzingAll)
-                            
-                            Button(action: {
-                                HapticHelper.trigger(.medium)
-                                viewModel.uploadAllReady()
-                            }) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "paperplane.fill")
-                                    Text("Отправить")
+                                .buttonStyle(PremiumButtonStyle())
+                                .disabled(selectedPhotoIds.isEmpty)
+                                
+                                Button(action: {
+                                    HapticHelper.trigger(.medium)
+                                    let selectedIdsArray = Array(selectedPhotoIds)
+                                    Task {
+                                        for id in selectedIdsArray {
+                                            viewModel.uploadPhoto(id)
+                                        }
+                                    }
+                                    isSelectionMode = false
+                                    selectedPhotoIds.removeAll()
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "paperplane.fill")
+                                        Text("Отправить выбр.")
+                                    }
+                                    .font(.system(size: 11, weight: .black))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08))
+                                    .foregroundStyle(.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(colorScheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.12), lineWidth: 1.2)
+                                    )
                                 }
-                                .font(.system(size: 11, weight: .black))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08))
-                                .foregroundStyle(.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(colorScheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.12), lineWidth: 1.2)
-                                )
+                                .buttonStyle(PremiumButtonStyle())
+                                .disabled(selectedPhotoIds.isEmpty)
+                            } else {
+                                Button(action: {
+                                    HapticHelper.trigger(.medium)
+                                    viewModel.runAIForAll()
+                                }) {
+                                    HStack(spacing: 6) {
+                                        if #available(iOS 17.0, *) {
+                                            Image(systemName: "sparkles")
+                                                .symbolEffect(.pulse, options: .repeating, value: viewModel.isAnalyzingAll)
+                                        } else {
+                                            Image(systemName: "sparkles")
+                                        }
+                                        Text("Заполнить все ИИ")
+                                    }
+                                    .font(.system(size: 11, weight: .black))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(AppleTheme.primaryGradient)
+                                    .foregroundStyle(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .neonShadow(color: Color(hex: "7C3AED"), radius: 5)
+                                }
+                                .buttonStyle(PremiumButtonStyle())
+                                .disabled(viewModel.isAnalyzingAll)
+                                
+                                Button(action: {
+                                    HapticHelper.trigger(.medium)
+                                    viewModel.uploadAllReady()
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "paperplane.fill")
+                                        Text("Отправить")
+                                    }
+                                    .font(.system(size: 11, weight: .black))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08))
+                                    .foregroundStyle(.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(colorScheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.12), lineWidth: 1.2)
+                                    )
+                                }
+                                .buttonStyle(PremiumButtonStyle())
                             }
-                            .buttonStyle(PremiumButtonStyle())
                         }
                         .padding(10)
                         .glassCard(cornerRadius: 18, padding: 8)
