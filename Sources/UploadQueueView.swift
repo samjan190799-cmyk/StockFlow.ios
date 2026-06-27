@@ -5,6 +5,12 @@ import UIKit
 import AVFoundation
 import UniformTypeIdentifiers
 
+@MainActor
+final class UploadSpeedTracker {
+    var lastProgress: Double = 0.0
+    var lastTime: Date = Date()
+}
+
 // MARK: - Queue View Model (MainActor Isolated, Safe Concurrency)
 @MainActor
 class QueueViewModel: ObservableObject {
@@ -268,13 +274,33 @@ class QueueViewModel: ObservableObject {
         photos[idx].errorMessage = nil
         triggerToast("Загрузка файла".localized + " \(photos[idx].filename)...")
         
+        // Переменные для замера скорости загрузки
+        let fileSize = Double(photos[idx].fileSize.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "MB", with: "").replacingOccurrences(of: "KB", with: "").replacingOccurrences(of: "GB", with: "")) ?? 0
+        var lastSpeedProgress: Double = 0.0
+        var lastSpeedTime: Date = Date()
+        
         Task {
             do {
                 let photo = self.photos[idx]
-                try await performRealUpload(for: photo) { progress in
+                try await performRealUpload(for: photo) { prog in
                     _ = Task { @MainActor in
                         if let index = self.photos.firstIndex(where: { $0.id == id }) {
-                            self.photos[index].uploadProgress = progress
+                            self.photos[index].uploadProgress = prog
+                            
+                            // Замер скорости KB/s
+                            let now = Date()
+                            let dt = now.timeIntervalSince(lastSpeedTime)
+                            if dt > 0.4 {
+                                let dprog = prog - lastSpeedProgress
+                                if dprog > 0 {
+                                    // Примерный размер файла в байтах (из uploadProgress * totalBytes)
+                                    let totalBytes = max(fileSize * 1024 * 1024, 1.0)
+                                    let bytesPerSec = (dprog * totalBytes) / dt
+                                    self.uploadSpeedKBps[id] = bytesPerSec / 1024.0
+                                }
+                                lastSpeedProgress = prog
+                                lastSpeedTime = now
+                            }
                         }
                     }
                 }
@@ -346,10 +372,28 @@ class QueueViewModel: ObservableObject {
                                 await semaphore.signal()
                                 return
                             }
-                            try await self.performRealUpload(for: currentPhoto) { progress in
+                            
+                            let tracker = UploadSpeedTracker()
+                            let fileSize = Double(currentPhoto.fileSize.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "MB", with: "").replacingOccurrences(of: "KB", with: "").replacingOccurrences(of: "GB", with: "")) ?? 0
+                            
+                            try await self.performRealUpload(for: currentPhoto) { prog in
                                 _ = Task { @MainActor in
                                     if let index = self.photos.firstIndex(where: { $0.id == pId }) {
-                                        self.photos[index].uploadProgress = progress
+                                        self.photos[index].uploadProgress = prog
+                                        
+                                        // Замер скорости KB/s
+                                        let now = Date()
+                                        let dt = now.timeIntervalSince(tracker.lastTime)
+                                        if dt > 0.4 {
+                                            let dprog = prog - tracker.lastProgress
+                                            if dprog > 0 {
+                                                let totalBytes = max(fileSize * 1024 * 1024, 1.0)
+                                                let bytesPerSec = (dprog * totalBytes) / dt
+                                                self.uploadSpeedKBps[pId] = bytesPerSec / 1024.0
+                                            }
+                                            tracker.lastProgress = prog
+                                            tracker.lastTime = now
+                                        }
                                     }
                                 }
                             }
@@ -357,6 +401,7 @@ class QueueViewModel: ObservableObject {
                             if let index = self.photos.firstIndex(where: { $0.id == pId }) {
                                 self.photos[index].status = .success
                                 self.photos[index].uploadProgress = 1.0
+                                self.uploadSpeedKBps.removeValue(forKey: pId)
                                 self.triggerToast("Файл \(self.photos[index].filename) успешно загружен!")
                                 NotificationHelper.sendNotification(
                                     title: "Успешная выгрузка".localized,
@@ -367,6 +412,7 @@ class QueueViewModel: ObservableObject {
                             if let index = self.photos.firstIndex(where: { $0.id == pId }) {
                                 self.photos[index].status = .error
                                 self.photos[index].errorMessage = error.localizedDescription
+                                self.uploadSpeedKBps.removeValue(forKey: pId)
                                 self.triggerToast("Ошибка: \(self.photos[index].filename): \(error.localizedDescription)")
                                 NotificationHelper.sendNotification(
                                     title: "Ошибка выгрузки".localized,
@@ -388,31 +434,6 @@ class QueueViewModel: ObservableObject {
     }
     
     private func performRealUpload(for photo: PhotoMetadata, progress: (@Sendable (Double) -> Void)? = nil) async throws {
-        let photoId = photo.id
-        let fileSizeBytes = Double((try? Data(contentsOf: photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased().isEmpty ? "mp4" : URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg")")))?.count ?? 0)
-        
-        // Обёртка для замера скорости: отслеживаем прогресс + время
-        var lastProgress: Double = 0.0
-        var lastTime: Date = Date()
-        
-        let speedTrackingProgress: (@Sendable (Double) -> Void)? = { [weak self] prog in
-            progress?(prog)
-            // Вычисляем скорость на MainActor
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                let now = Date()
-                let dt = now.timeIntervalSince(lastTime)
-                if dt > 0.3 { // Обновляем не чаще ~3 раза в секунду
-                    let dprog = prog - lastProgress
-                    if dprog > 0 && fileSizeBytes > 0 {
-                        let bytesPerSec = (dprog * fileSizeBytes) / dt
-                        self.uploadSpeedKBps[photoId] = bytesPerSec / 1024.0
-                    }
-                    lastProgress = prog
-                    lastTime = now
-                }
-            }
-        }
 
         let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
         let actualExt = ext.isEmpty ? "mp4" : ext
