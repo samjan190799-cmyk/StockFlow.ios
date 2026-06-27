@@ -763,15 +763,76 @@ class QueueViewModel: ObservableObject {
         }
     }
     
-    func generateShutterstockCSV() -> String {
-        var csv = "Filename,Description,Keywords,Categories\n"
-        for photo in photos {
-            let cleanFilename = photo.filename.replacingOccurrences(of: "\"", with: "\"\"")
-            let cleanDesc = photo.description.replacingOccurrences(of: "\"", with: "\"\"")
-            let cleanKeywords = photo.keywords.joined(separator: ", ").replacingOccurrences(of: "\"", with: "\"\"")
-            let cleanCats = photo.categories.joined(separator: ", ").replacingOccurrences(of: "\"", with: "\"\"")
-            
-            csv += "\"\(cleanFilename)\",\"\(cleanDesc)\",\"\(cleanKeywords)\",\"\(cleanCats)\"\n"
+    // MARK: - CSV Export Helpers
+    
+    /// Фильтрует фотографии для экспорта:
+    /// Если forIds != nil — экспортируем только выбранные,
+    /// иначе — только те, что ещё не загружены (status != .success)
+    private func photosForExport(forIds: Set<UUID>?) -> [PhotoMetadata] {
+        if let ids = forIds {
+            return photos.filter { ids.contains($0.id) }
+        } else {
+            return photos.filter { $0.status != .success }
+        }
+    }
+    
+    private func escape(_ str: String) -> String {
+        "\"" + str.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
+    
+    // Shutterstock: Filename, Description, Keywords, Categories, Illustration, Mature Content, Editorial
+    func generateShutterstockCSV(forIds: Set<UUID>? = nil) -> String {
+        var csv = "Filename,Description,Keywords,Categories,Illustration,Mature Content,Editorial\n"
+        for photo in photosForExport(forIds: forIds) {
+            let fn = escape(photo.filename)
+            let desc = escape(photo.description)
+            let kw = escape(photo.keywords.prefix(50).joined(separator: ", "))
+            let cats = escape(photo.categories.prefix(2).joined(separator: ", "))
+            csv += "\(fn),\(desc),\(kw),\(cats),No,No,No\n"
+        }
+        return csv
+    }
+    
+    // Adobe Stock: Filename,Title,Keywords,Category,Releases
+    // Лимиты: Title ≤ 70 chars, Keywords ≤ 50 через запятую
+    func generateAdobeStockCSV(forIds: Set<UUID>? = nil) -> String {
+        var csv = "Filename,Title,Keywords,Category,Releases\n"
+        for photo in photosForExport(forIds: forIds) {
+            let fn = escape(photo.filename)
+            // Adobe не принимает заголовки длиннее 70 символов
+            let title = escape(String(photo.title.prefix(70)))
+            let kw = escape(photo.keywords.prefix(50).joined(separator: ", "))
+            // Adobe использует числовые коды категорий; оставляем первую текстовую категорию как есть
+            let cat = escape(photo.categories.first ?? "")
+            csv += "\(fn),\(title),\(kw),\(cat),\n"
+        }
+        return csv
+    }
+    
+    // Pond5: originalfilename, title, description, keywords
+    func generatePond5CSV(forIds: Set<UUID>? = nil) -> String {
+        var csv = "originalfilename,title,description,keywords\n"
+        for photo in photosForExport(forIds: forIds) {
+            let fn = escape(photo.filename)
+            let title = escape(String(photo.title.prefix(80)))
+            let desc = escape(photo.description)
+            let kw = escape(photo.keywords.prefix(50).joined(separator: ", "))
+            csv += "\(fn),\(title),\(desc),\(kw)\n"
+        }
+        return csv
+    }
+    
+    // Dreamstime: загружается тем же FTP в папку загрузки рядом с файлами
+    // Формат: filename, title, description, keywords, category
+    func generateDreamstimeCSV(forIds: Set<UUID>? = nil) -> String {
+        var csv = "filename,title,description,keywords,category\n"
+        for photo in photosForExport(forIds: forIds) {
+            let fn = escape(photo.filename)
+            let title = escape(String(photo.title.prefix(80)))
+            let desc = escape(photo.description)
+            let kw = escape(photo.keywords.prefix(50).joined(separator: ", "))
+            let cat = escape(photo.categories.first ?? "")
+            csv += "\(fn),\(title),\(desc),\(kw),\(cat)\n"
         }
         return csv
     }
@@ -793,6 +854,7 @@ struct UploadQueueView: View {
     @State private var selectedDetailPhoto: PhotoMetadata? = nil
     @State private var isSelectionMode = false
     @State private var selectedPhotoIds = Set<UUID>()
+    @State private var showCSVMenu = false
     
     var filteredPhotos: [PhotoMetadata] {
         viewModel.photos.filter { photo in
@@ -1116,13 +1178,49 @@ struct UploadQueueView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {
                         if !viewModel.photos.isEmpty {
-                            ShareLink(
-                                item: CSVDocument(csvText: viewModel.generateShutterstockCSV()),
-                                preview: SharePreview("shutterstock_metadata.csv", image: Image(systemName: "tablecells"))
-                            ) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(Color(hex: "7C3AED"))
+                            // Меню экспорта CSV для каждого стока
+                            let exportIds: Set<UUID>? = isSelectionMode && !selectedPhotoIds.isEmpty ? selectedPhotoIds : nil
+                            
+                            Menu {
+                                // Shutterstock
+                                ShareLink(
+                                    item: CSVDocument(csvText: viewModel.generateShutterstockCSV(forIds: exportIds)),
+                                    preview: SharePreview("shutterstock_metadata.csv", image: Image(systemName: "tablecells"))
+                                ) {
+                                    Label("Shutterstock CSV", systemImage: "s.circle.fill")
+                                }
+                                
+                                // Adobe Stock
+                                ShareLink(
+                                    item: CSVDocument(csvText: viewModel.generateAdobeStockCSV(forIds: exportIds)),
+                                    preview: SharePreview("adobe_stock_metadata.csv", image: Image(systemName: "tablecells"))
+                                ) {
+                                    Label("Adobe Stock CSV", systemImage: "a.circle.fill")
+                                }
+                                
+                                // Pond5
+                                ShareLink(
+                                    item: CSVDocument(csvText: viewModel.generatePond5CSV(forIds: exportIds)),
+                                    preview: SharePreview("pond5_metadata.csv", image: Image(systemName: "tablecells"))
+                                ) {
+                                    Label("Pond5 CSV", systemImage: "p.circle.fill")
+                                }
+                                
+                                // Dreamstime
+                                ShareLink(
+                                    item: CSVDocument(csvText: viewModel.generateDreamstimeCSV(forIds: exportIds)),
+                                    preview: SharePreview("dreamstime_metadata.csv", image: Image(systemName: "tablecells"))
+                                ) {
+                                    Label("Dreamstime CSV", systemImage: "d.circle.fill")
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 15))
+                                    Text("CSV")
+                                        .font(.system(size: 12, weight: .bold))
+                                }
+                                .foregroundStyle(Color(hex: "7C3AED"))
                             }
                         }
                         
