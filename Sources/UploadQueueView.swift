@@ -278,7 +278,11 @@ class QueueViewModel: ObservableObject {
         let tracker = UploadSpeedTracker()
         let fileSize = Double(photos[idx].fileSize.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "MB", with: "").replacingOccurrences(of: "KB", with: "").replacingOccurrences(of: "GB", with: "")) ?? 0
         
-        let (progressStream, progressContinuation) = AsyncStream<Double>.makeStream()
+        var escapedContinuation: AsyncStream<Double>.Continuation!
+        let progressStream = AsyncStream<Double> { cont in
+            escapedContinuation = cont
+        }
+        let progressContinuation = escapedContinuation!
         
         // Потребляем прогресс на @MainActor
         Task { @MainActor in
@@ -384,7 +388,11 @@ class QueueViewModel: ObservableObject {
                             let tracker = UploadSpeedTracker()
                             let fileSize = Double(currentPhoto.fileSize.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "MB", with: "").replacingOccurrences(of: "KB", with: "").replacingOccurrences(of: "GB", with: "")) ?? 0
                             
-                            let (progressStream, progressContinuation) = AsyncStream<Double>.makeStream()
+                            var escapedContinuation: AsyncStream<Double>.Continuation!
+                            let progressStream = AsyncStream<Double> { cont in
+                                escapedContinuation = cont
+                            }
+                            let progressContinuation = escapedContinuation!
                             
                             let progressTask = Task { @MainActor in
                                 for await prog in progressStream {
