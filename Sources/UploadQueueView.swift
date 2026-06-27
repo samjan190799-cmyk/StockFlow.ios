@@ -5,6 +5,10 @@ import UIKit
 import AVFoundation
 import UniformTypeIdentifiers
 
+final class ContinuationBox<Element>: @unchecked Sendable {
+    var continuation: AsyncStream<Element>.Continuation?
+}
+
 @MainActor
 final class UploadSpeedTracker {
     var lastProgress: Double = 0.0
@@ -278,11 +282,11 @@ class QueueViewModel: ObservableObject {
         let tracker = UploadSpeedTracker()
         let fileSize = Double(photos[idx].fileSize.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "MB", with: "").replacingOccurrences(of: "KB", with: "").replacingOccurrences(of: "GB", with: "")) ?? 0
         
-        var escapedContinuation: AsyncStream<Double>.Continuation!
+        let box = ContinuationBox<Double>()
         let progressStream = AsyncStream<Double> { cont in
-            escapedContinuation = cont
+            box.continuation = cont
         }
-        let progressContinuation = escapedContinuation!
+        guard let progressContinuation = box.continuation else { return }
         
         // Потребляем прогресс на @MainActor
         Task { @MainActor in
@@ -388,11 +392,11 @@ class QueueViewModel: ObservableObject {
                             let tracker = UploadSpeedTracker()
                             let fileSize = Double(currentPhoto.fileSize.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "MB", with: "").replacingOccurrences(of: "KB", with: "").replacingOccurrences(of: "GB", with: "")) ?? 0
                             
-                            var escapedContinuation: AsyncStream<Double>.Continuation!
+                            let box = ContinuationBox<Double>()
                             let progressStream = AsyncStream<Double> { cont in
-                                escapedContinuation = cont
+                                box.continuation = cont
                             }
-                            let progressContinuation = escapedContinuation!
+                            guard let progressContinuation = box.continuation else { return }
                             
                             let progressTask = Task { @MainActor in
                                 for await prog in progressStream {
