@@ -275,9 +275,8 @@ class QueueViewModel: ObservableObject {
         triggerToast("Загрузка файла".localized + " \(photos[idx].filename)...")
         
         // Переменные для замера скорости загрузки
+        let tracker = UploadSpeedTracker()
         let fileSize = Double(photos[idx].fileSize.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "MB", with: "").replacingOccurrences(of: "KB", with: "").replacingOccurrences(of: "GB", with: "")) ?? 0
-        var lastSpeedProgress: Double = 0.0
-        var lastSpeedTime: Date = Date()
         
         Task {
             do {
@@ -289,17 +288,17 @@ class QueueViewModel: ObservableObject {
                             
                             // Замер скорости KB/s
                             let now = Date()
-                            let dt = now.timeIntervalSince(lastSpeedTime)
+                            let dt = now.timeIntervalSince(tracker.lastTime)
                             if dt > 0.4 {
-                                let dprog = prog - lastSpeedProgress
+                                let dprog = prog - tracker.lastProgress
                                 if dprog > 0 {
                                     // Примерный размер файла в байтах (из uploadProgress * totalBytes)
                                     let totalBytes = max(fileSize * 1024 * 1024, 1.0)
                                     let bytesPerSec = (dprog * totalBytes) / dt
                                     self.uploadSpeedKBps[id] = bytesPerSec / 1024.0
                                 }
-                                lastSpeedProgress = prog
-                                lastSpeedTime = now
+                                tracker.lastProgress = prog
+                                tracker.lastTime = now
                             }
                         }
                     }
