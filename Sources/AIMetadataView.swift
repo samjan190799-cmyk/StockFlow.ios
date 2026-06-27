@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import AVFoundation
 
 // MARK: - AI metadata screen
 @MainActor
@@ -377,11 +378,39 @@ struct AIMetadataView: View {
         }
         
         let dirURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Photos")
-        let fileURL = dirURL.appendingPathComponent("\(photos[curIdx].id.uuidString).jpg")
-        let data = (try? Data(contentsOf: fileURL)) ?? Data()
+        let photo = photos[curIdx]
+        let isVideo = photo.isVideo
         
         Task {
             do {
+                let data: Data
+                if isVideo {
+                    let ext = (URL(fileURLWithPath: photo.filename).pathExtension.lowercased())
+                    let actualExt = ext.isEmpty ? "mp4" : ext
+                    let videoURL = dirURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
+                    let asset = AVAsset(url: videoURL)
+                    let generator = AVAssetImageGenerator(asset: asset)
+                    generator.appliesPreferredTrackTransform = true
+                    generator.requestedTimeToleranceBefore = .zero
+                    generator.requestedTimeToleranceAfter = .zero
+                    let time = CMTime(seconds: 1.0, preferredTimescale: 60)
+                    
+                    data = await Task.detached(priority: .userInitiated) { () -> Data in
+                        if let cgImage = try? generator.copyCGImage(at: time, actualTime: nil),
+                           let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9) {
+                            return jpegData
+                        }
+                        if let cgImageZero = try? generator.copyCGImage(at: .zero, actualTime: nil),
+                           let jpegDataZero = UIImage(cgImage: cgImageZero).jpegData(compressionQuality: 0.9) {
+                            return jpegDataZero
+                        }
+                        return Data()
+                    }.value
+                } else {
+                    let fileURL = dirURL.appendingPathComponent("\(photo.id.uuidString).jpg")
+                    data = (try? Data(contentsOf: fileURL)) ?? Data()
+                }
+                
                 let result = try await AIManager.shared.analyzePhoto(
                     imageData: data,
                     customPrompt: customPrompt,
