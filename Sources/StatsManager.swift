@@ -304,4 +304,26 @@ final class StatsManager: ObservableObject {
         guard let data = try? JSONEncoder().encode(history) else { return }
         UserDefaults.standard.set(data, forKey: historyKey)
     }
+    
+    // MARK: - История загрузок для отображения
+    
+    /// Возвращает последние `limit` записей, опционально отфильтрованных по имени стока.
+    /// Результат отсортирован от новых к старым.
+    func recentHistory(for stockName: String = "Все стоки", limit: Int = 50) -> [UploadHistoryRecord] {
+        let all = StatsManager.loadHistorySync()
+        let filtered: [UploadHistoryRecord]
+        if stockName == "Все стоки" {
+            filtered = all
+        } else {
+            filtered = all.filter { $0.platformName == stockName }
+        }
+        return Array(filtered.sorted(by: { $0.date > $1.date }).prefix(limit))
+    }
+    
+    /// Удаляет всю историю загрузок
+    func clearHistory() {
+        UserDefaults.standard.removeObject(forKey: StatsManager.historyKey)
+        statsByStock = [:]
+        lastRefreshDate = nil
+    }
 }

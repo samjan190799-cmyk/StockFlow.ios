@@ -80,6 +80,8 @@ struct InsightsView: View {
     @State private var selectedStock   = "Все стоки"
     @State private var activeURL: URL? = nil
     @State private var showStockPicker = false
+    @State private var showHistory     = false
+    @State private var showClearConfirm = false
 
     // MARK: - Computed
     private var connectedPlatforms: [StockPlatform] {
@@ -197,6 +199,10 @@ struct InsightsView: View {
                                 // Список стоков
                                 if !isDemoMode {
                                     performanceSection
+                                        .padding(.horizontal)
+
+                                    // История загрузок
+                                    historySection
                                         .padding(.horizontal)
                                         .padding(.bottom, 24)
                                 }
@@ -754,6 +760,148 @@ struct InsightsView: View {
         }
     }
 
+    // MARK: - История загрузок
+    private var historySection: some View {
+        let records = stats.recentHistory(for: selectedStock, limit: 40)
+        
+        return VStack(alignment: .leading, spacing: 10) {
+            // Заголовок + кнопка развернуть/свернуть
+            HStack {
+                Text("История загрузок")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.primary)
+                
+                Spacer()
+                
+                if !records.isEmpty {
+                    Text("\(records.count) записей")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showHistory.toggle()
+                    }
+                }) {
+                    Image(systemName: showHistory ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
+            if showHistory {
+                if records.isEmpty {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 8) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 28))
+                                .foregroundStyle(.secondary)
+                            Text("История пуста")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 20)
+                    .glassCard(cornerRadius: 14, padding: 0)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(records.enumerated()), id: \.element.filename) { idx, record in
+                            let icon = stockIcon(record.platformName)
+                            let df = DateFormatter()
+                            _ = { df.locale = Locale(identifier: "ru_RU"); df.dateFormat = "dd MMM HH:mm" }()
+                            
+                            HStack(spacing: 12) {
+                                // Иконка стока
+                                ZStack {
+                                    Circle()
+                                        .fill(icon.color.opacity(0.12))
+                                        .frame(width: 34, height: 34)
+                                    Image(systemName: icon.sfSymbol)
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundStyle(icon.color)
+                                }
+                                
+                                // Имя файла и сток
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(record.filename)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                    Text(record.platformName)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(icon.color)
+                                }
+                                
+                                Spacer()
+                                
+                                // Дата и статус
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Text(df.string(from: record.date))
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                    
+                                    // Бейдж успех/ошибка
+                                    HStack(spacing: 3) {
+                                        Image(systemName: record.isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                            .font(.system(size: 8))
+                                        Text(record.isSuccess ? "Ок" : "Ошибка")
+                                            .font(.system(size: 9, weight: .bold))
+                                    }
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background((record.isSuccess ? Color(hex: "10B981") : Color(hex: "EF4444")).opacity(0.12))
+                                    .foregroundStyle(record.isSuccess ? Color(hex: "10B981") : Color(hex: "EF4444"))
+                                    .clipShape(Capsule())
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            
+                            if idx < records.count - 1 {
+                                Divider()
+                                    .background(Color.primary.opacity(0.06))
+                                    .padding(.horizontal, 12)
+                            }
+                        }
+                    }
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.08), lineWidth: 1))
+                    
+                    // Кнопка очистки истории
+                    Button(action: {
+                        showClearConfirm = true
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11))
+                            Text("Очистить историю")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(Color.red.opacity(0.7))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.red.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.red.opacity(0.15), lineWidth: 1))
+                    }
+                }
+            }
+        }
+        .confirmationDialog("Очистить историю?", isPresented: $showClearConfirm, titleVisibility: .visible) {
+            Button("Очистить", role: .destructive) {
+                stats.clearHistory()
+                stats.refresh()
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Вся история загрузок будет удалена. Это действие нельзя отменить.")
+        }
+    }
+    
     // MARK: - Эффективность по стокам
     private var performanceSection: some View {
         VStack(alignment: .leading, spacing: 12) {

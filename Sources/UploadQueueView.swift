@@ -18,6 +18,8 @@ class QueueViewModel: ObservableObject {
     @Published var isAnalyzingAll = false
     @Published var toastMessage = ""
     @Published var showToast = false
+    /// Скорость загрузки в KB/с для каждого активного файла
+    @Published var uploadSpeedKBps: [UUID: Double] = [:]
     
     private var metadataURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -280,6 +282,7 @@ class QueueViewModel: ObservableObject {
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].status = .success
                     self.photos[index].uploadProgress = 1.0
+                    self.uploadSpeedKBps.removeValue(forKey: id)
                     self.triggerToast("Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized)
                     NotificationHelper.sendNotification(
                         title: "Успешная выгрузка".localized,
@@ -290,6 +293,7 @@ class QueueViewModel: ObservableObject {
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].status = .error
                     self.photos[index].errorMessage = error.localizedDescription
+                    self.uploadSpeedKBps.removeValue(forKey: id)
                     self.triggerToast("Ошибка выгрузки".localized + " \(self.photos[index].filename): \(error.localizedDescription)")
                     NotificationHelper.sendNotification(
                         title: "Ошибка выгрузки".localized,
@@ -384,6 +388,32 @@ class QueueViewModel: ObservableObject {
     }
     
     private func performRealUpload(for photo: PhotoMetadata, progress: (@Sendable (Double) -> Void)? = nil) async throws {
+        let photoId = photo.id
+        let fileSizeBytes = Double((try? Data(contentsOf: photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased().isEmpty ? "mp4" : URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg")")))?.count ?? 0)
+        
+        // Обёртка для замера скорости: отслеживаем прогресс + время
+        var lastProgress: Double = 0.0
+        var lastTime: Date = Date()
+        
+        let speedTrackingProgress: (@Sendable (Double) -> Void)? = { [weak self] prog in
+            progress?(prog)
+            // Вычисляем скорость на MainActor
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                let now = Date()
+                let dt = now.timeIntervalSince(lastTime)
+                if dt > 0.3 { // Обновляем не чаще ~3 раза в секунду
+                    let dprog = prog - lastProgress
+                    if dprog > 0 && fileSizeBytes > 0 {
+                        let bytesPerSec = (dprog * fileSizeBytes) / dt
+                        self.uploadSpeedKBps[photoId] = bytesPerSec / 1024.0
+                    }
+                    lastProgress = prog
+                    lastTime = now
+                }
+            }
+        }
+
         let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
         let actualExt = ext.isEmpty ? "mp4" : ext
         let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
@@ -706,12 +736,24 @@ class QueueViewModel: ObservableObject {
     
     func removePhoto(_ id: UUID) {
         photos.removeAll(where: { $0.id == id })
+        uploadSpeedKBps.removeValue(forKey: id)
         savePhotosToDisk()
     }
     
     func deletePhoto(at offsets: IndexSet) {
+        // Очищаем скорость для удаляемых
+        for idx in offsets {
+            if idx < photos.count {
+                uploadSpeedKBps.removeValue(forKey: photos[idx].id)
+            }
+        }
         photos.remove(atOffsets: offsets)
         savePhotosToDisk()
+    }
+    
+    /// Перемещает файл в очереди (для drag & drop)
+    func movePhoto(from source: IndexSet, to destination: Int) {
+        photos.move(fromOffsets: source, toOffset: destination)
     }
     
     func addPhoto(_ photo: PhotoMetadata) {
@@ -855,6 +897,7 @@ struct UploadQueueView: View {
     @State private var isSelectionMode = false
     @State private var selectedPhotoIds = Set<UUID>()
     @State private var showCSVMenu = false
+    @State private var isReorderMode = false
     
     var filteredPhotos: [PhotoMetadata] {
         viewModel.photos.filter { photo in
@@ -900,19 +943,34 @@ struct UploadQueueView: View {
                             )
                             .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.15 : 0.04), radius: 4, x: 0, y: 2)
                             
-                            // Заголовок Recents и кнопка Select
-                            HStack {
+                            // Заголовок Recents и кнопки управления режимами
+                            HStack(spacing: 10) {
                                 Text("Недавние".localized)
                                     .font(.system(size: 20, weight: .bold))
                                     .foregroundStyle(.primary)
                                 Spacer()
-                                Button(isSelectionMode ? "Отмена".localized : "Выбрать".localized) {
-                                    HapticHelper.trigger(.light)
-                                    isSelectionMode.toggle()
-                                    selectedPhotoIds.removeAll()
+                                
+                                if !isSelectionMode {
+                                    // Кнопка режима перетаскивания
+                                    Button(isReorderMode ? "Готово" : "Порядок") {
+                                        HapticHelper.trigger(.light)
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            isReorderMode.toggle()
+                                        }
+                                    }
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(isReorderMode ? Color(hex: "10B981") : Color(hex: "A855F7"))
                                 }
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Color(hex: "A855F7"))
+                                
+                                if !isReorderMode {
+                                    Button(isSelectionMode ? "Отмена".localized : "Выбрать".localized) {
+                                        HapticHelper.trigger(.light)
+                                        isSelectionMode.toggle()
+                                        selectedPhotoIds.removeAll()
+                                    }
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Color(hex: "A855F7"))
+                                }
                             }
                             .padding(.top, 8)
                             
@@ -933,6 +991,40 @@ struct UploadQueueView: View {
                                 .frame(maxWidth: .infinity)
                                 .glassCard(cornerRadius: 20, padding: 24)
                                 .padding(.top, 20)
+                            } else if isReorderMode {
+                                // Drag & Drop режим перетаскивания (List с ручками)
+                                List {
+                                    ForEach(viewModel.photos) { photo in
+                                        HStack(spacing: 10) {
+                                            Image(systemName: "line.3.horizontal")
+                                                .font(.system(size: 16, weight: .medium))
+                                                .foregroundStyle(.secondary)
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text(photo.filename)
+                                                    .font(.system(size: 13, weight: .semibold))
+                                                    .lineLimit(1)
+                                                Text(photo.status.rawValue)
+                                                    .font(.system(size: 10))
+                                                    .foregroundStyle(photo.status.color)
+                                            }
+                                            Spacer()
+                                            LazyImageView(photoId: photo.id, maxPixelSize: 60, contentMode: .fill, isVideo: photo.isVideo)
+                                                .frame(width: 44, height: 44)
+                                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        }
+                                        .padding(.vertical, 4)
+                                        .listRowBackground(Color.clear)
+                                        .listRowSeparator(.hidden)
+                                    }
+                                    .onMove { from, to in
+                                        HapticHelper.trigger(.light)
+                                        viewModel.movePhoto(from: from, to: to)
+                                    }
+                                }
+                                .listStyle(.plain)
+                                .scrollDisabled(true)
+                                .frame(height: CGFloat(viewModel.photos.count) * 66)
+                                .background(Color.clear)
                             } else {
                                 LazyVStack(spacing: 16) {
                                     ForEach(Array(filteredPhotos.enumerated()), id: \.element.id) { index, photo in
@@ -1290,6 +1382,11 @@ struct PhotoRowView: View, Equatable {
     let index: Int
     @ObservedObject var viewModel: QueueViewModel
     
+    // Текущая скорость загрузки для этого файла
+    private var speedKBps: Double? {
+        viewModel.uploadSpeedKBps[photo.id]
+    }
+    
     nonisolated static func == (lhs: PhotoRowView, rhs: PhotoRowView) -> Bool {
         return lhs.photo.id == rhs.photo.id &&
                lhs.photo.status == rhs.photo.status &&
@@ -1298,6 +1395,8 @@ struct PhotoRowView: View, Equatable {
                lhs.photo.filename == rhs.photo.filename &&
                lhs.photo.fileSize == rhs.photo.fileSize &&
                lhs.photo.selectedStocks == rhs.photo.selectedStocks
+        // Примечание: скорость всегда разная (не Equatable),
+        // поэтому не сравниваем: вид обновится через uploadProgress.
     }
     
     var body: some View {
@@ -1306,10 +1405,25 @@ struct PhotoRowView: View, Equatable {
             photoProgressBar(photo)
             photoButtons(photo, index: index)
             if photo.status == .uploading {
-                Text("UPLOADING...")
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundStyle(Color(hex: "10B981"))
-                    .padding(.bottom, 12)
+                // Показываем скорость KB/с если известна, иначе статус UPLOADING
+                let speedText: String = {
+                    if let kbps = speedKBps, kbps > 0 {
+                        if kbps >= 1024 {
+                            return String(format: "%.1f MB/s", kbps / 1024.0)
+                        } else {
+                            return String(format: "%.0f KB/s", kbps)
+                        }
+                    }
+                    return "UPLOADING..."
+                }()
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 9))
+                    Text(speedText)
+                        .font(.system(size: 10, weight: .black))
+                }
+                .foregroundStyle(Color(hex: "10B981"))
+                .padding(.bottom, 12)
             }
         }
         .background(
