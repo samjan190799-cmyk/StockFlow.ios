@@ -2,6 +2,8 @@ import SwiftUI
 import PhotosUI
 import ImageIO
 import UIKit
+import AVFoundation
+import UniformTypeIdentifiers
 
 // MARK: - Queue View Model (MainActor Isolated, Safe Concurrency)
 @MainActor
@@ -43,7 +45,9 @@ class QueueViewModel: ObservableObject {
             do {
                 for photo in photosCopy {
                     if let data = photo.imageData {
-                        let fileURL = dirURL.appendingPathComponent("\(photo.id.uuidString).jpg")
+                        let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
+                        let actualExt = ext.isEmpty ? "mp4" : ext
+                        let fileURL = dirURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
                         try data.write(to: fileURL, options: .atomic)
                     }
                 }
@@ -53,10 +57,15 @@ class QueueViewModel: ObservableObject {
                 let data = try encoder.encode(photosCopy)
                 try data.write(to: metaURL, options: .atomic)
                 
-                let idsInQueue = Set(photosCopy.map { "\($0.id.uuidString).jpg" })
+                let idsInQueue = Set(photosCopy.map { photo -> String in
+                    let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
+                    let actualExt = ext.isEmpty ? "mp4" : ext
+                    return "\(photo.id.uuidString).\(actualExt)"
+                })
                 let existingFiles = try FileManager.default.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: nil)
                 for file in existingFiles {
-                    if !idsInQueue.contains(file.lastPathComponent) {
+                    // Также не удаляем временные файлы ИИ-кадров, если они нужны
+                    if !idsInQueue.contains(file.lastPathComponent) && !file.lastPathComponent.contains("_thumb.jpg") {
                         try? FileManager.default.removeItem(at: file)
                     }
                 }
@@ -82,6 +91,36 @@ class QueueViewModel: ObservableObject {
             self.photos = loadedPhotos
         } catch {
             print("Error loading photos from disk: \(error.localizedDescription)")
+        }
+    }
+    
+    private func getAIImageData(for photo: PhotoMetadata) async -> Data {
+        let photoId = photo.id
+        if photo.isVideo {
+            let ext = (URL(fileURLWithPath: photo.filename).pathExtension.lowercased())
+            let actualExt = ext.isEmpty ? "mp4" : ext
+            let videoURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).\(actualExt)")
+            let asset = AVAsset(url: videoURL)
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.requestedTimeToleranceBefore = .zero
+            generator.requestedTimeToleranceAfter = .zero
+            let time = CMTime(seconds: 1.0, preferredTimescale: 60)
+            
+            return await Task.detached(priority: .userInitiated) { () -> Data in
+                if let cgImage = try? generator.copyCGImage(at: time, actualTime: nil),
+                   let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9) {
+                    return jpegData
+                }
+                if let cgImageZero = try? generator.copyCGImage(at: .zero, actualTime: nil),
+                   let jpegDataZero = UIImage(cgImage: cgImageZero).jpegData(compressionQuality: 0.9) {
+                    return jpegDataZero
+                }
+                return Data()
+            }.value
+        } else {
+            let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).jpg")
+            return (try? Data(contentsOf: fileURL)) ?? Data()
         }
     }
     
@@ -111,7 +150,7 @@ class QueueViewModel: ObservableObject {
                 if self.photos.count > idx {
                     self.photos[idx].title = "Драматичный закат в горах (Демо)"
                     self.photos[idx].keywords = ["закат", "облака", "небо", "горы", "пейзаж", "демо"]
-                    self.photos[idx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа вашей фотографии."
+                    self.photos[idx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
                     self.photos[idx].status = .ready
                     self.triggerToast("Демо-анализ завершен")
                 }
@@ -120,13 +159,12 @@ class QueueViewModel: ObservableObject {
         }
         
         photos[idx].status = .aiAnalyzing
-        triggerToast("ИИ анализирует фотографию...")
+        triggerToast("ИИ анализирует файл...")
         
         Task {
             do {
-                let photoId = self.photos[idx].id
-                let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).jpg")
-                let imageData = (try? Data(contentsOf: fileURL)) ?? Data()
+                let photo = self.photos[idx]
+                let imageData = await getAIImageData(for: photo)
                 let result = try await AIManager.shared.analyzePhoto(
                     imageData: imageData,
                     customPrompt: customPrompt,
@@ -154,7 +192,7 @@ class QueueViewModel: ObservableObject {
         guard !newOrErrorPhotos.isEmpty else { return }
         
         isAnalyzingAll = true
-        triggerToast("Запущен ИИ-анализ для \(newOrErrorPhotos.count) фото...")
+        triggerToast("Запущен ИИ-анализ для \(newOrErrorPhotos.count) файлов...")
         
         let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? AIProvider.gemini.rawValue
         let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
@@ -185,9 +223,8 @@ class QueueViewModel: ObservableObject {
                     } else {
                         // Real analysis
                         do {
-                            let photoId = self.photos[idx].id
-                            let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).jpg")
-                            let data = (try? Data(contentsOf: fileURL)) ?? Data()
+                            let currentPhoto = self.photos[idx]
+                            let data = await getAIImageData(for: currentPhoto)
                             let result = try await AIManager.shared.analyzePhoto(
                                 imageData: data,
                                 customPrompt: customPrompt,
@@ -212,7 +249,7 @@ class QueueViewModel: ObservableObject {
             }
             
             self.isAnalyzingAll = false
-            self.triggerToast("ИИ-анализ всех фото завершен")
+            self.triggerToast("ИИ-анализ всех файлов завершен")
         }
     }
     
@@ -347,18 +384,26 @@ class QueueViewModel: ObservableObject {
     }
     
     private func performRealUpload(for photo: PhotoMetadata, progress: (@Sendable (Double) -> Void)? = nil) async throws {
-        let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).jpg")
+        let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
+        let actualExt = ext.isEmpty ? "mp4" : ext
+        let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
+        
         guard let data = try? Data(contentsOf: fileURL) else {
-            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Изображение не найдено на диске"])
+            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Файл не найден на диске"])
         }
         
-        // Переносим обработку метаданных и сжатие в фоновый актор ImageProcessor
-        let compress = UserDefaults.standard.bool(forKey: "sys_compress_jpeg")
-        let finalData = await ImageProcessor.shared.prepareImageForUpload(
-            imageData: data,
-            photo: photo,
-            compress: compress
-        )
+        // Переносим обработку метаданных и сжатие в фоновый актор ImageProcessor (только для фото)
+        let finalData: Data
+        if photo.isVideo {
+            finalData = data
+        } else {
+            let compress = UserDefaults.standard.bool(forKey: "sys_compress_jpeg")
+            finalData = await ImageProcessor.shared.prepareImageForUpload(
+                imageData: data,
+                photo: photo,
+                compress: compress
+            )
+        }
         
         // Load active platforms
         guard let platformsData = UserDefaults.standard.data(forKey: "stock_platforms"),
@@ -672,7 +717,9 @@ class QueueViewModel: ObservableObject {
     func addPhoto(_ photo: PhotoMetadata) {
         var photoCopy = photo
         if let data = photo.imageData {
-            let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).jpg")
+            let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
+            let actualExt = ext.isEmpty ? "mp4" : ext
+            let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
             Task.detached(priority: .background) {
                 try? data.write(to: fileURL, options: .atomic)
             }
@@ -852,7 +899,7 @@ struct UploadQueueView: View {
                         PhotosPicker(
                             selection: $selectedItems,
                             maxSelectionCount: 50,
-                            matching: .images,
+                            matching: .any(of: [.images, .videos]),
                             photoLibrary: .shared()
                         ) {
                             ZStack {
@@ -1070,7 +1117,7 @@ struct PhotoRowView: View, Equatable {
         ZStack(alignment: .topLeading) {
             ZStack {
                 // Размытый фон для заполнения пропорций по краям
-                LazyImageView(photoId: photo.id, maxPixelSize: 150, contentMode: .fill)
+                LazyImageView(photoId: photo.id, maxPixelSize: 150, contentMode: .fill, isVideo: photo.isVideo)
                     .frame(height: 200)
                     .frame(maxWidth: .infinity)
                     .blur(radius: 16)
@@ -1078,7 +1125,7 @@ struct PhotoRowView: View, Equatable {
                     .clipped()
                 
                 // Полное изображение без обрезки
-                LazyImageView(photoId: photo.id, maxPixelSize: 400, contentMode: .fit)
+                LazyImageView(photoId: photo.id, maxPixelSize: 400, contentMode: .fit, isVideo: photo.isVideo)
                     .frame(height: 200)
                     .frame(maxWidth: .infinity)
             }
@@ -1233,64 +1280,74 @@ struct PhotoRowView: View, Equatable {
     private func loadSelectedPhotos(from items: [PhotosPickerItem]) {
         let vm = viewModel
         for item in items {
+            let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
+            
             item.loadTransferable(type: Data.self) { result in
                 switch result {
                 case .success(let data):
                     if let data = data {
                         var finalData = data
-                        let isJpeg = data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
-                        
-                        if !isJpeg {
-                            if let uiImage = UIImage(data: data),
-                               let jpegData = uiImage.jpegData(compressionQuality: 0.95) {
-                                finalData = jpegData
-                                Task { @MainActor in
-                                    FTPTranscriptLogger.shared.logInfo("[Diagnostic] Авто-конвертация не-JPEG (RAW/HEIC/PNG) в JPEG (размер: \(data.count) -> \(jpegData.count))")
-                                }
-                            } else {
-                                Task { @MainActor in
-                                    FTPTranscriptLogger.shared.logInfo("[WARNING] Файл не является JPEG и не удалось конвертировать его в UIImage.")
-                                }
-                            }
-                        }
+                        var filename = ""
                         
                         let randomNum = Int.random(in: 1000...9999)
-                        let filename = "IMG_\(randomNum).JPG"
                         
-                        // Авто-апскейл: применяем только если настройка включена
-                        let autoUpscaleEnabled = UserDefaults.standard.bool(forKey: "sys_auto_upscale")
-                        if autoUpscaleEnabled {
-                            let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? ""
-                            let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? ""
+                        if isVideo {
+                            let ext = item.supportedContentTypes.first(where: { $0.conforms(to: .movie) || $0.conforms(to: .video) })?.preferredFilenameExtension ?? "mp4"
+                            filename = "VID_\(randomNum).\(ext.uppercased())"
+                        } else {
+                            let isJpeg = data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
                             
-                            // Определяем порог в МБ
-                            let thresholdMB: Double
-                            if thresholdStr.contains("2 МБ") {
-                                thresholdMB = 2.0
-                            } else if thresholdStr.contains("8 МБ") {
-                                thresholdMB = 8.0
-                            } else {
-                                thresholdMB = 4.0 // Рекомендуется
+                            if !isJpeg {
+                                if let uiImage = UIImage(data: data),
+                                   let jpegData = uiImage.jpegData(compressionQuality: 0.95) {
+                                    finalData = jpegData
+                                    Task { @MainActor in
+                                        FTPTranscriptLogger.shared.logInfo("[Diagnostic] Авто-конвертация не-JPEG (RAW/HEIC/PNG) в JPEG (размер: \(data.count) -> \(jpegData.count))")
+                                    }
+                                } else {
+                                    Task { @MainActor in
+                                        FTPTranscriptLogger.shared.logInfo("[WARNING] Файл не является JPEG и не удалось конвертировать его в UIImage.")
+                                    }
+                                }
                             }
                             
-                            let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
-                            if sizeMB < thresholdMB, let uiImage = UIImage(data: finalData) {
-                                // Определяем коэффициент масштабирования
-                                let scale: CGFloat = factorStr.contains("4x") ? 4.0 : 2.0
-                                let newSize = CGSize(
-                                    width: uiImage.size.width * scale,
-                                    height: uiImage.size.height * scale
-                                )
-                                UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-                                uiImage.draw(in: CGRect(origin: .zero, size: newSize))
-                                let upscaled = UIGraphicsGetImageFromCurrentImageContext()
-                                UIGraphicsEndImageContext()
+                            filename = "IMG_\(randomNum).JPG"
+                            
+                            // Авто-апскейл: применяем только если настройка включена
+                            let autoUpscaleEnabled = UserDefaults.standard.bool(forKey: "sys_auto_upscale")
+                            if autoUpscaleEnabled {
+                                let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? ""
+                                let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? ""
                                 
-                                if let upscaled = upscaled,
-                                   let upscaledData = upscaled.jpegData(compressionQuality: 0.92) {
-                                    finalData = upscaledData
-                                    Task { @MainActor in
-                                        FTPTranscriptLogger.shared.logInfo("[Upscale] Авто-апскейл \(String(format: "%.1f", sizeMB)) МБ → \(String(format: "%.1f", Double(upscaledData.count)/1024/1024)) МБ (\(Int(scale))x, бикубика)")
+                                // Определяем порог в МБ
+                                let thresholdMB: Double
+                                if thresholdStr.contains("2 МБ") {
+                                    thresholdMB = 2.0
+                                } else if thresholdStr.contains("8 МБ") {
+                                    thresholdMB = 8.0
+                                } else {
+                                    thresholdMB = 4.0 // Рекомендуется
+                                }
+                                
+                                let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
+                                if sizeMB < thresholdMB, let uiImage = UIImage(data: finalData) {
+                                    // Определяем коэффициент масштабирования
+                                    let scale: CGFloat = factorStr.contains("4x") ? 4.0 : 2.0
+                                    let newSize = CGSize(
+                                        width: uiImage.size.width * scale,
+                                        height: uiImage.size.height * scale
+                                    )
+                                    UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+                                    uiImage.draw(in: CGRect(origin: .zero, size: newSize))
+                                    let upscaled = UIGraphicsGetImageFromCurrentImageContext()
+                                    UIGraphicsEndImageContext()
+                                    
+                                    if let upscaled = upscaled,
+                                       let upscaledData = upscaled.jpegData(compressionQuality: 0.92) {
+                                        finalData = upscaledData
+                                        Task { @MainActor in
+                                            FTPTranscriptLogger.shared.logInfo("[Upscale] Авто-апскейл \(String(format: "%.1f", sizeMB)) МБ → \(String(format: "%.1f", Double(upscaledData.count)/1024/1024)) МБ (\(Int(scale))x, бикубика)")
+                                        }
                                     }
                                 }
                             }
@@ -1307,7 +1364,8 @@ struct PhotoRowView: View, Equatable {
                             description: "",
                             categories: [],
                             status: .new,
-                            imageData: finalData
+                            imageData: finalData,
+                            isVideo: isVideo
                         )
                         
                         Task {
@@ -1315,7 +1373,7 @@ struct PhotoRowView: View, Equatable {
                         }
                     }
                 case .failure(let error):
-                    print("Error loading image: \(error.localizedDescription)")
+                    print("Error loading media: \(error.localizedDescription)")
                 }
             }
         }
@@ -1614,7 +1672,7 @@ struct DetailCardView: View {
             // Раздел 1: Превью и Ключевые слова
             HStack(alignment: .top, spacing: 14) {
                 // Превью
-                LazyImageView(photoId: photo.id, maxPixelSize: 300, contentMode: .fill)
+                LazyImageView(photoId: photo.id, maxPixelSize: 300, contentMode: .fill, isVideo: photo.isVideo)
                 .frame(width: 100, height: 135)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(

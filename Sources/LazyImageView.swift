@@ -5,6 +5,7 @@ struct LazyImageView: View {
     let photoId: UUID
     var maxPixelSize: Int = 400
     var contentMode: ContentMode = .fit
+    var isVideo: Bool = false
     
     @State private var image: UIImage? = nil
     @State private var isLoading = false
@@ -19,9 +20,21 @@ struct LazyImageView: View {
     var body: some View {
         Group {
             if let image = image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: contentMode)
+                ZStack(alignment: .bottomTrailing) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: contentMode)
+                    
+                    if isVideo {
+                        Image(systemName: "play.fill")
+                            .font(.caption2)
+                            .padding(4)
+                            .background(.black.opacity(0.6))
+                            .foregroundStyle(.white)
+                            .clipShape(Circle())
+                            .padding(6)
+                    }
+                }
             } else {
                 ZStack {
                     Color.white.opacity(0.04)
@@ -29,7 +42,7 @@ struct LazyImageView: View {
                         ProgressView()
                             .tint(Color(hex: "7C3AED"))
                     } else {
-                        Image(systemName: "photo")
+                        Image(systemName: isVideo ? "video" : "photo")
                             .font(.system(size: 24))
                             .foregroundStyle(.secondary)
                     }

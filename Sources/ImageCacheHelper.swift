@@ -1,6 +1,7 @@
 import UIKit
 import ImageIO
 import Foundation
+import AVFoundation
 
 /// Помощник для работы с кэшем изображений и их даунсемплингом в фоновом потоке
 @MainActor
@@ -37,7 +38,42 @@ final class ImageCacheHelper {
             return cached
         }
         
-        let fileURL = dirURL.appendingPathComponent("\(photoId.uuidString).jpg")
+        // Проверяем, есть ли видеофайл с таким именем на диске
+        var fileURL = dirURL.appendingPathComponent("\(photoId.uuidString).jpg")
+        var isVideoFile = false
+        
+        let extensions = ["mp4", "mov", "m4v", "MP4", "MOV"]
+        for ext in extensions {
+            let possibleURL = dirURL.appendingPathComponent("\(photoId.uuidString).\(ext)")
+            if FileManager.default.fileExists(atPath: possibleURL.path) {
+                fileURL = possibleURL
+                isVideoFile = true
+                break
+            }
+        }
+        
+        if isVideoFile {
+            let image = await Task.detached(priority: .userInitiated) { () -> UIImage? in
+                let asset = AVAsset(url: fileURL)
+                let generator = AVAssetImageGenerator(asset: asset)
+                generator.appliesPreferredTrackTransform = true
+                generator.requestedTimeToleranceBefore = .zero
+                generator.requestedTimeToleranceAfter = .zero
+                let time = CMTime(seconds: 1.0, preferredTimescale: 60)
+                guard let cgImage = try? generator.copyCGImage(at: time, actualTime: nil) else {
+                    guard let cgImageZero = try? generator.copyCGImage(at: .zero, actualTime: nil) else {
+                        return nil
+                    }
+                    return UIImage(cgImage: cgImageZero)
+                }
+                return UIImage(cgImage: cgImage)
+            }.value
+            
+            if let image = image {
+                cacheImage(image, forKey: key)
+            }
+            return image
+        }
         
         // Переносим обработку в фоновый поток (Task.detached)
         let image = await Task.detached(priority: .userInitiated) { () -> UIImage? in

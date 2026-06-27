@@ -35,12 +35,13 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
     var status: PhotoStatus
     var selectedStocks: Set<String>
     var imageData: Data? = nil
+    var isVideo: Bool = false
     
     var uploadProgress: Double = 0.0
     var errorMessage: String? = nil
     
     enum CodingKeys: String, CodingKey {
-        case id, filename, fileSize, title, keywords, description, categories, status, selectedStocks, uploadProgress, errorMessage
+        case id, filename, fileSize, title, keywords, description, categories, status, selectedStocks, uploadProgress, errorMessage, isVideo
     }
     
     init(
@@ -53,7 +54,8 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         categories: [String] = [],
         status: PhotoStatus = .new,
         selectedStocks: Set<String> = ["Shutterstock", "Adobe Stock"],
-        imageData: Data? = nil
+        imageData: Data? = nil,
+        isVideo: Bool = false
     ) {
         self.id = id
         self.filename = filename
@@ -65,8 +67,25 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         self.status = status
         self.selectedStocks = selectedStocks
         self.imageData = imageData
+        self.isVideo = isVideo
     }
     
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        filename = try container.decode(String.self, forKey: .filename)
+        fileSize = try container.decode(String.self, forKey: .fileSize)
+        title = try container.decode(String.self, forKey: .title)
+        keywords = try container.decode([String].self, forKey: .keywords)
+        description = try container.decode(String.self, forKey: .description)
+        categories = (try? container.decode([String].self, forKey: .categories)) ?? []
+        status = try container.decode(PhotoStatus.self, forKey: .status)
+        selectedStocks = try container.decode(Set<String>.self, forKey: .selectedStocks)
+        uploadProgress = (try? container.decode(Double.self, forKey: .uploadProgress)) ?? 0.0
+        errorMessage = try? container.decode(String.self, forKey: .errorMessage)
+        isVideo = (try? container.decode(Bool.self, forKey: .isVideo)) ?? false
+        imageData = nil
+    }
 }
 
 // MARK: - AI Provider
