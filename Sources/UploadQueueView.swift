@@ -917,210 +917,237 @@ struct UploadQueueView: View {
                 LiquidBackgroundView()
                 
                 VStack(spacing: 0) {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            // Виджет статистики и сети вместо зоны добавления файлов
-                            QueueStatsWidget(viewModel: viewModel)
-                            
-                            // Строка поиска (адаптивная для тёмной и светлой темы)
+                    if isReorderMode {
+                        // Полноэкранный List для изменения порядка (без конфликтов со ScrollView)
+                        VStack(alignment: .leading, spacing: 10) {
                             HStack {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(.secondary)
-                                TextField("Поиск фото, альбомов...".localized, text: $searchText)
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.primary)
-                            }
-                            .padding(.horizontal, 14)
-                            .frame(height: 46)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.04))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08), lineWidth: 1)
-                            )
-                            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.15 : 0.04), radius: 4, x: 0, y: 2)
-                            
-                            // Заголовок Recents и кнопки управления режимами
-                            HStack(spacing: 10) {
-                                Text("Недавние".localized)
+                                Text("Порядок очереди".localized)
                                     .font(.system(size: 20, weight: .bold))
                                     .foregroundStyle(.primary)
                                 Spacer()
-                                
-                                if !isSelectionMode {
-                                    // Кнопка режима перетаскивания
-                                    Button(isReorderMode ? "Готово" : "Порядок") {
-                                        HapticHelper.trigger(.light)
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            isReorderMode.toggle()
-                                        }
+                                Button("Готово".localized) {
+                                    HapticHelper.trigger(.light)
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        isReorderMode = false
                                     }
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(isReorderMode ? Color(hex: "10B981") : Color(hex: "A855F7"))
                                 }
-                                
-                                if !isReorderMode {
-                                    Button(isSelectionMode ? "Отмена".localized : "Выбрать".localized) {
-                                        HapticHelper.trigger(.light)
-                                        isSelectionMode.toggle()
-                                        selectedPhotoIds.removeAll()
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Color(hex: "10B981"))
+                            }
+                            .padding(.horizontal)
+                            .padding(.top, 16)
+                            .padding(.bottom, 8)
+                            
+                            List {
+                                ForEach(viewModel.photos) { photo in
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "line.3.horizontal")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundStyle(.secondary)
+                                        
+                                        LazyImageView(photoId: photo.id, maxPixelSize: 60, contentMode: .fill, isVideo: photo.isVideo)
+                                            .frame(width: 44, height: 44)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(photo.filename)
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundStyle(.primary)
+                                                .lineLimit(1)
+                                            Text(photo.status.rawValue)
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(photo.status.color)
+                                        }
+                                        Spacer()
                                     }
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(Color(hex: "A855F7"))
+                                    .padding(.vertical, 4)
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
+                                }
+                                .onMove { from, to in
+                                    HapticHelper.trigger(.light)
+                                    viewModel.movePhoto(from: from, to: to)
                                 }
                             }
-                            .padding(.top, 8)
-                            
-                            // Список фотографий
-                            if filteredPhotos.isEmpty {
-                                VStack(spacing: 12) {
-                                    SmartStockLogoView(size: 64)
-                                        .padding(.bottom, 6)
-                                    Text("Очередь пуста")
-                                        .font(.system(size: 15, weight: .bold))
-                                        .foregroundStyle(.primary)
-                                    Text("Выберите снимки, чтобы запустить ИИ-подбор метаданных и отправить их на микростоки.")
-                                        .font(.system(size: 12))
+                            .listStyle(.plain)
+                            .scrollContentBackground(.hidden)
+                            .background(Color.clear)
+                        }
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 16) {
+                                // Виджет статистики и сети вместо зоны добавления файлов
+                                QueueStatsWidget(viewModel: viewModel)
+                                
+                                // Строка поиска (адаптивная для тёмной и светлой темы)
+                                HStack {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 14, weight: .bold))
                                         .foregroundStyle(.secondary)
-                                        .multilineTextAlignment(.center)
-                                        .padding(.horizontal, 24)
+                                    TextField("Поиск фото, альбомов...".localized, text: $searchText)
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(.primary)
                                 }
-                                .frame(maxWidth: .infinity)
-                                .glassCard(cornerRadius: 20, padding: 24)
-                                .padding(.top, 20)
-                            } else if isReorderMode {
-                                // Drag & Drop режим перетаскивания (List с ручками)
-                                List {
-                                    ForEach(viewModel.photos) { photo in
-                                        HStack(spacing: 10) {
-                                            Image(systemName: "line.3.horizontal")
-                                                .font(.system(size: 16, weight: .medium))
-                                                .foregroundStyle(.secondary)
-                                            VStack(alignment: .leading, spacing: 3) {
-                                                Text(photo.filename)
-                                                    .font(.system(size: 13, weight: .semibold))
-                                                    .lineLimit(1)
-                                                Text(photo.status.rawValue)
-                                                    .font(.system(size: 10))
-                                                    .foregroundStyle(photo.status.color)
+                                .padding(.horizontal, 14)
+                                .frame(height: 46)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.04))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.15 : 0.04), radius: 4, x: 0, y: 2)
+                                
+                                // Заголовок Recents и кнопки управления режимами
+                                HStack(spacing: 10) {
+                                    Text("Недавние".localized)
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    
+                                    if !isSelectionMode {
+                                        // Кнопка режима перетаскивания
+                                        Button(isReorderMode ? "Готово" : "Порядок") {
+                                            HapticHelper.trigger(.light)
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                isReorderMode.toggle()
                                             }
-                                            Spacer()
-                                            LazyImageView(photoId: photo.id, maxPixelSize: 60, contentMode: .fill, isVideo: photo.isVideo)
-                                                .frame(width: 44, height: 44)
-                                                .clipShape(RoundedRectangle(cornerRadius: 8))
                                         }
-                                        .padding(.vertical, 4)
-                                        .listRowBackground(Color.clear)
-                                        .listRowSeparator(.hidden)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(isReorderMode ? Color(hex: "10B981") : Color(hex: "A855F7"))
                                     }
-                                    .onMove { from, to in
-                                        HapticHelper.trigger(.light)
-                                        viewModel.movePhoto(from: from, to: to)
+                                    
+                                    if !isReorderMode {
+                                        Button(isSelectionMode ? "Отмена".localized : "Выбрать".localized) {
+                                            HapticHelper.trigger(.light)
+                                            isSelectionMode.toggle()
+                                            selectedPhotoIds.removeAll()
+                                        }
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(Color(hex: "A855F7"))
                                     }
                                 }
-                                .listStyle(.plain)
-                                .scrollDisabled(true)
-                                .frame(height: CGFloat(viewModel.photos.count) * 66)
-                                .background(Color.clear)
-                            } else {
-                                LazyVStack(spacing: 16) {
-                                    ForEach(Array(filteredPhotos.enumerated()), id: \.element.id) { index, photo in
-                                        HStack(spacing: 12) {
-                                            if isSelectionMode {
-                                                Button(action: {
-                                                    HapticHelper.trigger(.light)
-                                                    if selectedPhotoIds.contains(photo.id) {
-                                                        selectedPhotoIds.remove(photo.id)
-                                                    } else {
-                                                        selectedPhotoIds.insert(photo.id)
-                                                    }
-                                                }) {
-                                                    Image(systemName: selectedPhotoIds.contains(photo.id) ? "checkmark.circle.fill" : "circle")
-                                                        .font(.system(size: 24, weight: .bold))
-                                                        .foregroundStyle(selectedPhotoIds.contains(photo.id) ? Color(hex: "A855F7") : .secondary)
-                                                }
-                                                .transition(.move(edge: .leading).combined(with: .opacity))
-                                            }
-                                            
-                                            PhotoRowView(photo: photo, index: index, viewModel: viewModel)
-                                                .onTapGesture {
-                                                    if isSelectionMode {
+                                .padding(.top, 8)
+                                
+                                // Список фотографий
+                                if filteredPhotos.isEmpty {
+                                    VStack(spacing: 12) {
+                                        SmartStockLogoView(size: 64)
+                                            .padding(.bottom, 6)
+                                        Text("Очередь пуста")
+                                            .font(.system(size: 15, weight: .bold))
+                                            .foregroundStyle(.primary)
+                                        Text("Выберите снимки, чтобы запустить ИИ-подбор метаданных и отправить их на микростоки.")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.secondary)
+                                            .multilineTextAlignment(.center)
+                                            .padding(.horizontal, 24)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .glassCard(cornerRadius: 20, padding: 24)
+                                    .padding(.top, 20)
+                                } else {
+                                    LazyVStack(spacing: 16) {
+                                        ForEach(Array(filteredPhotos.enumerated()), id: \.element.id) { index, photo in
+                                            HStack(spacing: 12) {
+                                                if isSelectionMode {
+                                                    Button(action: {
                                                         HapticHelper.trigger(.light)
                                                         if selectedPhotoIds.contains(photo.id) {
                                                             selectedPhotoIds.remove(photo.id)
                                                         } else {
                                                             selectedPhotoIds.insert(photo.id)
                                                         }
-                                                    } else {
-                                                        HapticHelper.selection()
-                                                        selectedDetailPhoto = photo
+                                                    }) {
+                                                        Image(systemName: selectedPhotoIds.contains(photo.id) ? "checkmark.circle.fill" : "circle")
+                                                            .font(.system(size: 24, weight: .bold))
+                                                            .foregroundStyle(selectedPhotoIds.contains(photo.id) ? Color(hex: "A855F7") : .secondary)
+                                                    }
+                                                    .transition(.move(edge: .leading).combined(with: .opacity))
+                                                }
+                                                
+                                                PhotoRowView(photo: photo, index: index, viewModel: viewModel)
+                                                    .onTapGesture {
+                                                        if isSelectionMode {
+                                                            HapticHelper.trigger(.light)
+                                                            if selectedPhotoIds.contains(photo.id) {
+                                                                selectedPhotoIds.remove(photo.id)
+                                                            } else {
+                                                                selectedPhotoIds.insert(photo.id)
+                                                            }
+                                                        } else {
+                                                            HapticHelper.selection()
+                                                            selectedDetailPhoto = photo
+                                                        }
+                                                    }
+                                            }
+                                                .contextMenu {
+                                                    Button {
+                                                        viewModel.runAIForPhoto(photo.id)
+                                                    } label: {
+                                                        Label("Запустить ИИ-анализ", systemImage: "sparkles")
+                                                    }
+                                                    
+                                                    Button {
+                                                        viewModel.uploadPhoto(photo.id)
+                                                    } label: {
+                                                        Label("Выгрузить на стоки", systemImage: "paperplane")
+                                                    }
+                                                    
+                                                    Button(role: .destructive) {
+                                                        viewModel.removePhoto(photo.id)
+                                                    } label: {
+                                                        Label("Удалить", systemImage: "trash")
                                                     }
                                                 }
+                                                .applyScrollTransitionIfAvailable()
                                         }
-                                            .contextMenu {
-                                                Button {
-                                                    viewModel.runAIForPhoto(photo.id)
-                                                } label: {
-                                                    Label("Запустить ИИ-анализ", systemImage: "sparkles")
-                                                }
-                                                
-                                                Button {
-                                                    viewModel.uploadPhoto(photo.id)
-                                                } label: {
-                                                    Label("Выгрузить на стоки", systemImage: "paperplane")
-                                                }
-                                                
-                                                Button(role: .destructive) {
-                                                    viewModel.removePhoto(photo.id)
-                                                } label: {
-                                                    Label("Удалить", systemImage: "trash")
-                                                }
-                                            }
-                                            .applyScrollTransitionIfAvailable()
                                     }
                                 }
                             }
+                            .padding(.horizontal)
+                            .padding(.bottom, 120) // Отступ для плавающих кнопок и таб-бара
                         }
-                        .padding(.horizontal)
-                        .padding(.bottom, 120) // Отступ для плавающих кнопок и таб-бара
                     }
                 }
                 
                 // Плавающая фиолетовая кнопка "+" в нижнем правом углу
-                VStack {
-                    Spacer()
-                    HStack {
+                if !isReorderMode {
+                    VStack {
                         Spacer()
-                        PhotosPicker(
-                            selection: $selectedItems,
-                            maxSelectionCount: 50,
-                            matching: .any(of: [.images, .videos]),
-                            photoLibrary: .shared()
-                        ) {
-                            ZStack {
-                                Circle()
-                                    .fill(LinearGradient(colors: [Color(hex: "7C3AED"), Color(hex: "A855F7")], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    .frame(width: 56, height: 56)
-                                    .neonShadow(color: Color(hex: "7C3AED"), radius: 8)
-                                
-                                Image(systemName: "plus")
-                                    .font(.system(size: 24, weight: .bold))
-                                    .foregroundStyle(.white)
+                        HStack {
+                            Spacer()
+                            PhotosPicker(
+                                selection: $selectedItems,
+                                maxSelectionCount: 50,
+                                matching: .any(of: [.images, .videos]),
+                                photoLibrary: .shared()
+                            ) {
+                                ZStack {
+                                    Circle()
+                                        .fill(LinearGradient(colors: [Color(hex: "7C3AED"), Color(hex: "A855F7")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                        .frame(width: 56, height: 56)
+                                        .neonShadow(color: Color(hex: "7C3AED"), radius: 8)
+                                    
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 24, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
                             }
-                        }
-                        .onChange(of: selectedItems) { newItems in
-                            if !newItems.isEmpty {
-                                HapticHelper.trigger(.medium)
+                            .onChange(of: selectedItems) { newItems in
+                                if !newItems.isEmpty {
+                                    HapticHelper.trigger(.medium)
+                                }
+                                loadSelectedPhotos(from: newItems)
                             }
-                            loadSelectedPhotos(from: newItems)
+                            .padding(.trailing, 20)
+                            .padding(.bottom, viewModel.photos.isEmpty ? 20 : 94) // Сдвигаем вверх, если виден Floating Action Bar
                         }
-                        .padding(.trailing, 20)
-                        .padding(.bottom, viewModel.photos.isEmpty ? 20 : 94) // Сдвигаем вверх, если виден Floating Action Bar
                     }
                 }
+
                 
                 // Floating Action Bar (Заполнить все ИИ / Отправить)
                 if !viewModel.photos.isEmpty {

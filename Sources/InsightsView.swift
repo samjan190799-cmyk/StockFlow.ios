@@ -808,7 +808,7 @@ struct InsightsView: View {
                     .glassCard(cornerRadius: 14, padding: 0)
                 } else {
                     VStack(spacing: 0) {
-                        ForEach(Array(records.enumerated()), id: \.element.filename) { idx, record in
+                        ForEach(records) { record in
                             let icon = stockIcon(record.platformName)
                             let df = DateFormatter()
                             _ = { df.locale = Locale(identifier: "ru_RU"); df.dateFormat = "dd MMM HH:mm" }()
@@ -860,7 +860,7 @@ struct InsightsView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
                             
-                            if idx < records.count - 1 {
+                            if record.id != records.last?.id {
                                 Divider()
                                     .background(Color.primary.opacity(0.06))
                                     .padding(.horizontal, 12)

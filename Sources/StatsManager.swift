@@ -32,6 +32,13 @@ struct UploadHistoryRecord: Codable, Sendable {
     let isSuccess: Bool
 }
 
+extension UploadHistoryRecord: Identifiable {
+    var id: String {
+        "\(platformId)_\(filename)_\(date.timeIntervalSince1970)"
+    }
+}
+
+
 // MARK: - StatsManager
 @MainActor
 final class StatsManager: ObservableObject {
