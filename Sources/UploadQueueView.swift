@@ -2458,8 +2458,10 @@ struct CSVDocument: Transferable {
     let csvText: String
     
     static var transferRepresentation: some TransferRepresentation {
-        DataRepresentation(contentType: .commaSeparatedText) { doc in
+        DataRepresentation(exportedContentType: .commaSeparatedText) { doc in
             doc.csvText.data(using: .utf8) ?? Data()
+        } importing: { data in
+            CSVDocument(csvText: String(data: data, encoding: .utf8) ?? "")
         }
     }
 }
