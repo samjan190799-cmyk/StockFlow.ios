@@ -762,6 +762,19 @@ class QueueViewModel: ObservableObject {
         default: return "потоков".localized
         }
     }
+    
+    func generateShutterstockCSV() -> String {
+        var csv = "Filename,Description,Keywords,Categories\n"
+        for photo in photos {
+            let cleanFilename = photo.filename.replacingOccurrences(of: "\"", with: "\"\"")
+            let cleanDesc = photo.description.replacingOccurrences(of: "\"", with: "\"\"")
+            let cleanKeywords = photo.keywords.joined(separator: ", ").replacingOccurrences(of: "\"", with: "\"\"")
+            let cleanCats = photo.categories.joined(separator: ", ").replacingOccurrences(of: "\"", with: "\"\"")
+            
+            csv += "\"\(cleanFilename)\",\"\(cleanDesc)\",\"\(cleanKeywords)\",\"\(cleanCats)\"\n"
+        }
+        return csv
+    }
 }
 
 // MARK: - Upload Queue View
@@ -1014,6 +1027,17 @@ struct UploadQueueView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {
+                        if !viewModel.photos.isEmpty {
+                            ShareLink(
+                                item: CSVDocument(csvText: viewModel.generateShutterstockCSV()),
+                                preview: SharePreview("shutterstock_metadata.csv", image: Image(systemName: "tablecells"))
+                            ) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(Color(hex: "7C3AED"))
+                            }
+                        }
+                        
                         Button(action: {
                             showLogViewer = true
                         }) {
@@ -2049,6 +2073,17 @@ struct PopularityRow: View {
                 .font(.system(size: 9, weight: .black))
                 .foregroundStyle(.secondary)
                 .frame(width: 44, alignment: .trailing)
+        }
+    }
+}
+
+// MARK: - CSV Document Transferable Helper
+struct CSVDocument: Transferable {
+    let csvText: String
+    
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(contentType: .commaSeparatedText) { doc in
+            doc.csvText.data(using: .utf8) ?? Data()
         }
     }
 }
