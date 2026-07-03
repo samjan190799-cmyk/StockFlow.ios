@@ -145,7 +145,7 @@ final class ImageCacheHelper {
             // Получаем длительность видео
             let durationSeconds: Double
             if #available(iOS 16.0, *) {
-                durationSeconds = (try? asset.duration.seconds) ?? 0
+                durationSeconds = asset.duration.seconds
             } else {
                 durationSeconds = asset.duration.seconds
             }
