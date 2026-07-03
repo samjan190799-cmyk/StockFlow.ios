@@ -408,6 +408,7 @@ class FTPSecureClient {
 
         // === ШАГ 15: QUIT ===
         try? sslWriteCmd(context: controlSSL!, cmd: "QUIT\r\n")
+    }
 
     // MARK: - TCP Layer
 
