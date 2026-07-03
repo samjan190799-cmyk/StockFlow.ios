@@ -5,6 +5,26 @@ import UIKit
 import AVFoundation
 import UniformTypeIdentifiers
 
+/// Вспомогательный Transferable-тип для импорта видеофайлов через PhotosPickerItem.
+/// Необходим потому что URL напрямую не является Transferable.
+struct VideoFileTransferable: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { video in
+            SentTransferredFile(video.url)
+        } importing: { received in
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(received.file.lastPathComponent)
+            if FileManager.default.fileExists(atPath: tempURL.path) {
+                try FileManager.default.removeItem(at: tempURL)
+            }
+            try FileManager.default.copyItem(at: received.file, to: tempURL)
+            return VideoFileTransferable(url: tempURL)
+        }
+    }
+}
+
 final class ContinuationBox<Element>: @unchecked Sendable {
     var continuation: AsyncStream<Element>.Continuation?
 }
@@ -1720,13 +1740,11 @@ struct PhotoRowView: View, Equatable {
             let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
             
             if isVideo {
-                item.loadTransferable(type: URL.self) { result in
+                item.loadTransferable(type: VideoFileTransferable.self) { result in
                     switch result {
-                    case .success(let url):
-                        if let url = url {
-                            let access = url.startAccessingSecurityScopedResource()
-                            defer { if access { url.stopAccessingSecurityScopedResource() } }
-                            
+                    case .success(let videoFile):
+                        if let videoFile = videoFile {
+                            let url = videoFile.url
                             let ext = url.pathExtension.lowercased()
                             let actualExt = ext.isEmpty ? "mp4" : ext
                             let uuid = UUID()
