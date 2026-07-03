@@ -135,42 +135,42 @@ actor ImageProcessor {
         
         // Common Keys
         // Title
-        let titleItem = NSMutableMetadataItem()
-        titleItem.keySpace = .common
+        let titleItem = AVMutableMetadataItem()
+        titleItem.keySpace = AVMetadataKeySpace.common
         titleItem.key = AVMetadataKey.commonKeyTitle as NSCopying & NSObjectProtocol
         titleItem.value = photo.title as NSString
         metadataItems.append(titleItem)
         
         // Description
-        let descItem = NSMutableMetadataItem()
-        descItem.keySpace = .common
+        let descItem = AVMutableMetadataItem()
+        descItem.keySpace = AVMetadataKeySpace.common
         descItem.key = AVMetadataKey.commonKeyDescription as NSCopying & NSObjectProtocol
         descItem.value = photo.description as NSString
         metadataItems.append(descItem)
         
         // Keywords
         let keywordsString = photo.keywords.joined(separator: ", ")
-        let keywordsItem = NSMutableMetadataItem()
-        keywordsItem.keySpace = .common
+        let keywordsItem = AVMutableMetadataItem()
+        keywordsItem.keySpace = AVMetadataKeySpace.common
         keywordsItem.key = AVMetadataKey.commonKeyKeywords as NSCopying & NSObjectProtocol
         keywordsItem.value = keywordsString as NSString
         metadataItems.append(keywordsItem)
         
         // QuickTime Metadata Keys
-        let qtTitleItem = NSMutableMetadataItem()
-        qtTitleItem.keySpace = .quickTimeMetadata
+        let qtTitleItem = AVMutableMetadataItem()
+        qtTitleItem.keySpace = AVMetadataKeySpace.quickTimeMetadata
         qtTitleItem.key = AVMetadataKey.quickTimeMetadataKeyTitle as NSCopying & NSObjectProtocol
         qtTitleItem.value = photo.title as NSString
         metadataItems.append(qtTitleItem)
         
-        let qtDescItem = NSMutableMetadataItem()
-        qtDescItem.keySpace = .quickTimeMetadata
+        let qtDescItem = AVMutableMetadataItem()
+        qtDescItem.keySpace = AVMetadataKeySpace.quickTimeMetadata
         qtDescItem.key = AVMetadataKey.quickTimeMetadataKeyDescription as NSCopying & NSObjectProtocol
         qtDescItem.value = photo.description as NSString
         metadataItems.append(qtDescItem)
         
-        let qtKeywordsItem = NSMutableMetadataItem()
-        qtKeywordsItem.keySpace = .quickTimeMetadata
+        let qtKeywordsItem = AVMutableMetadataItem()
+        qtKeywordsItem.keySpace = AVMetadataKeySpace.quickTimeMetadata
         qtKeywordsItem.key = AVMetadataKey.quickTimeMetadataKeyKeywords as NSCopying & NSObjectProtocol
         qtKeywordsItem.value = keywordsString as NSString
         metadataItems.append(qtKeywordsItem)
