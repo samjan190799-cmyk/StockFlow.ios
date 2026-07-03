@@ -47,6 +47,30 @@ class FTPSecureClient {
         }.value
     }
 
+    /// Загрузка файла по FTPS (Explicit TLS) по его URL с поддержкой Session Resumption.
+    /// Предотвращает OOM при работе с большими файлами.
+    static func upload(
+        fileURL: URL,
+        filename: String,
+        host: String,
+        port: Int = 21,
+        username: String,
+        password: String,
+        progress: (@Sendable (Double) -> Void)? = nil
+    ) async throws {
+        try await Task.detached(priority: .userInitiated) {
+            try Self.performUpload(
+                fileURL: fileURL,
+                filename: filename,
+                host: host,
+                port: port,
+                username: username,
+                password: password,
+                progress: progress
+            )
+        }.value
+    }
+
     // MARK: - Core Upload Logic (выполняется в фоновом потоке)
 
     private static func performUpload(
@@ -218,10 +242,172 @@ class FTPSecureClient {
 
         logMsg("[SecureTransport] ✅ Файл \(filename) успешно загружен!")
 
-        // === ШАГ 15: QUIT ===
         try? sslWriteCmd(context: controlSSL!, cmd: "QUIT\r\n")
         // defer закроет SSLClose + close
     }
+
+    private static func performUpload(
+        fileURL: URL,
+        filename: String,
+        host: String,
+        port: Int,
+        username: String,
+        password: String,
+        progress: (@Sendable (Double) -> Void)?
+    ) throws {
+        let cleanHost = cleanedHost(host)
+        let resolvedIp = resolveHost(cleanHost) ?? cleanHost
+
+        let fileAttributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let totalSize = (fileAttributes?[.size] as? UInt64) ?? 0
+        logMsg("[SecureTransport] Подключение к \(cleanHost) [\(resolvedIp)]:\(port)")
+        logMsg("[Diagnostic] Исходный файл по URL: \(fileURL.lastPathComponent), размер: \(totalSize) байт")
+
+        let peerId = "ftps-\(cleanHost)".data(using: .utf8)!
+
+        // === ШАГ 1: TCP подключение к контрольному каналу ===
+        let controlSock = try tcpConnect(host: resolvedIp, port: port, timeoutSec: 15)
+        setSocketTimeout(controlSock, seconds: 15)
+        setNoSigPipe(controlSock)
+
+        var controlSSL: SSLContext?
+        var dataSock: Int32 = -1
+        var dataSSL: SSLContext?
+
+        defer { Darwin.close(controlSock) }
+        defer { if let ssl = controlSSL { secureSSLClose(context: ssl, sock: controlSock); controlSSL = nil } }
+        defer { if dataSock >= 0 { Darwin.close(dataSock); dataSock = -1 } }
+        defer { if let ssl = dataSSL { secureSSLClose(context: ssl, sock: dataSock); dataSSL = nil } }
+
+        // === ШАГ 2: Чтение баннера (plain text) ===
+        var plainBuf = Data()
+        let banner = try plainReadResponse(sock: controlSock, buffer: &plainBuf)
+        guard banner.hasPrefix("220") else {
+            throw ftpError("Неожиданный баннер сервера: \(banner)")
+        }
+
+        // === ШАГ 3: AUTH TLS ===
+        try plainWrite(sock: controlSock, cmd: "AUTH TLS\r\n")
+        let authResp = try plainReadResponse(sock: controlSock, buffer: &plainBuf)
+        guard authResp.hasPrefix("234") else {
+            throw ftpError("AUTH TLS отклонен сервером: \(authResp)")
+        }
+
+        // === ШАГ 4: TLS на контрольном канале ===
+        let requireValidCert = UserDefaults.standard.bool(forKey: "sys_verify_tls")
+        controlSSL = try createSSLContext(sock: controlSock, peerName: cleanHost, peerId: peerId, requireValidCertificate: requireValidCert)
+        try performSSLHandshake(context: controlSSL!, requireValidCertificate: requireValidCert)
+
+        // === ШАГ 5: Чтение защищённого приветствия ===
+        var sslBuf = Data()
+        let welcome = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+        guard welcome.hasPrefix("220") else {
+            // Некоторые серверы повторно шлют баннер 220 после TLS
+            print("FTPSecureClient: приветствие после TLS: \(welcome)")
+        }
+
+        // === ШАГ 6: USER / PASS ===
+        try sslWriteCmd(context: controlSSL!, cmd: "USER \(username)\r\n")
+        let userResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+        if userResp.hasPrefix("331") {
+            try sslWriteCmd(context: controlSSL!, cmd: "PASS \(password)\r\n")
+            let passResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+            guard passResp.hasPrefix("230") else {
+                throw ftpError("Неверный логин или пароль (код: \(passResp))")
+            }
+        } else if !userResp.hasPrefix("230") {
+            throw ftpError("Ошибка авторизации: \(userResp)")
+        }
+
+        // === ШАГ 7: PBSZ и PROT ===
+        try sslWriteCmd(context: controlSSL!, cmd: "PBSZ 0\r\n")
+        _ = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+
+        try sslWriteCmd(context: controlSSL!, cmd: "PROT P\r\n")
+        let protResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+        var useTlsDataChannel = true
+        if !protResp.hasPrefix("200") {
+            print("FTPSecureClient: PROT P отклонен (\(protResp)), пробуем PROT C")
+            try sslWriteCmd(context: controlSSL!, cmd: "PROT C\r\n")
+            _ = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+            useTlsDataChannel = false
+        }
+
+        // === ШАГ 8: TYPE I ===
+        try sslWriteCmd(context: controlSSL!, cmd: "TYPE I\r\n")
+        _ = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+
+        // === ШАГ 9: Вход в пассивный режим (PASV/EPSV) ===
+        var pasvPort = -1
+        var pasvIp = resolvedIp
+
+        try sslWriteCmd(context: controlSSL!, cmd: "PASV\r\n")
+        let pasvResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+        if pasvResp.hasPrefix("227") {
+            if let (parsedIp, parsedPort) = parsePasvIpPort(pasvResp) {
+                pasvPort = parsedPort
+                pasvIp = parsedIp
+            }
+        }
+
+        if pasvPort <= 0 {
+            try sslWriteCmd(context: controlSSL!, cmd: "EPSV\r\n")
+            let epsvResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+            if epsvResp.hasPrefix("229"), let portOnly = parseEpsvPort(epsvResp) {
+                pasvPort = portOnly
+            }
+        }
+
+        guard pasvPort > 0 else {
+            throw ftpError("Не удалось войти в пассивный режим")
+        }
+
+        logMsg("[SecureTransport] Канал данных: подключение к \(pasvIp):\(pasvPort)")
+        dataSock = try tcpConnect(host: pasvIp, port: pasvPort, timeoutSec: 15)
+        setSocketTimeout(dataSock, seconds: 60)
+        setNoSigPipe(dataSock)
+
+        // === ШАГ 10: Отправка команды STOR на контрольном канале ===
+        try sslWriteCmd(context: controlSSL!, cmd: "STOR \(filename)\r\n")
+        let storResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+        guard storResp.hasPrefix("150") || storResp.hasPrefix("125") else {
+            throw ftpError("STOR ошибка: \(storResp)")
+        }
+
+        // === ШАГ 11: TLS на канале данных ===
+        if useTlsDataChannel {
+            logMsg("[SecureTransport] TLS канала данных (Session Resumption через SSLSetPeerID)...")
+            dataSSL = try createSSLContext(sock: dataSock, peerName: cleanHost, peerId: peerId, requireValidCertificate: requireValidCert)
+            try performSSLHandshake(context: dataSSL!, requireValidCertificate: requireValidCert)
+            logMsg("[SecureTransport] ✅ TLS канала данных УСПЕХ — Session Resumption работает!")
+        }
+
+        // === ШАГ 12: Передача данных ===
+        if let ssl = dataSSL {
+            try sslWriteFile(context: ssl, sock: dataSock, fileURL: fileURL, progress: progress)
+        } else {
+            try plainWriteFile(sock: dataSock, fileURL: fileURL, progress: progress)
+        }
+
+        // === ШАГ 13: Закрытие канала данных ===
+        if let ssl = dataSSL {
+            secureSSLClose(context: ssl, sock: dataSock)
+            dataSSL = nil
+        }
+        Darwin.close(dataSock)
+        dataSock = -1
+
+        // === ШАГ 14: Чтение подтверждения «226 Transfer complete» ===
+        setSocketTimeout(controlSock, seconds: 60)
+        let completeResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+        guard completeResp.hasPrefix("226") else {
+            throw ftpError("Ошибка завершения передачи: \(completeResp)")
+        }
+
+        logMsg("[SecureTransport] ✅ Файл \(filename) успешно загружен!")
+
+        // === ШАГ 15: QUIT ===
+        try? sslWriteCmd(context: controlSSL!, cmd: "QUIT\r\n")
 
     // MARK: - TCP Layer
 
@@ -702,6 +888,143 @@ class FTPSecureClient {
         let sentSha256 = sentHash.map { String(format: "%02x", $0) }.joined()
 
         logMsg("[Diagnostic] Передача по SSL завершена. Всего записано: \(totalBytesWrittenToSocket) байт. Возникновений errSSLWouldBlock: \(totalErrWouldBlockCount). SHA-256 отправленного потока: \(sentSha256)")
+    }
+
+    /// Отправка данных файла через plain-text сокет (PROT C) с чтением с диска чанками
+    private static func plainWriteFile(sock: Int32, fileURL: URL, progress: (@Sendable (Double) -> Void)?) throws {
+        let fileHandle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? fileHandle.close() }
+        
+        let fileAttributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let total = (fileAttributes[.size] as? UInt64) ?? 0
+        let chunkSize = 65536
+        var offset: UInt64 = 0
+        
+        while offset < total {
+            let bytesToRead = min(UInt64(chunkSize), total - offset)
+            guard let chunk = try? fileHandle.read(upToCount: Int(bytesToRead)) else {
+                throw ftpError("Ошибка чтения чанка из файла")
+            }
+            
+            if chunk.isEmpty { break }
+            
+            try chunk.withUnsafeBytes { buffer in
+                var totalSent = 0
+                while totalSent < chunk.count {
+                    let ptr = buffer.baseAddress!.advanced(by: totalSent)
+                    let remaining = chunk.count - totalSent
+                    let sent = send(sock, ptr, remaining, 0)
+                    if sent > 0 {
+                        totalSent += sent
+                    } else {
+                        let err = errno
+                        if err == EAGAIN || err == EWOULDBLOCK {
+                            var pollFd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
+                            let pollResult = poll(&pollFd, 1, 10000)
+                            if pollResult <= 0 {
+                                throw ftpError("Таймаут передачи данных: errno \(err)")
+                            }
+                            continue
+                        }
+                        throw ftpError("Ошибка передачи данных: errno \(err)")
+                    }
+                }
+            }
+            
+            offset += UInt64(chunk.count)
+            if total > 0 { progress?(Double(offset) / Double(total)) }
+        }
+    }
+
+    /// Отправка данных файла через SSL (PROT P) с чтением с диска чанками (предотвращает OOM)
+    private static func sslWriteFile(context: SSLContext, sock: Int32, fileURL: URL, progress: (@Sendable (Double) -> Void)?) throws {
+        let fileHandle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? fileHandle.close() }
+        
+        let fileAttributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let total = (fileAttributes[.size] as? UInt64) ?? 0
+        let chunkSize = 16384 // 16 KB (размер одной TLS-записи)
+        var offset: UInt64 = 0
+        var totalBytesWrittenToSocket = 0
+        var totalErrWouldBlockCount = 0
+        
+        var shaCtx = CC_SHA256_CTX()
+        CC_SHA256_Init(&shaCtx)
+        
+        logMsg("[SecureTransport] Начало потоковой передачи файла по SSL. Размер: \(total) байт")
+        
+        while offset < total {
+            let bytesToRead = min(UInt64(chunkSize), total - offset)
+            guard let chunk = try? fileHandle.read(upToCount: Int(bytesToRead)) else {
+                throw ftpError("Ошибка чтения чанка из файла")
+            }
+            
+            if chunk.isEmpty { break }
+            
+            try chunk.withUnsafeBytes { buffer in
+                let ptr = buffer.baseAddress!
+                let len = chunk.count
+                var bytesWrittenThisChunk = 0
+                
+                while bytesWrittenThisChunk < len {
+                    let currentPtr = ptr.advanced(by: bytesWrittenThisChunk)
+                    let currentLen = len - bytesWrittenThisChunk
+                    
+                    var processed = 0
+                    var status = SSLWrite(context, currentPtr, currentLen, &processed)
+                    
+                    if status == noErr {
+                        if processed > 0 {
+                            CC_SHA256_Update(&shaCtx, currentPtr, CC_LONG(processed))
+                            bytesWrittenThisChunk += processed
+                            totalBytesWrittenToSocket += processed
+                        } else if currentLen > 0 {
+                            logMsg("[WARNING] SSLWrite вернул noErr, но processed = 0")
+                            throw ftpError("SSLWrite вернул noErr при processed = 0")
+                        }
+                        continue
+                    }
+                    
+                    if status == errSSLWouldBlock {
+                        totalErrWouldBlockCount += 1
+                        
+                        if processed > 0 {
+                            CC_SHA256_Update(&shaCtx, currentPtr, CC_LONG(processed))
+                            bytesWrittenThisChunk += processed
+                            totalBytesWrittenToSocket += processed
+                        }
+                        
+                        var flushAttempts = 0
+                        while status == errSSLWouldBlock {
+                            var pollFd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
+                            let pollResult = poll(&pollFd, 1, 30000)
+                            if pollResult <= 0 {
+                                throw ftpError("Таймаут сброса буфера данных (попытка \(flushAttempts))")
+                            }
+                            
+                            var dummy = 0
+                            status = SSLWrite(context, nil, 0, &dummy)
+                            flushAttempts += 1
+                        }
+                        
+                        if status != noErr {
+                            throw ftpError("Ошибка сброса буфера данных: OSStatus \(status)")
+                        }
+                        continue
+                    }
+                    
+                    throw ftpError("Ошибка передачи данных: OSStatus \(status)")
+                }
+            }
+            
+            offset += UInt64(chunk.count)
+            if total > 0 { progress?(Double(offset) / Double(total)) }
+        }
+        
+        var sentHash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        CC_SHA256_Final(&sentHash, &shaCtx)
+        let hashString = sentHash.map { String(format: "%02x", $0) }.joined()
+        logMsg("[Diagnostic] Завершена передача по SSL. Записано в сокет: \(totalBytesWrittenToSocket) байт. SHA-256 переданных данных: \(hashString)")
     }
 
     // MARK: - Helper Methods

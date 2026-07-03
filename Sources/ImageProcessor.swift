@@ -1,6 +1,7 @@
 import Foundation
 import ImageIO
 import UIKit
+import AVFoundation
 
 /// Фоновый актор для ресурсоемких операций с изображениями
 actor ImageProcessor {
@@ -94,5 +95,94 @@ actor ImageProcessor {
             return destinationData as Data
         }
         return nil
+    }
+    
+    /// Внедряет метаданные (Title, Description, Keywords) в MP4/QuickTime видеофайл без перекодирования.
+    /// Возвращает URL нового временного файла.
+    func prepareVideoForUpload(
+        videoURL: URL,
+        photo: PhotoMetadata
+    ) async throws -> URL {
+        let asset = AVAsset(url: videoURL)
+        
+        // Создаем уникальный временный файл с тем же расширением
+        let ext = videoURL.pathExtension.lowercased()
+        let actualExt = ext.isEmpty ? "mp4" : ext
+        let tempDir = FileManager.default.temporaryDirectory
+        let outputURL = tempDir.appendingPathComponent("\(UUID().uuidString).\(actualExt)")
+        
+        // Определяем тип файла по расширению
+        let fileType: AVFileType
+        if actualExt == "mov" {
+            fileType = .mov
+        } else {
+            fileType = .mp4
+        }
+        
+        guard let exportSession = AVAssetExportSession(
+            asset: asset,
+            presetName: AVAssetExportPresetPassthrough
+        ) else {
+            throw NSError(domain: "ImageProcessor", code: -1, userInfo: [NSLocalizedDescriptionKey: "Не удалось создать AVAssetExportSession"])
+        }
+        
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = fileType
+        exportSession.shouldOptimizeForNetworkUse = true
+        
+        // Формируем метаданные
+        var metadataItems: [AVMetadataItem] = []
+        
+        // Common Keys
+        // Title
+        let titleItem = NSMutableMetadataItem()
+        titleItem.keySpace = .common
+        titleItem.key = AVMetadataKey.commonKeyTitle as NSCopying & NSObjectProtocol
+        titleItem.value = photo.title as NSString
+        metadataItems.append(titleItem)
+        
+        // Description
+        let descItem = NSMutableMetadataItem()
+        descItem.keySpace = .common
+        descItem.key = AVMetadataKey.commonKeyDescription as NSCopying & NSObjectProtocol
+        descItem.value = photo.description as NSString
+        metadataItems.append(descItem)
+        
+        // Keywords
+        let keywordsString = photo.keywords.joined(separator: ", ")
+        let keywordsItem = NSMutableMetadataItem()
+        keywordsItem.keySpace = .common
+        keywordsItem.key = AVMetadataKey.commonKeyKeywords as NSCopying & NSObjectProtocol
+        keywordsItem.value = keywordsString as NSString
+        metadataItems.append(keywordsItem)
+        
+        // QuickTime Metadata Keys
+        let qtTitleItem = NSMutableMetadataItem()
+        qtTitleItem.keySpace = .quickTimeMetadata
+        qtTitleItem.key = AVMetadataKey.quickTimeMetadataKeyTitle as NSCopying & NSObjectProtocol
+        qtTitleItem.value = photo.title as NSString
+        metadataItems.append(qtTitleItem)
+        
+        let qtDescItem = NSMutableMetadataItem()
+        qtDescItem.keySpace = .quickTimeMetadata
+        qtDescItem.key = AVMetadataKey.quickTimeMetadataKeyDescription as NSCopying & NSObjectProtocol
+        qtDescItem.value = photo.description as NSString
+        metadataItems.append(qtDescItem)
+        
+        let qtKeywordsItem = NSMutableMetadataItem()
+        qtKeywordsItem.keySpace = .quickTimeMetadata
+        qtKeywordsItem.key = AVMetadataKey.quickTimeMetadataKeyKeywords as NSCopying & NSObjectProtocol
+        qtKeywordsItem.value = keywordsString as NSString
+        metadataItems.append(qtKeywordsItem)
+        
+        exportSession.metadata = metadataItems
+        
+        await exportSession.export()
+        
+        if let error = exportSession.error {
+            throw error
+        }
+        
+        return outputURL
     }
 }

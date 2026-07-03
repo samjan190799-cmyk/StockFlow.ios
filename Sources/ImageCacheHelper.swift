@@ -107,4 +107,85 @@ final class ImageCacheHelper {
         
         return image
     }
+    
+    /// Извлекает несколько кадров из видеофайла для анализа ИИ (например, 3 кадра)
+    func extractFrames(
+        photoId: UUID,
+        fromDir dirURL: URL,
+        count: Int = 3
+    ) async -> [Data] {
+        var fileURL = dirURL.appendingPathComponent("\(photoId.uuidString).jpg")
+        var isVideoFile = false
+        
+        let extensions = ["mp4", "mov", "m4v", "MP4", "MOV"]
+        for ext in extensions {
+            let possibleURL = dirURL.appendingPathComponent("\(photoId.uuidString).\(ext)")
+            if FileManager.default.fileExists(atPath: possibleURL.path) {
+                fileURL = possibleURL
+                isVideoFile = true
+                break
+            }
+        }
+        
+        guard isVideoFile else {
+            // Если это не видео, возвращаем данные фото
+            if let data = try? Data(contentsOf: fileURL) {
+                return [data]
+            }
+            return []
+        }
+        
+        return await Task.detached(priority: .userInitiated) { () -> [Data] in
+            let asset = AVAsset(url: fileURL)
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.requestedTimeToleranceBefore = .zero
+            generator.requestedTimeToleranceAfter = .zero
+            
+            // Получаем длительность видео
+            let durationSeconds: Double
+            if #available(iOS 16.0, *) {
+                durationSeconds = (try? asset.duration.seconds) ?? 0
+            } else {
+                durationSeconds = asset.duration.seconds
+            }
+            
+            guard durationSeconds > 0 else {
+                if let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil),
+                   let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9) {
+                    return [jpegData]
+                }
+                return []
+            }
+            
+            var times: [CMTime] = []
+            if count == 1 {
+                times.append(CMTime(seconds: min(1.0, durationSeconds), preferredTimescale: 60))
+            } else {
+                for i in 0..<count {
+                    let percent = Double(i) / Double(count - 1)
+                    // Точки на 5%, 50%, 95%
+                    let targetSec = durationSeconds * (0.05 + percent * 0.9)
+                    times.append(CMTime(seconds: targetSec, preferredTimescale: 60))
+                }
+            }
+            
+            var frames: [Data] = []
+            for time in times {
+                if let cgImage = try? generator.copyCGImage(at: time, actualTime: nil),
+                   let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9) {
+                    frames.append(jpegData)
+                }
+            }
+            
+            if frames.isEmpty {
+                if let cgImageZero = try? generator.copyCGImage(at: .zero, actualTime: nil),
+                   let jpegDataZero = UIImage(cgImage: cgImageZero).jpegData(compressionQuality: 0.9) {
+                    frames.append(jpegDataZero)
+                }
+            }
+            
+            return frames
+        }.value
+    }
 }

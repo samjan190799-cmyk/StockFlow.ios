@@ -106,33 +106,20 @@ class QueueViewModel: ObservableObject {
         }
     }
     
-    private func getAIImageData(for photo: PhotoMetadata) async -> Data {
+    private func getAIImagesData(for photo: PhotoMetadata) async -> [Data] {
         let photoId = photo.id
         if photo.isVideo {
-            let ext = (URL(fileURLWithPath: photo.filename).pathExtension.lowercased())
-            let actualExt = ext.isEmpty ? "mp4" : ext
-            let videoURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).\(actualExt)")
-            let asset = AVAsset(url: videoURL)
-            let generator = AVAssetImageGenerator(asset: asset)
-            generator.appliesPreferredTrackTransform = true
-            generator.requestedTimeToleranceBefore = .zero
-            generator.requestedTimeToleranceAfter = .zero
-            let time = CMTime(seconds: 1.0, preferredTimescale: 60)
-            
-            return await Task.detached(priority: .userInitiated) { () -> Data in
-                if let cgImage = try? generator.copyCGImage(at: time, actualTime: nil),
-                   let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9) {
-                    return jpegData
-                }
-                if let cgImageZero = try? generator.copyCGImage(at: .zero, actualTime: nil),
-                   let jpegDataZero = UIImage(cgImage: cgImageZero).jpegData(compressionQuality: 0.9) {
-                    return jpegDataZero
-                }
-                return Data()
-            }.value
+            return await ImageCacheHelper.shared.extractFrames(
+                photoId: photoId,
+                fromDir: self.photosDirectoryURL,
+                count: 3
+            )
         } else {
             let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).jpg")
-            return (try? Data(contentsOf: fileURL)) ?? Data()
+            if let data = try? Data(contentsOf: fileURL) {
+                return [data]
+            }
+            return []
         }
     }
     
@@ -176,9 +163,9 @@ class QueueViewModel: ObservableObject {
         Task {
             do {
                 let photo = self.photos[idx]
-                let imageData = await getAIImageData(for: photo)
+                let imagesData = await getAIImagesData(for: photo)
                 let result = try await AIManager.shared.analyzePhoto(
-                    imageData: imageData,
+                    imagesData: imagesData,
                     customPrompt: customPrompt,
                     provider: provider,
                     apiKey: apiKey
@@ -236,9 +223,9 @@ class QueueViewModel: ObservableObject {
                         // Real analysis
                         do {
                             let currentPhoto = self.photos[idx]
-                            let data = await getAIImageData(for: currentPhoto)
+                            let imagesData = await getAIImagesData(for: currentPhoto)
                             let result = try await AIManager.shared.analyzePhoto(
-                                imageData: data,
+                                imagesData: imagesData,
                                 customPrompt: customPrompt,
                                 provider: provider,
                                 apiKey: apiKey
@@ -462,26 +449,59 @@ class QueueViewModel: ObservableObject {
     }
     
     private func performRealUpload(for photo: PhotoMetadata, progress: (@Sendable (Double) -> Void)? = nil) async throws {
-
         let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
         let actualExt = ext.isEmpty ? "mp4" : ext
-        let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
+        let sourceFileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
         
-        guard let data = try? Data(contentsOf: fileURL) else {
+        guard FileManager.default.fileExists(atPath: sourceFileURL.path) else {
             throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Файл не найден на диске"])
         }
         
-        // Переносим обработку метаданных и сжатие в фоновый актор ImageProcessor (только для фото)
-        let finalData: Data
+        // Массив временных URL для удаления в конце
+        var tempURLsToDelete: [URL] = []
+        defer {
+            for tempURL in tempURLsToDelete {
+                try? FileManager.default.removeItem(at: tempURL)
+            }
+        }
+        
+        let fileURLToUpload: URL
         if photo.isVideo {
-            finalData = data
+            // Внедряем метаданные в видеофайл в режиме passthrough (очень быстро)
+            do {
+                let preparedVideoURL = try await ImageProcessor.shared.prepareVideoForUpload(
+                    videoURL: sourceFileURL,
+                    photo: photo
+                )
+                fileURLToUpload = preparedVideoURL
+                tempURLsToDelete.append(preparedVideoURL)
+            } catch {
+                print("Error preparing video metadata: \(error.localizedDescription)")
+                // В случае ошибки используем исходный файл
+                fileURLToUpload = sourceFileURL
+            }
         } else {
+            // Обработка метаданных фото и сжатие
+            guard let data = try? Data(contentsOf: sourceFileURL) else {
+                throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Не удалось прочитать файл изображения"])
+            }
+            
             let compress = UserDefaults.standard.bool(forKey: "sys_compress_jpeg")
-            finalData = await ImageProcessor.shared.prepareImageForUpload(
+            let finalImageData = await ImageProcessor.shared.prepareImageForUpload(
                 imageData: data,
                 photo: photo,
                 compress: compress
             )
+            
+            // Сохраняем обработанное фото во временный файл
+            let tempImageURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).jpg")
+            do {
+                try finalImageData.write(to: tempImageURL)
+                fileURLToUpload = tempImageURL
+                tempURLsToDelete.append(tempImageURL)
+            } catch {
+                throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Не удалось сохранить обработанное изображение: \(error.localizedDescription)"])
+            }
         }
         
         // Load active platforms
@@ -490,7 +510,6 @@ class QueueViewModel: ObservableObject {
             throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Настройки стоков не найдены"])
         }
         
-        // Фильтруем только те стоки, которые включены в настройках И выбраны для конкретной фотографии
         let activePlatforms = platforms.filter { platform in
             platform.isEnabled && photo.selectedStocks.contains(platform.name)
         }
@@ -503,10 +522,11 @@ class QueueViewModel: ObservableObject {
         if pcServerEnabled {
             let pcAddress = UserDefaults.standard.string(forKey: "sys_pc_server_address") ?? "192.168.1.50:5000"
             try await uploadViaPCServer(
-                data: finalData,
+                fileURL: fileURLToUpload,
                 filename: photo.filename,
                 pcAddress: pcAddress,
                 activePlatforms: activePlatforms,
+                isVideo: photo.isVideo,
                 progress: progress
             )
             return
@@ -517,7 +537,6 @@ class QueueViewModel: ObservableObject {
         
         let maxAttempts = UserDefaults.standard.bool(forKey: "sys_retry_on_fail") ? 3 : 1
         
-        // Upload to each active platform
         for platform in activePlatforms {
             let serviceKey = "com.samvel.smartstock.platform.\(platform.id)"
             let password = KeychainHelper.shared.read(for: serviceKey) ?? ""
@@ -527,17 +546,14 @@ class QueueViewModel: ObservableObject {
                 continue
             }
             
-            // FTPClient теперь сам определяет протокол по хосту (ftp/ftps/sftp)
-            // Передаём оригинальный host как есть
             var attempts = 0
             var uploadError: Error? = nil
             
             while attempts < maxAttempts {
                 do {
-                    // FTPSecureClient использует BSD-сокеты + SecureTransport
-                    // с SSLSetPeerID для TLS Session Resumption (решает проблему Shutterstock)
+                    // Используем потоковую отправку по URL
                     try await FTPSecureClient.upload(
-                        data: finalData,
+                        fileURL: fileURLToUpload,
                         filename: photo.filename,
                         host: platform.host,
                         port: 21,
@@ -547,7 +563,6 @@ class QueueViewModel: ObservableObject {
                     )
                     successCount += 1
                     uploadError = nil
-                    // Записываем успешную загрузку в историю статистики
                     StatsManager.recordUpload(
                         platformId: platform.id,
                         platformName: platform.name,
@@ -559,14 +574,13 @@ class QueueViewModel: ObservableObject {
                     attempts += 1
                     uploadError = error
                     if attempts < maxAttempts {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000) // Wait 2s before retry
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
                     }
                 }
             }
             
             if let error = uploadError {
                 uploadErrors.append("\(platform.name): \(error.localizedDescription)")
-                // Записываем ошибку в историю статистики (только после всех попыток)
                 StatsManager.recordUpload(
                     platformId: platform.id,
                     platformName: platform.name,
@@ -586,15 +600,16 @@ class QueueViewModel: ObservableObject {
     }
     
     private func uploadViaPCServer(
-        data: Data,
+        fileURL: URL,
         filename: String,
         pcAddress: String,
         activePlatforms: [StockPlatform],
+        isVideo: Bool,
         progress: (@Sendable (Double) -> Void)? = nil
     ) async throws {
         // Шаг 1: Загрузка временного файла на ПК
         progress?(0.05)
-        let fileId = try await uploadMultipart(data: data, filename: filename, pcAddress: pcAddress)
+        let fileId = try await uploadMultipart(fileURL: fileURL, filename: filename, pcAddress: pcAddress, isVideo: isVideo)
         
         let targetStockIds = Set(activePlatforms.map { $0.id })
         
@@ -624,7 +639,7 @@ class QueueViewModel: ObservableObject {
         }
     }
     
-    private func uploadMultipart(data: Data, filename: String, pcAddress: String) async throws -> String {
+    private func uploadMultipart(fileURL: URL, filename: String, pcAddress: String, isVideo: Bool) async throws -> String {
         let boundary = "Boundary-\(UUID().uuidString)"
         guard let url = URL(string: "http://\(pcAddress)/api/upload-temp") else {
             throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Некорректный адрес ПК-сервера: \(pcAddress)"])
@@ -634,16 +649,38 @@ class QueueViewModel: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         
-        var body = Data()
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"photos\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
-        body.append(data)
-        body.append("\r\n".data(using: .utf8)!)
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
+        // Создаем временный файл для multipart-тела
+        let tempBodyURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         
-        let (responseData, response) = try await URLSession.shared.data(for: request)
+        // Записываем заголовки
+        var headerData = Data()
+        headerData.append("--\(boundary)\r\n".data(using: .utf8)!)
+        headerData.append("Content-Disposition: form-data; name=\"photos\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        
+        let contentType = isVideo ? "video/mp4" : "image/jpeg"
+        headerData.append("Content-Type: \(contentType)\r\n\r\n".data(using: .utf8)!)
+        
+        try headerData.write(to: tempBodyURL)
+        
+        // Дописываем сам файл
+        let fileHandle = try FileHandle(forWritingTo: tempBodyURL)
+        try fileHandle.seekToEnd()
+        
+        let sourceHandle = try FileHandle(forReadingFrom: fileURL)
+        while let chunk = try? sourceHandle.read(upToCount: 65536), !chunk.isEmpty {
+            try fileHandle.write(contentsOf: chunk)
+        }
+        try sourceHandle.close()
+        
+        // Дописываем закрывающий boundary
+        var footerData = Data()
+        footerData.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        try fileHandle.write(contentsOf: footerData)
+        try fileHandle.close()
+        
+        defer { try? FileManager.default.removeItem(at: tempBodyURL) }
+        
+        let (responseData, response) = try await URLSession.shared.upload(for: request, fromFile: tempBodyURL)
         guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
             let errorMsg = String(data: responseData, encoding: .utf8) ?? "Неизвестная ошибка"
             throw NSError(domain: "PCUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Ошибка загрузки на ПК-сервер: \(errorMsg)"])
@@ -1682,19 +1719,67 @@ struct PhotoRowView: View, Equatable {
         for item in items {
             let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
             
-            item.loadTransferable(type: Data.self) { result in
-                switch result {
-                case .success(let data):
-                    if let data = data {
-                        var finalData = data
-                        var filename = ""
-                        
-                        let randomNum = Int.random(in: 1000...9999)
-                        
-                        if isVideo {
-                            let ext = item.supportedContentTypes.first(where: { $0.conforms(to: .movie) || $0.conforms(to: .video) })?.preferredFilenameExtension ?? "mp4"
-                            filename = "VID_\(randomNum).\(ext.uppercased())"
-                        } else {
+            if isVideo {
+                item.loadTransferable(type: URL.self) { result in
+                    switch result {
+                    case .success(let url):
+                        if let url = url {
+                            let access = url.startAccessingSecurityScopedResource()
+                            defer { if access { url.stopAccessingSecurityScopedResource() } }
+                            
+                            let ext = url.pathExtension.lowercased()
+                            let actualExt = ext.isEmpty ? "mp4" : ext
+                            let uuid = UUID()
+                            let targetURL = self.photosDirectoryURL.appendingPathComponent("\(uuid.uuidString).\(actualExt)")
+                            
+                            do {
+                                if FileManager.default.fileExists(atPath: targetURL.path) {
+                                    try FileManager.default.removeItem(at: targetURL)
+                                }
+                                try FileManager.default.copyItem(at: url, to: targetURL)
+                                
+                                let randomNum = Int.random(in: 1000...9999)
+                                let filename = "VID_\(randomNum).\(actualExt.uppercased())"
+                                
+                                let fileAttributes = try FileManager.default.attributesOfItem(atPath: targetURL.path)
+                                let fileSizeByte = fileAttributes[.size] as? Int64 ?? 0
+                                let fileSizeStr = ByteCountFormatter.string(fromByteCount: fileSizeByte, countStyle: .file)
+                                
+                                let newPhoto = PhotoMetadata(
+                                    id: uuid,
+                                    filename: filename,
+                                    fileSize: fileSizeStr,
+                                    title: "",
+                                    keywords: [],
+                                    description: "",
+                                    categories: [],
+                                    status: .new,
+                                    isVideo: true
+                                )
+                                
+                                Task { @MainActor in
+                                    await vm.addPhoto(newPhoto)
+                                }
+                            } catch {
+                                Task { @MainActor in
+                                    self.triggerToast("Ошибка импорта видео: \(error.localizedDescription)")
+                                }
+                            }
+                        }
+                    case .failure(let error):
+                        print("Error loading video URL: \(error.localizedDescription)")
+                    }
+                }
+            } else {
+                item.loadTransferable(type: Data.self) { result in
+                    switch result {
+                    case .success(let data):
+                        if let data = data {
+                            var finalData = data
+                            var filename = ""
+                            
+                            let randomNum = Int.random(in: 1000...9999)
+                            
                             let isJpeg = data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
                             
                             if !isJpeg {
@@ -1713,25 +1798,23 @@ struct PhotoRowView: View, Equatable {
                             
                             filename = "IMG_\(randomNum).JPG"
                             
-                            // Авто-апскейл: применяем только если настройка включена
+                            // Авто-апскейл
                             let autoUpscaleEnabled = UserDefaults.standard.bool(forKey: "sys_auto_upscale")
                             if autoUpscaleEnabled {
                                 let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? ""
                                 let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? ""
                                 
-                                // Определяем порог в МБ
                                 let thresholdMB: Double
                                 if thresholdStr.contains("2 МБ") {
                                     thresholdMB = 2.0
                                 } else if thresholdStr.contains("8 МБ") {
                                     thresholdMB = 8.0
                                 } else {
-                                    thresholdMB = 4.0 // Рекомендуется
+                                    thresholdMB = 4.0
                                 }
                                 
                                 let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
                                 if sizeMB < thresholdMB, let uiImage = UIImage(data: finalData) {
-                                    // Определяем коэффициент масштабирования
                                     let scale: CGFloat = factorStr.contains("4x") ? 4.0 : 2.0
                                     let newSize = CGSize(
                                         width: uiImage.size.width * scale,
@@ -1751,29 +1834,29 @@ struct PhotoRowView: View, Equatable {
                                     }
                                 }
                             }
+                            
+                            let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
+                            let fileSizeStr = String(format: "%.2f МБ", sizeMB)
+                            
+                            let newPhoto = PhotoMetadata(
+                                filename: filename,
+                                fileSize: fileSizeStr,
+                                title: "",
+                                keywords: [],
+                                description: "",
+                                categories: [],
+                                status: .new,
+                                imageData: finalData,
+                                isVideo: false
+                            )
+                            
+                            Task {
+                                await vm.addPhoto(newPhoto)
+                            }
                         }
-                        
-                        let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
-                        let fileSizeStr = String(format: "%.2f МБ", sizeMB)
-                        
-                        let newPhoto = PhotoMetadata(
-                            filename: filename,
-                            fileSize: fileSizeStr,
-                            title: "",
-                            keywords: [],
-                            description: "",
-                            categories: [],
-                            status: .new,
-                            imageData: finalData,
-                            isVideo: isVideo
-                        )
-                        
-                        Task {
-                            await vm.addPhoto(newPhoto)
-                        }
+                    case .failure(let error):
+                        print("Error loading photo: \(error.localizedDescription)")
                     }
-                case .failure(let error):
-                    print("Error loading media: \(error.localizedDescription)")
                 }
             }
         }

@@ -14,12 +14,12 @@ final class AIManager: Sendable {
     
     static let defaultPrompt = "Analyze this image for a stock photo agency. Provide: 1. A commercially viable Title (max 70 characters), 2. A detailed Description (max 200 characters), 3. A list of 25-35 highly relevant Keywords (comma separated), 4. Select exactly 1 or 2 categories that describe this image from this list: [Abstract, Animals/Wildlife, Arts, Backgrounds/Textures, Beauty/Fashion, Buildings/Landmarks, Business/Finance, Celebrities, Education, Food and drink, Healthcare/Medical, Holidays, Industrial, Interiors, Miscellaneous, Nature, Objects, Parks/Outdoor, People, Religion, Science, Signs/Symbols, Sports/Recreation, Technology, Transportation, Vintage]. Output strictly in JSON format matching this schema: {\"title\": \"string\", \"description\": \"string\", \"keywords\": [\"keyword1\", \"keyword2\", ...], \"categories\": [\"category1\", \"category2\"]}"
     
-    func analyzePhoto(imageData: Data, customPrompt: String, provider: String, apiKey: String) async throws -> AIResult {
-        guard !imageData.isEmpty else {
-            throw NSError(domain: "AIManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Изображение не найдено."])
+    func analyzePhoto(imagesData: [Data], customPrompt: String, provider: String, apiKey: String) async throws -> AIResult {
+        guard !imagesData.isEmpty else {
+            throw NSError(domain: "AIManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Изображения не найдены."])
         }
         
-        let base64Image = imageData.base64EncodedString()
+        let base64Images = imagesData.map { $0.base64EncodedString() }
         let prompt = customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AIManager.defaultPrompt : customPrompt
         
         var attempts = 0
@@ -29,9 +29,9 @@ final class AIManager: Sendable {
         while true {
             do {
                 if provider.contains("Gemini") {
-                    return try await analyzeWithGemini(base64Image: base64Image, prompt: prompt, apiKey: apiKey)
+                    return try await analyzeWithGemini(base64Images: base64Images, prompt: prompt, apiKey: apiKey)
                 } else if provider.contains("OpenAI") {
-                    return try await analyzeWithOpenAI(base64Image: base64Image, prompt: prompt, apiKey: apiKey)
+                    return try await analyzeWithOpenAI(base64Images: base64Images, prompt: prompt, apiKey: apiKey)
                 } else {
                     throw NSError(domain: "AIManager", code: 501, userInfo: [NSLocalizedDescriptionKey: "Провайдер \(provider) пока не поддерживается."])
                 }
@@ -54,7 +54,7 @@ final class AIManager: Sendable {
     }
     
     // MARK: - Gemini Integration
-    private func analyzeWithGemini(base64Image: String, prompt: String, apiKey: String) async throws -> AIResult {
+    private func analyzeWithGemini(base64Images: [String], prompt: String, apiKey: String) async throws -> AIResult {
         let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(apiKey)"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "AIManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Некорректный URL Gemini."])
@@ -64,19 +64,24 @@ final class AIManager: Sendable {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
+        var parts: [[String: Any]] = [
+            ["text": prompt]
+        ]
+        
+        for base64 in base64Images {
+            parts.append([
+                "inlineData": [
+                    "mimeType": "image/jpeg",
+                    "data": base64
+                ]
+            ])
+        }
+        
         // Prepare request body according to Gemini multimodal API schema
         let requestBody: [String: Any] = [
             "contents": [
                 [
-                    "parts": [
-                        ["text": prompt],
-                        [
-                            "inlineData": [
-                                "mimeType": "image/jpeg",
-                                "data": base64Image
-                            ]
-                        ]
-                    ]
+                    "parts": parts
                 ]
             ],
             "generationConfig": [
@@ -111,7 +116,7 @@ final class AIManager: Sendable {
     }
     
     // MARK: - OpenAI Integration
-    private func analyzeWithOpenAI(base64Image: String, prompt: String, apiKey: String) async throws -> AIResult {
+    private func analyzeWithOpenAI(base64Images: [String], prompt: String, apiKey: String) async throws -> AIResult {
         let urlString = "https://api.openai.com/v1/chat/completions"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "AIManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Некорректный URL OpenAI."])
@@ -122,21 +127,26 @@ final class AIManager: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         
+        var content: [[String: Any]] = [
+            ["type": "text", "text": prompt]
+        ]
+        
+        for base64 in base64Images {
+            content.append([
+                "type": "image_url",
+                "image_url": [
+                    "url": "data:image/jpeg;base64,\(base64)"
+                ]
+            ])
+        }
+        
         // Prepare request body for GPT-4o-mini multimodal request
         let requestBody: [String: Any] = [
             "model": "gpt-4o-mini",
             "messages": [
                 [
                     "role": "user",
-                    "content": [
-                        ["type": "text", "text": prompt],
-                        [
-                            "type": "image_url",
-                            "image_url": [
-                                "url": "data:image/jpeg;base64,\(base64Image)"
-                            ]
-                        ]
-                    ]
+                    "content": content
                 ]
             ],
             "response_format": ["type": "json_object"]

@@ -383,36 +383,24 @@ struct AIMetadataView: View {
         
         Task {
             do {
-                let data: Data
+                let imagesData: [Data]
                 if isVideo {
-                    let ext = (URL(fileURLWithPath: photo.filename).pathExtension.lowercased())
-                    let actualExt = ext.isEmpty ? "mp4" : ext
-                    let videoURL = dirURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
-                    let asset = AVAsset(url: videoURL)
-                    let generator = AVAssetImageGenerator(asset: asset)
-                    generator.appliesPreferredTrackTransform = true
-                    generator.requestedTimeToleranceBefore = .zero
-                    generator.requestedTimeToleranceAfter = .zero
-                    let time = CMTime(seconds: 1.0, preferredTimescale: 60)
-                    
-                    data = await Task.detached(priority: .userInitiated) { () -> Data in
-                        if let cgImage = try? generator.copyCGImage(at: time, actualTime: nil),
-                           let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9) {
-                            return jpegData
-                        }
-                        if let cgImageZero = try? generator.copyCGImage(at: .zero, actualTime: nil),
-                           let jpegDataZero = UIImage(cgImage: cgImageZero).jpegData(compressionQuality: 0.9) {
-                            return jpegDataZero
-                        }
-                        return Data()
-                    }.value
+                    imagesData = await ImageCacheHelper.shared.extractFrames(
+                        photoId: photo.id,
+                        fromDir: dirURL,
+                        count: 3
+                    )
                 } else {
                     let fileURL = dirURL.appendingPathComponent("\(photo.id.uuidString).jpg")
-                    data = (try? Data(contentsOf: fileURL)) ?? Data()
+                    if let data = try? Data(contentsOf: fileURL) {
+                        imagesData = [data]
+                    } else {
+                        imagesData = []
+                    }
                 }
                 
                 let result = try await AIManager.shared.analyzePhoto(
-                    imageData: data,
+                    imagesData: imagesData,
                     customPrompt: customPrompt,
                     provider: provider,
                     apiKey: apiKey
