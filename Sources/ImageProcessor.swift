@@ -150,11 +150,6 @@ actor ImageProcessor {
         
         // Keywords
         let keywordsString = photo.keywords.joined(separator: ", ")
-        let keywordsItem = AVMutableMetadataItem()
-        keywordsItem.keySpace = AVMetadataKeySpace.common
-        keywordsItem.key = AVMetadataKey.commonKeyKeywords as NSCopying & NSObjectProtocol
-        keywordsItem.value = keywordsString as NSString
-        metadataItems.append(keywordsItem)
         
         // QuickTime Metadata Keys
         let qtTitleItem = AVMutableMetadataItem()
