@@ -338,32 +338,34 @@ class FTPSecureClient {
         _ = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
 
         // === ШАГ 9: Вход в пассивный режим (PASV/EPSV) ===
-        var pasvPort = -1
-        var pasvIp = resolvedIp
+        var dataPort = 0
+        var epsvOk = false
 
-        try sslWriteCmd(context: controlSSL!, cmd: "PASV\r\n")
-        let pasvResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
-        if pasvResp.hasPrefix("227") {
-            if let (parsedIp, parsedPort) = parsePasvIpPort(pasvResp) {
-                pasvPort = parsedPort
-                pasvIp = parsedIp
-            }
+        try sslWriteCmd(context: controlSSL!, cmd: "EPSV\r\n")
+        let epsvResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+        if epsvResp.hasPrefix("229"), let port = parseEPSVPort(epsvResp) {
+            dataPort = port
+            epsvOk = true
+            logMsg("[SecureTransport] EPSV port: \(dataPort)")
         }
 
-        if pasvPort <= 0 {
-            try sslWriteCmd(context: controlSSL!, cmd: "EPSV\r\n")
-            let epsvResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
-            if epsvResp.hasPrefix("229"), let portOnly = parseEpsvPort(epsvResp) {
-                pasvPort = portOnly
+        if !epsvOk {
+            logMsg("[SecureTransport] EPSV не удался, пробуем PASV...")
+            try sslWriteCmd(context: controlSSL!, cmd: "PASV\r\n")
+            let pasvResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+            guard pasvResp.hasPrefix("227") else {
+                throw ftpError("PASV ошибка: \(pasvResp)")
             }
+            dataPort = try parsePASVPort(pasvResp)
+            logMsg("[SecureTransport] PASV port: \(dataPort)")
         }
 
-        guard pasvPort > 0 else {
+        guard dataPort > 0 else {
             throw ftpError("Не удалось войти в пассивный режим")
         }
 
-        logMsg("[SecureTransport] Канал данных: подключение к \(pasvIp):\(pasvPort)")
-        dataSock = try tcpConnect(host: pasvIp, port: pasvPort, timeoutSec: 15)
+        logMsg("[SecureTransport] Канал данных: подключение к \(resolvedIp):\(dataPort)")
+        dataSock = try tcpConnect(host: resolvedIp, port: dataPort, timeoutSec: 15)
         setSocketTimeout(dataSock, seconds: 60)
         setNoSigPipe(dataSock)
 
