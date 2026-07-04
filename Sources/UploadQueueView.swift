@@ -1004,11 +1004,17 @@ struct UploadQueueView: View {
     @State private var selectedPhotoIds = Set<UUID>()
     @State private var showCSVMenu = false
     @State private var isReorderMode = false
+    /// 0 = Фото, 1 = Видео
+    @State private var mediaTab: Int = 0
     
     var filteredPhotos: [PhotoMetadata] {
-        viewModel.photos.filter { photo in
-            let matchesSearch = searchText.isEmpty || 
-                                photo.filename.localizedCaseInsensitiveContains(searchText) || 
+        let isVideo = mediaTab == 1
+        return viewModel.photos.filter { photo in
+            // Фильтр по вкладке Фото / Видео
+            guard photo.isVideo == isVideo else { return false }
+            
+            let matchesSearch = searchText.isEmpty ||
+                                photo.filename.localizedCaseInsensitiveContains(searchText) ||
                                 photo.title.localizedCaseInsensitiveContains(searchText) ||
                                 photo.keywords.contains(where: { $0.localizedCaseInsensitiveContains(searchText) })
             
@@ -1084,6 +1090,54 @@ struct UploadQueueView: View {
                             VStack(spacing: 16) {
                                 // Виджет статистики и сети вместо зоны добавления файлов
                                 QueueStatsWidget(viewModel: viewModel)
+                                
+                                // MARK: - Вкладки Фото / Видео
+                                HStack(spacing: 0) {
+                                    ForEach([(0, "Фото", "photo.on.rectangle"), (1, "Видео", "video.fill")], id: \.0) { tabIndex, title, icon in
+                                        Button(action: {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                mediaTab = tabIndex
+                                                selectedFilter = nil
+                                                searchText = ""
+                                            }
+                                        }) {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: icon)
+                                                    .font(.system(size: 12, weight: .bold))
+                                                Text(title.localized)
+                                                    .font(.system(size: 13, weight: .bold))
+                                                let count = viewModel.photos.filter { $0.isVideo == (tabIndex == 1) }.count
+                                                if count > 0 {
+                                                    Text("\(count)")
+                                                        .font(.system(size: 10, weight: .black))
+                                                        .padding(.horizontal, 6)
+                                                        .padding(.vertical, 2)
+                                                        .background(mediaTab == tabIndex ? Color.white.opacity(0.25) : Color.white.opacity(0.08))
+                                                        .clipShape(Capsule())
+                                                }
+                                            }
+                                            .foregroundStyle(mediaTab == tabIndex ? .white : .secondary)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 10)
+                                            .background(
+                                                mediaTab == tabIndex
+                                                    ? LinearGradient(colors: [Color(hex: "7C3AED"), Color(hex: "A855F7")], startPoint: .leading, endPoint: .trailing)
+                                                    : LinearGradient(colors: [Color.clear, Color.clear], startPoint: .leading, endPoint: .trailing)
+                                            )
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    }
+                                }
+                                .padding(4)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.04))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08), lineWidth: 1)
+                                )
                                 
                                 // Строка поиска (адаптивная для тёмной и светлой темы)
                                 HStack {
@@ -1228,7 +1282,7 @@ struct UploadQueueView: View {
                             PhotosPicker(
                                 selection: $selectedItems,
                                 maxSelectionCount: 50,
-                                matching: .any(of: [.images, .videos]),
+                                matching: mediaTab == 0 ? .images : .videos,
                                 photoLibrary: .shared()
                             ) {
                                 ZStack {
@@ -1511,152 +1565,126 @@ struct UploadQueueView: View {
     
     // MARK: - Load Photos Logic
     private func loadSelectedPhotos(from items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
         let vm = viewModel
-        for item in items {
-            let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
-            
-            if isVideo {
-                item.loadTransferable(type: VideoFileTransferable.self) { result in
-                    switch result {
-                    case .success(let videoFile):
-                        if let videoFile = videoFile {
-                            let url = videoFile.url
-                            let ext = url.pathExtension.lowercased()
-                            let actualExt = ext.isEmpty ? "mp4" : ext
-                            let uuid = UUID()
-                            let targetURL = vm.photosDirectoryURL.appendingPathComponent("\(uuid.uuidString).\(actualExt)")
-                            
-                            do {
-                                if FileManager.default.fileExists(atPath: targetURL.path) {
-                                    try FileManager.default.removeItem(at: targetURL)
-                                }
-                                try FileManager.default.copyItem(at: url, to: targetURL)
-                                
-                                let randomNum = Int.random(in: 1000...9999)
-                                let filename = "VID_\(randomNum).\(actualExt.uppercased())"
-                                
-                                let fileAttributes = try FileManager.default.attributesOfItem(atPath: targetURL.path)
-                                let fileSizeByte = fileAttributes[.size] as? Int64 ?? 0
-                                let fileSizeStr = ByteCountFormatter.string(fromByteCount: fileSizeByte, countStyle: .file)
-                                
-                                let newPhoto = PhotoMetadata(
-                                    id: uuid,
-                                    filename: filename,
-                                    fileSize: fileSizeStr,
-                                    title: "",
-                                    keywords: [],
-                                    description: "",
-                                    categories: [],
-                                    status: .new,
-                                    isVideo: true
-                                )
-                                
-                                Task { @MainActor in
-                                    await vm.addPhoto(newPhoto)
-                                }
-                            } catch {
-                                Task { @MainActor in
-                                    vm.triggerToast("Ошибка импорта видео: \(error.localizedDescription)")
-                                }
-                            }
+        
+        Task { @MainActor in
+            for item in items {
+                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
+                
+                if isVideo {
+                    // Загружаем видео через VideoFileTransferable
+                    do {
+                        guard let videoFile = try await item.loadTransferable(type: VideoFileTransferable.self) else {
+                            print("[Video] loadTransferable вернул nil")
+                            continue
                         }
-                    case .failure(let error):
-                        print("Error loading video URL: \(error.localizedDescription)")
+                        let url = videoFile.url
+                        let ext = url.pathExtension.lowercased()
+                        let actualExt = ext.isEmpty ? "mp4" : ext
+                        let uuid = UUID()
+                        let targetURL = vm.photosDirectoryURL.appendingPathComponent("\(uuid.uuidString).\(actualExt)")
+                        
+                        if FileManager.default.fileExists(atPath: targetURL.path) {
+                            try? FileManager.default.removeItem(at: targetURL)
+                        }
+                        try FileManager.default.copyItem(at: url, to: targetURL)
+                        
+                        let randomNum = Int.random(in: 1000...9999)
+                        let filename = "VID_\(randomNum).\(actualExt.uppercased())"
+                        
+                        let fileAttributes = try FileManager.default.attributesOfItem(atPath: targetURL.path)
+                        let fileSizeByte = fileAttributes[.size] as? Int64 ?? 0
+                        let fileSizeStr = ByteCountFormatter.string(fromByteCount: fileSizeByte, countStyle: .file)
+                        
+                        let newPhoto = PhotoMetadata(
+                            id: uuid,
+                            filename: filename,
+                            fileSize: fileSizeStr,
+                            title: "",
+                            keywords: [],
+                            description: "",
+                            categories: [],
+                            status: .new,
+                            isVideo: true
+                        )
+                        vm.addPhoto(newPhoto)
+                        
+                    } catch {
+                        vm.triggerToast("Ошибка импорта видео: \(error.localizedDescription)")
+                        print("[Video] Ошибка: \(error)")
                     }
-                }
-            } else {
-                item.loadTransferable(type: Data.self) { result in
-                    switch result {
-                    case .success(let data):
-                        if let data = data {
-                            var finalData = data
-                            var filename = ""
-                            
-                            let randomNum = Int.random(in: 1000...9999)
-                            
-                            let isJpeg = data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
-                            
-                            if !isJpeg {
-                                if let uiImage = UIImage(data: data),
-                                   let jpegData = uiImage.jpegData(compressionQuality: 0.95) {
-                                    finalData = jpegData
-                                    Task { @MainActor in
-                                        FTPTranscriptLogger.shared.logInfo("[Diagnostic] Авто-конвертация не-JPEG (RAW/HEIC/PNG) в JPEG (размер: \(data.count) -> \(jpegData.count))")
-                                    }
-                                } else {
-                                    Task { @MainActor in
-                                        FTPTranscriptLogger.shared.logInfo("[WARNING] Файл не является JPEG и не удалось конвертировать его в UIImage.")
-                                    }
-                                }
-                            }
-                            
-                            filename = "IMG_\(randomNum).JPG"
-                            
-                            // Авто-апскейл
-                            let autoUpscaleEnabled = UserDefaults.standard.bool(forKey: "sys_auto_upscale")
-                            if autoUpscaleEnabled {
-                                let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? ""
-                                let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? ""
-                                
-                                let thresholdMB: Double
-                                if thresholdStr.contains("2 МБ") {
-                                    thresholdMB = 2.0
-                                } else if thresholdStr.contains("8 МБ") {
-                                    thresholdMB = 8.0
-                                } else {
-                                    thresholdMB = 4.0
-                                }
-                                
-                                let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
-                                if sizeMB < thresholdMB, let uiImage = UIImage(data: finalData) {
-                                    let scale: CGFloat = factorStr.contains("4x") ? 4.0 : 2.0
-                                    let newSize = CGSize(
-                                        width: uiImage.size.width * scale,
-                                        height: uiImage.size.height * scale
-                                    )
-                                    UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-                                    uiImage.draw(in: CGRect(origin: .zero, size: newSize))
-                                    let upscaled = UIGraphicsGetImageFromCurrentImageContext()
-                                    UIGraphicsEndImageContext()
-                                    
-                                    if let upscaled = upscaled,
-                                       let upscaledData = upscaled.jpegData(compressionQuality: 0.92) {
-                                        finalData = upscaledData
-                                        Task { @MainActor in
-                                            FTPTranscriptLogger.shared.logInfo("[Upscale] Авто-апскейл \(String(format: "%.1f", sizeMB)) МБ → \(String(format: "%.1f", Double(upscaledData.count)/1024/1024)) МБ (\(Int(scale))x, бикубика)")
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
-                            let fileSizeStr = String(format: "%.2f МБ", sizeMB)
-                            
-                            let newPhoto = PhotoMetadata(
-                                filename: filename,
-                                fileSize: fileSizeStr,
-                                title: "",
-                                keywords: [],
-                                description: "",
-                                categories: [],
-                                status: .new,
-                                imageData: finalData,
-                                isVideo: false
-                            )
-                            
-                            Task {
-                                await vm.addPhoto(newPhoto)
+                    
+                } else {
+                    // Загружаем фото как Data
+                    do {
+                        guard let data = try await item.loadTransferable(type: Data.self) else {
+                            print("[Photo] loadTransferable вернул nil")
+                            continue
+                        }
+                        
+                        var finalData = data
+                        let randomNum = Int.random(in: 1000...9999)
+                        
+                        // Авто-конвертация не-JPEG (HEIC, PNG, RAW) в JPEG
+                        let isJpeg = data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
+                        if !isJpeg {
+                            if let uiImage = UIImage(data: data), let jpegData = uiImage.jpegData(compressionQuality: 0.95) {
+                                finalData = jpegData
+                                FTPTranscriptLogger.shared.logInfo("[Diagnostic] Авто-конвертация не-JPEG в JPEG (\(data.count) -> \(jpegData.count))")
+                            } else {
+                                FTPTranscriptLogger.shared.logInfo("[WARNING] Не удалось конвертировать в UIImage")
                             }
                         }
-                    case .failure(let error):
-                        print("Error loading photo: \(error.localizedDescription)")
+                        
+                        // Авто-апскейл
+                        let autoUpscaleEnabled = UserDefaults.standard.bool(forKey: "sys_auto_upscale")
+                        if autoUpscaleEnabled {
+                            let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? ""
+                            let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? ""
+                            let thresholdMB: Double = thresholdStr.contains("2 МБ") ? 2.0 : (thresholdStr.contains("8 МБ") ? 8.0 : 4.0)
+                            let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
+                            if sizeMB < thresholdMB, let uiImage = UIImage(data: finalData) {
+                                let scale: CGFloat = factorStr.contains("4x") ? 4.0 : 2.0
+                                let newSize = CGSize(width: uiImage.size.width * scale, height: uiImage.size.height * scale)
+                                UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+                                uiImage.draw(in: CGRect(origin: .zero, size: newSize))
+                                let upscaled = UIGraphicsGetImageFromCurrentImageContext()
+                                UIGraphicsEndImageContext()
+                                if let upscaled, let upscaledData = upscaled.jpegData(compressionQuality: 0.92) {
+                                    finalData = upscaledData
+                                    FTPTranscriptLogger.shared.logInfo("[Upscale] \(String(format: "%.1f", sizeMB)) МБ -> \(String(format: "%.1f", Double(upscaledData.count)/1024/1024)) МБ (\(Int(scale))x)")
+                                }
+                            }
+                        }
+                        
+                        let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
+                        let fileSizeStr = String(format: "%.2f МБ", sizeMB)
+                        let filename = "IMG_\(randomNum).JPG"
+                        
+                        let newPhoto = PhotoMetadata(
+                            filename: filename,
+                            fileSize: fileSizeStr,
+                            title: "",
+                            keywords: [],
+                            description: "",
+                            categories: [],
+                            status: .new,
+                            imageData: finalData,
+                            isVideo: false
+                        )
+                        vm.addPhoto(newPhoto)
+                        
+                    } catch {
+                        print("[Photo] Ошибка: \(error)")
                     }
                 }
             }
+            selectedItems = []
         }
-        selectedItems = []
     }
 }
+
 
 // MARK: - Photo Row View (Equatable)
 struct PhotoRowView: View, Equatable {
