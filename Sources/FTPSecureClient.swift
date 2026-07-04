@@ -147,12 +147,12 @@ class FTPSecureClient {
         var sslBuf = Data()
         
         // 4. USER
-        try sslWrite(context: controlSSL!, cmd: "USER \(username)\r\n")
+        try sslWriteCmd(context: controlSSL!, cmd: "USER \(username)\r\n")
         let userResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
         
         if userResp.hasPrefix("331") {
             // 5. PASS
-            try sslWrite(context: controlSSL!, cmd: "PASS \(password)\r\n")
+            try sslWriteCmd(context: controlSSL!, cmd: "PASS \(password)\r\n")
             let passResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
             guard passResp.hasPrefix("230") else {
                 throw ftpError("Неверный логин или пароль (код: \(passResp))")
@@ -162,7 +162,7 @@ class FTPSecureClient {
         }
         
         // 6. QUIT
-        try? sslWrite(context: controlSSL!, cmd: "QUIT\r\n")
+        try? sslWriteCmd(context: controlSSL!, cmd: "QUIT\r\n")
     }
 
     // MARK: - Core Upload Logic (выполняется в фоновом потоке)
