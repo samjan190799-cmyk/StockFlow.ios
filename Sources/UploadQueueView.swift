@@ -1093,7 +1093,12 @@ struct UploadQueueView: View {
                                 
                                 // MARK: - Вкладки Фото / Видео
                                 HStack(spacing: 0) {
-                                    ForEach([(0, "Фото", "photo.on.rectangle"), (1, "Видео", "video.fill")], id: \.0) { tabIndex, title, icon in
+                                    let tabs = [(0, "Фото", "photo.on.rectangle"), (1, "Видео", "video.fill")]
+                                    ForEach(tabs, id: \.0) { tab in
+                                        let tabIndex = tab.0
+                                        let tabTitle = tab.1
+                                        let tabIcon = tab.2
+                                        let tabCount = viewModel.photos.filter { $0.isVideo == (tabIndex == 1) }.count
                                         Button(action: {
                                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                                 mediaTab = tabIndex
@@ -1102,13 +1107,12 @@ struct UploadQueueView: View {
                                             }
                                         }) {
                                             HStack(spacing: 6) {
-                                                Image(systemName: icon)
+                                                Image(systemName: tabIcon)
                                                     .font(.system(size: 12, weight: .bold))
-                                                Text(title.localized)
+                                                Text(tabTitle.localized)
                                                     .font(.system(size: 13, weight: .bold))
-                                                let count = viewModel.photos.filter { $0.isVideo == (tabIndex == 1) }.count
-                                                if count > 0 {
-                                                    Text("\(count)")
+                                                if tabCount > 0 {
+                                                    Text("\(tabCount)")
                                                         .font(.system(size: 10, weight: .black))
                                                         .padding(.horizontal, 6)
                                                         .padding(.vertical, 2)
