@@ -8,8 +8,7 @@ struct SmartStockApp: App {
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @StateObject private var viewModel = QueueViewModel()
     @StateObject private var authManager = AuthManager.shared
-    @State private var tabViewID = UUID()
-    @State private var isReloadingLanguage = false
+    
     var colorScheme: ColorScheme? {
         switch sysTheme {
         case "Темная": return .dark
@@ -54,67 +53,54 @@ struct SmartStockApp: App {
     
     var body: some Scene {
         WindowGroup {
-            if isReloadingLanguage {
-                ZStack {
-                    LiquidBackgroundView(isAnimated: true)
-                    VStack(spacing: 20) {
-                        SmartStockLogoView(size: 80)
-                        ProgressView()
-                            .tint(Color(hex: "7C3AED"))
-                    }
-                }
-                .preferredColorScheme(colorScheme)
-                .transition(.opacity)
-            } else if authManager.isAuthenticated {
+            if authManager.isAuthenticated {
                 ZStack {
                     LiquidBackgroundView(isAnimated: true) // Единый фон на уровне всего приложения
                     
-                    TabView {
-                        UploadQueueView(viewModel: viewModel)
-                            .tabItem {
-                                Label(Localizer.translate("Галерея", to: sysLanguage), systemImage: "photo.on.rectangle")
-                            }
-                        
-                        AIAssistantView()
-                             .tabItem {
-                                 Label(Localizer.translate("ИИ", to: sysLanguage), systemImage: "brain")
-                             }
-                        
-                        InsightsView()
-                             .tabItem {
-                                 Label(Localizer.translate("Статистика", to: sysLanguage), systemImage: "chart.line.uptrend.xyaxis")
-                             }
-                        
-                        StockSettingsView()
-                            .tabItem {
-                                Label(Localizer.translate("Агентства", to: sysLanguage), systemImage: "arrow.left.and.right")
-                            }
-                        
-                        SystemSettingsView()
-                            .tabItem {
-                                Label(Localizer.translate("Настройки", to: sysLanguage), systemImage: "gearshape")
-                            }
+                    if sysLanguage == "English" {
+                        tabView(for: "English")
+                    } else if sysLanguage == "Հայերեն" {
+                        tabView(for: "Հայերեն")
+                    } else {
+                        tabView(for: "Русский")
                     }
                 }
-                .id(tabViewID) // Перестраивает UI при смене языка
                 .preferredColorScheme(colorScheme)
                 .tint(Color(hex: "7C3AED"))
-                .onChange(of: sysLanguage) { _ in
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isReloadingLanguage = true
-                    }
-                    // Даем 0.35 секунды на закрытие системного меню и плавную анимацию скрытия TabView
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        tabViewID = UUID()
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isReloadingLanguage = false
-                        }
-                    }
-                }
             } else {
                 AuthView(authManager: authManager)
                     .preferredColorScheme(.dark)
             }
+        }
+    }
+    
+    @ViewBuilder
+    private func tabView(for lang: String) -> some View {
+        TabView {
+            UploadQueueView(viewModel: viewModel)
+                .tabItem {
+                    Label(Localizer.translate("Галерея", to: lang), systemImage: "photo.on.rectangle")
+                }
+            
+            AIAssistantView()
+                 .tabItem {
+                     Label(Localizer.translate("ИИ", to: lang), systemImage: "brain")
+                 }
+            
+            InsightsView()
+                 .tabItem {
+                     Label(Localizer.translate("Статистика", to: lang), systemImage: "chart.line.uptrend.xyaxis")
+                 }
+            
+            StockSettingsView()
+                .tabItem {
+                    Label(Localizer.translate("Агентства", to: lang), systemImage: "arrow.left.and.right")
+                }
+            
+            SystemSettingsView()
+                .tabItem {
+                    Label(Localizer.translate("Настройки", to: lang), systemImage: "gearshape")
+                }
         }
     }
 }
