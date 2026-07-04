@@ -278,8 +278,7 @@ final class AIManager: Sendable {
         
         var userFriendlyMessage = ""
         
-        switch statusCode {
-        case 429:
+        if statusCode == 429 || status == "RESOURCE_EXHAUSTED" {
             userFriendlyMessage = "Превышена квота запросов (429: Resource Exhausted). Вы исчерпали лимит бесплатных запросов к Gemini API для модели gemini-3.5-flash."
             
             // Извлечение времени ожидания, если оно указано в сообщении (например: "Please retry in 52.059407285s.")
