@@ -301,7 +301,7 @@ class FTPSecureClient {
         // === ШАГ 5: Чтение защищённого приветствия ===
         var sslBuf = Data()
         let welcome = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
-        guard welcome.hasPrefix("220") else {
+        if !welcome.hasPrefix("220") {
             // Некоторые серверы повторно шлют баннер 220 после TLS
             print("FTPSecureClient: приветствие после TLS: \(welcome)")
         }
