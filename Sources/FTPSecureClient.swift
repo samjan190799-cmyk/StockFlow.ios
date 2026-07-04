@@ -298,15 +298,8 @@ class FTPSecureClient {
         controlSSL = try createSSLContext(sock: controlSock, peerName: cleanHost, peerId: peerId, requireValidCertificate: requireValidCert)
         try performSSLHandshake(context: controlSSL!, requireValidCertificate: requireValidCert)
 
-        // === ШАГ 5: Чтение защищённого приветствия ===
+        // === ШАГ 5: USER / PASS ===
         var sslBuf = Data()
-        let welcome = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
-        if !welcome.hasPrefix("220") {
-            // Некоторые серверы повторно шлют баннер 220 после TLS
-            print("FTPSecureClient: приветствие после TLS: \(welcome)")
-        }
-
-        // === ШАГ 6: USER / PASS ===
         try sslWriteCmd(context: controlSSL!, cmd: "USER \(username)\r\n")
         let userResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
         if userResp.hasPrefix("331") {

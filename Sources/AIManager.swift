@@ -55,7 +55,7 @@ final class AIManager: Sendable {
     
     // MARK: - Gemini Integration
     private func analyzeWithGemini(base64Images: [String], prompt: String, apiKey: String) async throws -> AIResult {
-        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(apiKey)"
+        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=\(apiKey)"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "AIManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Некорректный URL Gemini."])
         }
@@ -278,8 +278,9 @@ final class AIManager: Sendable {
         
         var userFriendlyMessage = ""
         
-        if statusCode == 429 || status == "RESOURCE_EXHAUSTED" {
-            userFriendlyMessage = "Превышена квота запросов (429: Resource Exhausted). Вы исчерпали лимит бесплатных запросов к Gemini API для модели gemini-2.5-flash."
+        switch statusCode {
+        case 429:
+            userFriendlyMessage = "Превышена квота запросов (429: Resource Exhausted). Вы исчерпали лимит бесплатных запросов к Gemini API для модели gemini-3.5-flash."
             
             // Извлечение времени ожидания, если оно указано в сообщении (например: "Please retry in 52.059407285s.")
             if let range = rawMessage.range(of: "Please retry in ([0-9\\.]+s|[0-9\\.]+ seconds)", options: .regularExpression) {
