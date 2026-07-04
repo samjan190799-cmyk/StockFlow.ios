@@ -1093,45 +1093,8 @@ struct UploadQueueView: View {
                                 
                                 // MARK: - Вкладки Фото / Видео
                                 HStack(spacing: 0) {
-                                    let tabs = [(0, "Фото", "photo.on.rectangle"), (1, "Видео", "video.fill")]
-                                    ForEach(tabs, id: \.0) { tab in
-                                        let tabIndex = tab.0
-                                        let tabTitle = tab.1
-                                        let tabIcon = tab.2
-                                        let tabCount = viewModel.photos.filter { $0.isVideo == (tabIndex == 1) }.count
-                                        Button(action: {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                mediaTab = tabIndex
-                                                selectedFilter = nil
-                                                searchText = ""
-                                            }
-                                        }) {
-                                            HStack(spacing: 6) {
-                                                Image(systemName: tabIcon)
-                                                    .font(.system(size: 12, weight: .bold))
-                                                Text(tabTitle.localized)
-                                                    .font(.system(size: 13, weight: .bold))
-                                                if tabCount > 0 {
-                                                    Text("\(tabCount)")
-                                                        .font(.system(size: 10, weight: .black))
-                                                        .padding(.horizontal, 6)
-                                                        .padding(.vertical, 2)
-                                                        .background(mediaTab == tabIndex ? Color.white.opacity(0.25) : Color.white.opacity(0.08))
-                                                        .clipShape(Capsule())
-                                                }
-                                            }
-                                            .foregroundStyle(mediaTab == tabIndex ? .white : .secondary)
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 10)
-                                            .background(
-                                                mediaTab == tabIndex
-                                                    ? LinearGradient(colors: [Color(hex: "7C3AED"), Color(hex: "A855F7")], startPoint: .leading, endPoint: .trailing)
-                                                    : LinearGradient(colors: [Color.clear, Color.clear], startPoint: .leading, endPoint: .trailing)
-                                            )
-                                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                                        }
-                                        .buttonStyle(PlainButtonStyle())
-                                    }
+                                    mediaTabButton(index: 0, title: "Фото", icon: "photo.on.rectangle")
+                                    mediaTabButton(index: 1, title: "Видео", icon: "video.fill")
                                 }
                                 .padding(4)
                                 .background(
@@ -1565,6 +1528,45 @@ struct UploadQueueView: View {
                 }
             }
         }
+    }
+    
+    // MARK: - Media Tab Button Helper
+    @ViewBuilder
+    private func mediaTabButton(index: Int, title: String, icon: String) -> some View {
+        let isActive = mediaTab == index
+        let count = viewModel.photos.filter { $0.isVideo == (index == 1) }.count
+        Button(action: {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                mediaTab = index
+                selectedFilter = nil
+                searchText = ""
+            }
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .bold))
+                Text(title.localized)
+                    .font(.system(size: 13, weight: .bold))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 10, weight: .black))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(isActive ? Color.white.opacity(0.25) : Color.white.opacity(0.08))
+                        .clipShape(Capsule())
+                }
+            }
+            .foregroundStyle(isActive ? .white : .secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                isActive
+                    ? LinearGradient(colors: [Color(hex: "7C3AED"), Color(hex: "A855F7")], startPoint: .leading, endPoint: .trailing)
+                    : LinearGradient(colors: [Color.clear, Color.clear], startPoint: .leading, endPoint: .trailing)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(PlainButtonStyle())
     }
     
     // MARK: - Load Photos Logic
