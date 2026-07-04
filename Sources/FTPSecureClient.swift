@@ -142,7 +142,8 @@ class FTPSecureClient {
         
         // 3. SSL Handshake
         let peerId = "ftps-\(cleanHost)".data(using: .utf8)!
-        controlSSL = try secureSSLConnect(sock: controlSock, peerName: cleanHost, peerId: peerId)
+        controlSSL = try createSSLContext(sock: controlSock, peerName: cleanHost, peerId: peerId, requireValidCertificate: false)
+        try performSSLHandshake(context: controlSSL!, requireValidCertificate: false)
         
         var sslBuf = Data()
         
