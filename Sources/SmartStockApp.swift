@@ -57,13 +57,33 @@ struct SmartStockApp: App {
                 ZStack {
                     LiquidBackgroundView(isAnimated: true) // Единый фон на уровне всего приложения
                     
-                    if sysLanguage == "English" {
-                        tabView(for: "English")
-                    } else if sysLanguage == "Հայերեն" {
-                        tabView(for: "Հայերեն")
-                    } else {
-                        tabView(for: "Русский")
+                    TabView {
+                        UploadQueueView(viewModel: viewModel)
+                            .tabItem {
+                                Label(Localizer.translate("Галерея", to: sysLanguage), systemImage: "photo.on.rectangle")
+                            }
+                        
+                        AIAssistantView()
+                             .tabItem {
+                                 Label(Localizer.translate("ИИ", to: sysLanguage), systemImage: "brain")
+                             }
+                        
+                        InsightsView()
+                             .tabItem {
+                                 Label(Localizer.translate("Статистика", to: sysLanguage), systemImage: "chart.line.uptrend.xyaxis")
+                             }
+                        
+                        StockSettingsView()
+                            .tabItem {
+                                Label(Localizer.translate("Агентства", to: sysLanguage), systemImage: "arrow.left.and.right")
+                            }
+                        
+                        SystemSettingsView()
+                            .tabItem {
+                                Label(Localizer.translate("Настройки", to: sysLanguage), systemImage: "gearshape")
+                            }
                     }
+                    .id(sysLanguage) // Гарантирует полное уничтожение и пересоздание TabView при смене языка
                 }
                 .preferredColorScheme(colorScheme)
                 .tint(Color(hex: "7C3AED"))
@@ -71,36 +91,6 @@ struct SmartStockApp: App {
                 AuthView(authManager: authManager)
                     .preferredColorScheme(.dark)
             }
-        }
-    }
-    
-    @ViewBuilder
-    private func tabView(for lang: String) -> some View {
-        TabView {
-            UploadQueueView(viewModel: viewModel)
-                .tabItem {
-                    Label(Localizer.translate("Галерея", to: lang), systemImage: "photo.on.rectangle")
-                }
-            
-            AIAssistantView()
-                 .tabItem {
-                     Label(Localizer.translate("ИИ", to: lang), systemImage: "brain")
-                 }
-            
-            InsightsView()
-                 .tabItem {
-                     Label(Localizer.translate("Статистика", to: lang), systemImage: "chart.line.uptrend.xyaxis")
-                 }
-            
-            StockSettingsView()
-                .tabItem {
-                    Label(Localizer.translate("Агентства", to: lang), systemImage: "arrow.left.and.right")
-                }
-            
-            SystemSettingsView()
-                .tabItem {
-                    Label(Localizer.translate("Настройки", to: lang), systemImage: "gearshape")
-                }
         }
     }
 }

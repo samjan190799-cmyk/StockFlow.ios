@@ -166,7 +166,7 @@ struct StockSettingsView: View {
         isVerifying = true
         Task {
             do {
-                try await FTPClient.testConnection(
+                try await FTPSecureClient.testConnection(
                     host: platform.host,
                     port: 21,
                     username: platform.username,

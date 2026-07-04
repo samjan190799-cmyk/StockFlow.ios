@@ -71,6 +71,100 @@ class FTPSecureClient {
         }.value
     }
 
+    // MARK: - Test Connection API
+
+    static func testConnection(
+        host: String,
+        port: Int = 21,
+        username: String,
+        password: String
+    ) async throws {
+        try await Task.detached(priority: .userInitiated) {
+            try Self.performTestConnection(
+                host: host,
+                port: port,
+                username: username,
+                password: password
+            )
+        }.value
+    }
+
+    private static func schemeFor(host: String) -> String {
+        let lower = host.lowercased()
+        if lower.hasPrefix("sftp") || lower.contains(".sftp.") {
+            return "sftp"
+        } else if lower.hasPrefix("ftps") {
+            return "ftps"
+        }
+        return "ftp"
+    }
+
+    private static func performTestConnection(
+        host: String,
+        port: Int,
+        username: String,
+        password: String
+    ) throws {
+        let cleanHost = cleanedHost(host)
+        
+        let scheme = schemeFor(host: host)
+        if scheme == "sftp" {
+            let resolvedIp = resolveHost(cleanHost) ?? cleanHost
+            let sock = try tcpConnect(host: resolvedIp, port: port == 21 ? 22 : port, timeoutSec: 10)
+            Darwin.close(sock)
+            return
+        }
+        
+        let resolvedIp = resolveHost(cleanHost) ?? cleanHost
+        logMsg("[SecureTransport] Проверка соединения с \(cleanHost) [\(resolvedIp)]:\(port)")
+        
+        let controlSock = try tcpConnect(host: resolvedIp, port: port, timeoutSec: 10)
+        setSocketTimeout(controlSock, seconds: 10)
+        setNoSigPipe(controlSock)
+        
+        var controlSSL: SSLContext?
+        defer { Darwin.close(controlSock) }
+        defer { if let ssl = controlSSL { secureSSLClose(context: ssl, sock: controlSock) } }
+        
+        // 1. Read Banner
+        var plainBuf = Data()
+        let banner = try plainReadResponse(sock: controlSock, buffer: &plainBuf)
+        guard banner.hasPrefix("220") else {
+            throw ftpError("Неожиданный приветственный баннер: \(banner)")
+        }
+        
+        // 2. AUTH TLS
+        try plainWrite(sock: controlSock, cmd: "AUTH TLS\r\n")
+        let authResp = try plainReadResponse(sock: controlSock, buffer: &plainBuf)
+        guard authResp.hasPrefix("234") else {
+            throw ftpError("Сервер отклонил AUTH TLS (код: \(authResp))")
+        }
+        
+        // 3. SSL Handshake
+        let peerId = "ftps-\(cleanHost)".data(using: .utf8)!
+        controlSSL = try secureSSLConnect(sock: controlSock, peerName: cleanHost, peerId: peerId)
+        
+        var sslBuf = Data()
+        
+        // 4. USER
+        try sslWrite(context: controlSSL!, cmd: "USER \(username)\r\n")
+        let userResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+        
+        if userResp.hasPrefix("331") {
+            // 5. PASS
+            try sslWrite(context: controlSSL!, cmd: "PASS \(password)\r\n")
+            let passResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+            guard passResp.hasPrefix("230") else {
+                throw ftpError("Неверный логин или пароль (код: \(passResp))")
+            }
+        } else if !userResp.hasPrefix("230") {
+            throw ftpError("Неверный ответ на имя пользователя (USER): \(userResp)")
+        }
+        
+        // 6. QUIT
+        try? sslWrite(context: controlSSL!, cmd: "QUIT\r\n")
+    }
+
     // MARK: - Core Upload Logic (выполняется в фоновом потоке)
 
     private static func performUpload(
