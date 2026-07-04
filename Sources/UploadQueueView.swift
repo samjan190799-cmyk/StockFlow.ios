@@ -56,7 +56,7 @@ class QueueViewModel: ObservableObject {
             .appendingPathComponent("queue_photos.json")
     }
     
-    private var photosDirectoryURL: URL {
+    var photosDirectoryURL: URL {
         let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Photos")
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: nil)
@@ -1748,7 +1748,7 @@ struct PhotoRowView: View, Equatable {
                             let ext = url.pathExtension.lowercased()
                             let actualExt = ext.isEmpty ? "mp4" : ext
                             let uuid = UUID()
-                            let targetURL = self.photosDirectoryURL.appendingPathComponent("\(uuid.uuidString).\(actualExt)")
+                            let targetURL = vm.photosDirectoryURL.appendingPathComponent("\(uuid.uuidString).\(actualExt)")
                             
                             do {
                                 if FileManager.default.fileExists(atPath: targetURL.path) {
