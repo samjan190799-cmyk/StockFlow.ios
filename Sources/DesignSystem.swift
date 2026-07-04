@@ -45,16 +45,29 @@ extension Color {
 }
 
 // MARK: - Liquid Ambient Background (Fixed Layout with Drifting Blobs & Grid Texture)
-// MARK: - Liquid Ambient Background (Fixed Layout with Drifting Blobs & Grid Texture)
 struct LiquidBackgroundView: View {
     @Environment(\.colorScheme) var colorScheme
+    var isAnimated: Bool = false
     
     var body: some View {
         let isDark = colorScheme == .dark
-        let bgColor = isDark ? Color.black : Color.white
         
-        return bgColor
-            .ignoresSafeArea()
+        return ZStack {
+            if isAnimated {
+                let bgColor = isDark ? Color(hex: "060608") : Color(hex: "F8F9FA")
+                bgColor
+                
+                // Анимированные сферы (вынесены в отдельный View для изоляции 120 FPS анимации)
+                AnimatedBlobsView(isDark: isDark)
+                
+                // Статическая сетка (никогда не перерисовывается, экономя CPU)
+                let dotColor: Color = isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)
+                StaticDotGridView(dotColor: dotColor)
+            } else {
+                Color.clear
+            }
+        }
+        .ignoresSafeArea()
     }
 }
 

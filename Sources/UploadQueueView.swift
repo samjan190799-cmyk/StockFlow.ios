@@ -272,12 +272,31 @@ class QueueViewModel: ObservableObject {
         }
     }
     
+    private func parseFileSizeToBytes(_ fileSizeStr: String) -> Double {
+        let clean = fileSizeStr.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: ",", with: ".").lowercased()
+        let numberString = clean.filter { "0123456789.".contains($0) }
+        let num = Double(numberString) ?? 0.0
+        
+        if clean.contains("gb") || clean.contains("гб") {
+            return num * 1024 * 1024 * 1024
+        } else if clean.contains("kb") || clean.contains("кб") {
+            return num * 1024
+        } else {
+            return num * 1024 * 1024
+        }
+    }
+    
     func uploadPhoto(_ id: UUID) {
         guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
         
         guard checkStockCredentials() else {
             triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!".localized)
             return
+        }
+        
+        // Регистрируем фоновую задачу для стабильной загрузки при сворачивании
+        let bgTask = UIApplication.shared.beginBackgroundTask(withName: "UploadPhoto-\(id.uuidString)") {
+            // Принудительное завершение системой при нехватке времени
         }
         
         photos[idx].status = .uploading
@@ -287,13 +306,16 @@ class QueueViewModel: ObservableObject {
         
         // Переменные для замера скорости загрузки
         let tracker = UploadSpeedTracker()
-        let fileSize = Double(photos[idx].fileSize.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "MB", with: "").replacingOccurrences(of: "KB", with: "").replacingOccurrences(of: "GB", with: "")) ?? 0
+        let totalBytes = max(parseFileSizeToBytes(photos[idx].fileSize), 1.0)
         
         let box = ContinuationBox<Double>()
         let progressStream = AsyncStream<Double> { cont in
             box.continuation = cont
         }
-        guard let progressContinuation = box.continuation else { return }
+        guard let progressContinuation = box.continuation else {
+            UIApplication.shared.endBackgroundTask(bgTask)
+            return
+        }
         
         // Потребляем прогресс на @MainActor
         Task { @MainActor in
@@ -307,8 +329,6 @@ class QueueViewModel: ObservableObject {
                     if dt > 0.4 {
                         let dprog = prog - tracker.lastProgress
                         if dprog > 0 {
-                            // Примерный размер файла в байтах (из uploadProgress * totalBytes)
-                            let totalBytes = max(fileSize * 1024 * 1024, 1.0)
                             let bytesPerSec = (dprog * totalBytes) / dt
                             self.uploadSpeedKBps[id] = bytesPerSec / 1024.0
                         }
@@ -320,6 +340,9 @@ class QueueViewModel: ObservableObject {
         }
         
         Task {
+            defer {
+                UIApplication.shared.endBackgroundTask(bgTask)
+            }
             do {
                 let photo = self.photos[idx]
                 try await performRealUpload(for: photo) { prog in
@@ -365,6 +388,11 @@ class QueueViewModel: ObservableObject {
             return
         }
         
+        // Регистрируем фоновую задачу для групповой выгрузки
+        let bgTask = UIApplication.shared.beginBackgroundTask(withName: "UploadAllReady") {
+            // Принудительное завершение
+        }
+        
         // Читаем лимит параллельных потоков из настроек (по умолчанию 3)
         let maxStreams = UserDefaults.standard.integer(forKey: "sys_parallel_streams")
         let streamLimit = maxStreams > 0 ? maxStreams : 3
@@ -381,6 +409,9 @@ class QueueViewModel: ObservableObject {
         }
         
         Task { @MainActor in
+            defer {
+                UIApplication.shared.endBackgroundTask(bgTask)
+            }
             // Простой семафор на основе actor для ограничения параллелизма
             let semaphore = UploadSemaphore(limit: streamLimit)
             
@@ -397,13 +428,16 @@ class QueueViewModel: ObservableObject {
                             }
                             
                             let tracker = UploadSpeedTracker()
-                            let fileSize = Double(currentPhoto.fileSize.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "MB", with: "").replacingOccurrences(of: "KB", with: "").replacingOccurrences(of: "GB", with: "")) ?? 0
+                            let totalBytes = max(self.parseFileSizeToBytes(currentPhoto.fileSize), 1.0)
                             
                             let box = ContinuationBox<Double>()
                             let progressStream = AsyncStream<Double> { cont in
                                 box.continuation = cont
                             }
-                            guard let progressContinuation = box.continuation else { return }
+                            guard let progressContinuation = box.continuation else {
+                                await semaphore.signal()
+                                return
+                            }
                             
                             let progressTask = Task { @MainActor in
                                 for await prog in progressStream {
@@ -416,7 +450,6 @@ class QueueViewModel: ObservableObject {
                                         if dt > 0.4 {
                                             let dprog = prog - tracker.lastProgress
                                             if dprog > 0 {
-                                                let totalBytes = max(fileSize * 1024 * 1024, 1.0)
                                                 let bytesPerSec = (dprog * totalBytes) / dt
                                                 self.uploadSpeedKBps[pId] = bytesPerSec / 1024.0
                                             }
@@ -448,7 +481,7 @@ class QueueViewModel: ObservableObject {
                                 self.photos[index].status = .error
                                 self.photos[index].errorMessage = error.localizedDescription
                                 self.uploadSpeedKBps.removeValue(forKey: pId)
-                                self.triggerToast("Ошибка: \(self.photos[index].filename): \(error.localizedDescription)")
+                                self.triggerToast("Ошибка выгрузки".localized + " \(self.photos[index].filename): \(error.localizedDescription)")
                                 NotificationHelper.sendNotification(
                                     title: "Ошибка выгрузки".localized,
                                     body: "Файл".localized + " \(self.photos[index].filename): \(error.localizedDescription)"
@@ -873,7 +906,7 @@ class QueueViewModel: ObservableObject {
             }
             photoCopy.imageData = nil // Освобождаем ОЗУ
         }
-        photos.append(photoCopy)
+        photos.insert(photoCopy, at: 0)
         savePhotosToDisk()
     }
     
