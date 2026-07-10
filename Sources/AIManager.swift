@@ -26,12 +26,21 @@ final class AIManager: Sendable {
         let maxRetries = 3
         let initialDelay: Double = 1.5
         
+        let geminiModels = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro"]
+        let openAIModels = ["gpt-5.5", "gpt-4o-mini", "gpt-4o"]
+        let claudeModels = ["claude-sonnet-5", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"]
+        
         while true {
             do {
                 if provider.contains("Gemini") {
-                    return try await analyzeWithGemini(base64Images: base64Images, prompt: prompt, apiKey: apiKey)
+                    let modelName = geminiModels[min(attempts, geminiModels.count - 1)]
+                    return try await analyzeWithGemini(modelName: modelName, base64Images: base64Images, prompt: prompt, apiKey: apiKey)
                 } else if provider.contains("OpenAI") {
-                    return try await analyzeWithOpenAI(base64Images: base64Images, prompt: prompt, apiKey: apiKey)
+                    let modelName = openAIModels[min(attempts, openAIModels.count - 1)]
+                    return try await analyzeWithOpenAI(modelName: modelName, base64Images: base64Images, prompt: prompt, apiKey: apiKey)
+                } else if provider.contains("Claude") {
+                    let modelName = claudeModels[min(attempts, claudeModels.count - 1)]
+                    return try await analyzeWithClaude(modelName: modelName, base64Images: base64Images, prompt: prompt, apiKey: apiKey)
                 } else {
                     throw NSError(domain: "AIManager", code: 501, userInfo: [NSLocalizedDescriptionKey: "Провайдер \(provider) пока не поддерживается."])
                 }
@@ -54,8 +63,8 @@ final class AIManager: Sendable {
     }
     
     // MARK: - Gemini Integration
-    private func analyzeWithGemini(base64Images: [String], prompt: String, apiKey: String) async throws -> AIResult {
-        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=\(apiKey)"
+    private func analyzeWithGemini(modelName: String, base64Images: [String], prompt: String, apiKey: String) async throws -> AIResult {
+        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/\(modelName):generateContent?key=\(apiKey)"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "AIManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Некорректный URL Gemini."])
         }
@@ -116,7 +125,7 @@ final class AIManager: Sendable {
     }
     
     // MARK: - OpenAI Integration
-    private func analyzeWithOpenAI(base64Images: [String], prompt: String, apiKey: String) async throws -> AIResult {
+    private func analyzeWithOpenAI(modelName: String, base64Images: [String], prompt: String, apiKey: String) async throws -> AIResult {
         let urlString = "https://api.openai.com/v1/chat/completions"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "AIManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Некорректный URL OpenAI."])
@@ -140,9 +149,9 @@ final class AIManager: Sendable {
             ])
         }
         
-        // Prepare request body for GPT-4o-mini multimodal request
+        // Prepare request body for GPT-4o-mini/GPT-4o multimodal request
         let requestBody: [String: Any] = [
-            "model": "gpt-4o-mini",
+            "model": modelName,
             "messages": [
                 [
                     "role": "user",
@@ -174,6 +183,69 @@ final class AIManager: Sendable {
         }
         
         return try parseAIResult(from: content)
+    }
+    
+    // MARK: - Claude Integration
+    private func analyzeWithClaude(modelName: String, base64Images: [String], prompt: String, apiKey: String) async throws -> AIResult {
+        let urlString = "https://api.anthropic.com/v1/messages"
+        guard let url = URL(string: urlString) else {
+            throw NSError(domain: "AIManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Некорректный URL Claude."])
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        
+        var contentBlocks: [[String: Any]] = []
+        for base64 in base64Images {
+            contentBlocks.append([
+                "type": "image",
+                "source": [
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": base64
+                ]
+            ])
+        }
+        
+        contentBlocks.append([
+            "type": "text",
+            "text": prompt
+        ])
+        
+        let requestBody: [String: Any] = [
+            "model": modelName,
+            "max_tokens": 1024,
+            "messages": [
+                [
+                    "role": "user",
+                    "content": contentBlocks
+                ]
+            ]
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "AIManager", code: 500, userInfo: [NSLocalizedDescriptionKey: "Не удалось получить ответ от сервера."])
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw parseClaudeError(statusCode: httpResponse.statusCode, data: data)
+        }
+        
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let content = json["content"] as? [[String: Any]],
+              let firstBlock = content.first,
+              let text = firstBlock["text"] as? String else {
+            throw NSError(domain: "AIManager", code: 500, userInfo: [NSLocalizedDescriptionKey: "Не удалось распарсить ответ Claude."])
+        }
+        
+        return try parseAIResult(from: text)
     }
     
     // MARK: - Robust JSON Parser Helper
@@ -279,7 +351,7 @@ final class AIManager: Sendable {
         var userFriendlyMessage = ""
         
         if statusCode == 429 || status == "RESOURCE_EXHAUSTED" {
-            userFriendlyMessage = "Превышена квота запросов (429: Resource Exhausted). Вы исчерпали лимит бесплатных запросов к Gemini API для модели gemini-3.5-flash."
+            userFriendlyMessage = "Превышена квота запросов (429: Resource Exhausted). Вы исчерпали лимит бесплатных запросов к Gemini API."
             
             // Извлечение времени ожидания, если оно указано в сообщении (например: "Please retry in 52.059407285s.")
             if let range = rawMessage.range(of: "Please retry in ([0-9\\.]+s|[0-9\\.]+ seconds)", options: .regularExpression) {
@@ -322,6 +394,29 @@ final class AIManager: Sendable {
             userFriendlyMessage = "Превышена квота или лимит запросов OpenAI (429). Проверьте баланс вашего аккаунта OpenAI."
         } else {
             userFriendlyMessage = "Ошибка OpenAI API (\(statusCode)): \(rawMessage)"
+        }
+        
+        return NSError(domain: "AIManager", code: statusCode, userInfo: [NSLocalizedDescriptionKey: userFriendlyMessage])
+    }
+    
+    private func parseClaudeError(statusCode: Int, data: Data) -> Error {
+        let defaultMessage = "Claude API Error (\(statusCode))"
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let errorObj = json["error"] as? [String: Any] else {
+            let errorText = String(data: data, encoding: .utf8) ?? "Неизвестная ошибка"
+            return NSError(domain: "AIManager", code: statusCode, userInfo: [NSLocalizedDescriptionKey: "\(defaultMessage): \(errorText)"])
+        }
+        
+        let rawMessage = errorObj["message"] as? String ?? ""
+        
+        var userFriendlyMessage = ""
+        
+        if statusCode == 401 {
+            userFriendlyMessage = "Недействительный API-ключ Claude. Пожалуйста, проверьте правильность ключа в настройках."
+        } else if statusCode == 429 {
+            userFriendlyMessage = "Превышена квота или лимит запросов Claude (429). Пожалуйста, подождите или проверьте баланс в кабинете Anthropic."
+        } else {
+            userFriendlyMessage = "Ошибка Claude API (\(statusCode)): \(rawMessage)"
         }
         
         return NSError(domain: "AIManager", code: statusCode, userInfo: [NSLocalizedDescriptionKey: userFriendlyMessage])
