@@ -553,9 +553,10 @@ extension String {
     func match(_ regex: String) -> [String] {
         do {
             let regex = try NSRegularExpression(pattern: regex)
-            let results = regex.matches(in: self, range: NSRange(self.startIndex..., in: self))
-            return results.map {
-                String(self[Range($0.range, in: self)!])
+            let results = regex.matches(in: self, range: NSRange(location: 0, length: self.utf16.count))
+            return results.compactMap { match in
+                guard let range = Range(match.range, in: self) else { return nil }
+                return String(self[range])
             }
         } catch {
             return []
