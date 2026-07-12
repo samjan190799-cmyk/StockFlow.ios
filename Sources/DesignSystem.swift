@@ -263,7 +263,7 @@ public struct PremiumButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - iOS Compatibility View Modifiers
+// MARK: - iOS Compatibility View Modifiers & Futuristic Effects
 extension View {
     @ViewBuilder
     public func applyScrollTransitionIfAvailable() -> some View {
@@ -276,6 +276,100 @@ extension View {
         } else {
             self
         }
+    }
+    
+    public func spatial3DTilt() -> some View {
+        self.modifier(Spatial3DTiltModifier())
+    }
+    
+    public func quantumNeonBorder(cornerRadius: CGFloat = 18) -> some View {
+        self.modifier(QuantumNeonBorderModifier(cornerRadius: cornerRadius))
+    }
+}
+
+// MARK: - iOS 26 Quantum & Spatial Modifiers
+struct Spatial3DTiltModifier: ViewModifier {
+    @State private var tiltAngleX: Double = 0.0
+    @State private var tiltAngleY: Double = 0.0
+    @State private var scale: CGFloat = 1.0
+    @State private var size: CGSize = .zero
+    
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(scale)
+            .rotation3DEffect(.degrees(tiltAngleX), axis: (x: 1, y: 0, z: 0))
+            .rotation3DEffect(.degrees(tiltAngleY), axis: (x: 0, y: 1, z: 0))
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear {
+                            self.size = geo.size
+                        }
+                        .onChange(of: geo.size) { newSize in
+                            self.size = newSize
+                        }
+                }
+            )
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let width = size.width > 0 ? size.width : 340.0
+                        let height = size.height > 0 ? size.height : 220.0
+                        
+                        let dx = value.location.x - (width / 2)
+                        let dy = value.location.y - (height / 2)
+                        
+                        let maxTilt: Double = 10.0
+                        withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.8)) {
+                            scale = 0.97
+                            tiltAngleY = Double(max(-1.0, min(1.0, dx / (width / 2)))) * maxTilt
+                            tiltAngleX = -Double(max(-1.0, min(1.0, dy / (height / 2)))) * maxTilt
+                        }
+                    }
+                    .onEnded { _ in
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
+                            scale = 1.0
+                            tiltAngleX = 0.0
+                            tiltAngleY = 0.0
+                        }
+                    }
+            )
+    }
+}
+
+struct QuantumNeonBorderModifier: ViewModifier {
+    var cornerRadius: CGFloat
+    @State private var animateGlow = false
+    
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color(hex: "4F46E5"),
+                                Color(hex: "7C3AED"),
+                                Color(hex: "EC4899"),
+                                Color(hex: "4F46E5")
+                            ],
+                            startPoint: animateGlow ? .topLeading : .bottomTrailing,
+                            endPoint: animateGlow ? .bottomTrailing : .topLeading
+                        ),
+                        lineWidth: 1.4
+                    )
+            )
+            .shadow(
+                color: Color(hex: "7C3AED").opacity(animateGlow ? 0.28 : 0.12),
+                radius: animateGlow ? 10 : 5,
+                x: 0,
+                y: animateGlow ? 4 : 2
+            )
+            .onAppear {
+                withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: true)) {
+                    animateGlow = true
+                }
+            }
     }
 }
 

@@ -1797,11 +1797,8 @@ struct PhotoRowView: View, Equatable {
             RoundedRectangle(cornerRadius: 18)
                 .fill(.ultraThinMaterial)  // Адаптивный фон
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.primary.opacity(0.10), lineWidth: 1.2)  // Адаптивная обводка
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .quantumNeonBorder(cornerRadius: 18)
+        .spatial3DTilt()
     }
     
     private func photoImage(_ photo: PhotoMetadata) -> some View {
