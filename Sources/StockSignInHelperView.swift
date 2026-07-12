@@ -171,6 +171,7 @@ struct StockSignInHelperView: View {
                         dismiss()
                     }
                 }
+            }
             .alert("Учетные данные обнаружены", isPresented: $showingImportAlert) {
                 Button("Импортировать") {
                     if let username = detectedUsername, let password = detectedPassword {
