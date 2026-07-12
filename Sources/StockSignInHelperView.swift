@@ -26,129 +26,138 @@ struct StockSignInHelperView: View {
         HelperConfig.config(for: platformId)
     }
     
+    private var headerPanel: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle.fill")
+                    .foregroundStyle(Color(hex: "7C3AED"))
+                    .font(.system(size: 14))
+                
+                Text("Инструкция по настройке FTP для \(config.name):")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.primary)
+                
+                Spacer()
+                
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            
+            Text(statusMessage)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(colorScheme == .dark ? Color(hex: "1C1C1E").opacity(0.85) : Color.white.opacity(0.85))
+        .overlay(
+            VStack {
+                Spacer()
+                Divider().background(Color.primary.opacity(0.08))
+            }
+        )
+    }
+    
+    private var webViewPanel: some View {
+        StockWebViewRepresentable(
+            webView: webView,
+            urlString: $urlString,
+            isLoading: $isLoading,
+            canGoBack: $canGoBack,
+            currentURL: $currentURL,
+            config: config,
+            onCredentialsDetected: { username, password in
+                HapticHelper.trigger(.success)
+                self.detectedUsername = username
+                self.detectedPassword = password
+                self.statusMessage = "Данные подключения обнаружены! Нажмите 'Импортировать' для сохранения."
+                self.showingImportAlert = true
+            },
+            onStatusChanged: { msg in
+                self.statusMessage = msg
+            }
+        )
+        .background(Color.white)
+    }
+    
+    private var controlBar: some View {
+        VStack(spacing: 12) {
+            Divider().background(Color.primary.opacity(0.08))
+            
+            HStack(spacing: 12) {
+                Button(action: {
+                    HapticHelper.trigger(.light)
+                    webView.goBack()
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .bold))
+                        .frame(width: 44, height: 44)
+                        .background(Color.primary.opacity(0.05))
+                        .clipShape(Circle())
+                }
+                .disabled(!canGoBack)
+                .opacity(canGoBack ? 1.0 : 0.4)
+                
+                Button(action: {
+                    HapticHelper.trigger(.light)
+                    webView.reload()
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 16, weight: .bold))
+                        .frame(width: 44, height: 44)
+                        .background(Color.primary.opacity(0.05))
+                        .clipShape(Circle())
+                }
+                
+                Button(action: parseFromClipboard) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.on.clipboard")
+                        Text("Из буфера")
+                    }
+                    .font(.system(size: 11, weight: .bold))
+                    .frame(height: 44)
+                    .padding(.horizontal, 10)
+                    .background(Color.primary.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 22))
+                }
+                
+                Spacer()
+                
+                // Кнопка ручного сканирования страницы
+                Button(action: triggerManualScan) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                        Text("Сканировать")
+                    }
+                    .font(.system(size: 13, weight: .bold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(Color(hex: "7C3AED"))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .shadow(color: Color(hex: "7C3AED").opacity(0.3), radius: 6)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+        }
+        .background(colorScheme == .dark ? Color(hex: "1C1C1E").opacity(0.9) : Color.white.opacity(0.9))
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
                 LiquidBackgroundView()
                 
                 VStack(spacing: 0) {
-                    // Информационная панель-подсказка сверху
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "info.circle.fill")
-                                .foregroundStyle(Color(hex: "7C3AED"))
-                                .font(.system(size: 14))
-                            
-                            Text("Инструкция по настройке FTP для \(config.name):")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.primary)
-                            
-                            Spacer()
-                            
-                            if isLoading {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
-                        }
-                        
-                        Text(statusMessage)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(colorScheme == .dark ? Color(hex: "1C1C1E").opacity(0.85) : Color.white.opacity(0.85))
-                    .overlay(
-                        VStack {
-                            Spacer()
-                            Divider().background(Color.primary.opacity(0.08))
-                        }
-                    )
+                    headerPanel
                     
-                    // Сама веб-страница
-                    StockWebViewRepresentable(
-                        webView: webView,
-                        urlString: $urlString,
-                        isLoading: $isLoading,
-                        canGoBack: $canGoBack,
-                        currentURL: $currentURL,
-                        config: config,
-                        onCredentialsDetected: { username, password in
-                            HapticHelper.trigger(.success)
-                            self.detectedUsername = username
-                            self.detectedPassword = password
-                            self.statusMessage = "Данные подключения обнаружены! Нажмите 'Импортировать' для сохранения."
-                            self.showingImportAlert = true
-                        },
-                        onStatusChanged: { msg in
-                            self.statusMessage = msg
-                        }
-                    )
-                    .background(Color.white)
+                    webViewPanel
                     
-                    // Панель управления снизу
-                    VStack(spacing: 12) {
-                        Divider().background(Color.primary.opacity(0.08))
-                        
-                        HStack(spacing: 12) {
-                            Button(action: {
-                                HapticHelper.trigger(.light)
-                                webView.goBack()
-                            }) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .frame(width: 44, height: 44)
-                                    .background(Color.primary.opacity(0.05))
-                                    .clipShape(Circle())
-                            }
-                            .disabled(!canGoBack)
-                            .opacity(canGoBack ? 1.0 : 0.4)
-                            
-                            Button(action: {
-                                HapticHelper.trigger(.light)
-                                webView.reload()
-                            }) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .frame(width: 44, height: 44)
-                                    .background(Color.primary.opacity(0.05))
-                                    .clipShape(Circle())
-                            }
-                            
-                            Button(action: parseFromClipboard) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "doc.on.clipboard")
-                                    Text("Из буфера")
-                                }
-                                .font(.system(size: 11, weight: .bold))
-                                .frame(height: 44)
-                                .padding(.horizontal, 10)
-                                .background(Color.primary.opacity(0.05))
-                                .clipShape(RoundedRectangle(cornerRadius: 22))
-                            }
-                            
-                            Spacer()
-                            
-                            // Кнопка ручного сканирования страницы
-                            Button(action: triggerManualScan) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "sparkles")
-                                    Text("Сканировать")
-                                }
-                                .font(.system(size: 13, weight: .bold))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 12)
-                                .background(Color(hex: "7C3AED"))
-                                .foregroundStyle(.white)
-                                .clipShape(Capsule())
-                                .shadow(color: Color(hex: "7C3AED").opacity(0.3), radius: 6)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
-                    }
-                    .background(colorScheme == .dark ? Color(hex: "1C1C1E").opacity(0.9) : Color.white.opacity(0.9))
+                    controlBar
                 }
             }
             .navigationTitle("Вход: \(config.name)")
