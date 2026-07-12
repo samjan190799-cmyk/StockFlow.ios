@@ -7,7 +7,6 @@ struct SmartStockApp: App {
     @AppStorage("sys_theme") private var sysTheme: String = "Темная"
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @StateObject private var viewModel = QueueViewModel()
-    @StateObject private var authManager = AuthManager.shared
     
     var colorScheme: ColorScheme? {
         switch sysTheme {
@@ -53,44 +52,39 @@ struct SmartStockApp: App {
     
     var body: some Scene {
         WindowGroup {
-            if authManager.isAuthenticated {
-                ZStack {
-                    LiquidBackgroundView(isAnimated: true) // Единый фон на уровне всего приложения
+            ZStack {
+                LiquidBackgroundView(isAnimated: true) // Единый фон на уровне всего приложения
+                
+                TabView {
+                    UploadQueueView(viewModel: viewModel)
+                        .tabItem {
+                            Label(Localizer.translate("Галерея", to: sysLanguage), systemImage: "photo.on.rectangle")
+                        }
                     
-                    TabView {
-                        UploadQueueView(viewModel: viewModel)
-                            .tabItem {
-                                Label(Localizer.translate("Галерея", to: sysLanguage), systemImage: "photo.on.rectangle")
-                            }
-                        
-                        AIAssistantView()
-                             .tabItem {
-                                 Label(Localizer.translate("ИИ", to: sysLanguage), systemImage: "brain")
-                             }
-                        
-                        InsightsView()
-                             .tabItem {
-                                 Label(Localizer.translate("Статистика", to: sysLanguage), systemImage: "chart.line.uptrend.xyaxis")
-                             }
-                        
-                        StockSettingsView()
-                            .tabItem {
-                                Label(Localizer.translate("Агентства", to: sysLanguage), systemImage: "arrow.left.and.right")
-                            }
-                        
-                        SystemSettingsView()
-                            .tabItem {
-                                Label(Localizer.translate("Настройки", to: sysLanguage), systemImage: "gearshape")
-                            }
-                    }
-                    .id(sysLanguage) // Гарантирует полное уничтожение и пересоздание TabView при смене языка
+                    AIAssistantView()
+                         .tabItem {
+                             Label(Localizer.translate("ИИ", to: sysLanguage), systemImage: "brain")
+                         }
+                    
+                    InsightsView()
+                         .tabItem {
+                             Label(Localizer.translate("Статистика", to: sysLanguage), systemImage: "chart.line.uptrend.xyaxis")
+                         }
+                    
+                    StockSettingsView()
+                        .tabItem {
+                            Label(Localizer.translate("Агентства", to: sysLanguage), systemImage: "arrow.left.and.right")
+                        }
+                    
+                    SystemSettingsView()
+                        .tabItem {
+                            Label(Localizer.translate("Настройки", to: sysLanguage), systemImage: "gearshape")
+                        }
                 }
-                .preferredColorScheme(colorScheme)
-                .tint(Color(hex: "7C3AED"))
-            } else {
-                AuthView(authManager: authManager)
-                    .preferredColorScheme(.dark)
+                .id(sysLanguage) // Гарантирует полное уничтожение и пересоздание TabView при смене языка
             }
+            .preferredColorScheme(colorScheme)
+            .tint(Color(hex: "7C3AED"))
         }
     }
 }

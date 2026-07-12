@@ -39,5 +39,7 @@
     <true/>
     <key>CADisableMinimumFrameDuration</key>
     <true/>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
 </dict>
 </plist>

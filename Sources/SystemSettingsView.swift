@@ -27,9 +27,7 @@ struct SystemSettingsView: View {
     @AppStorage("sys_pc_server_enabled") private var pcServerEnabled: Bool = false
     @AppStorage("sys_pc_server_address") private var pcServerAddress: String = "192.168.1.50:5000"
     
-    // Auth settings
-    @StateObject private var authManager = AuthManager.shared
-    @State private var showingLogoutAlert = false
+
     
     @State private var showFolderPicker = false
     @State private var isRunningScheduler = false
@@ -260,46 +258,7 @@ struct SystemSettingsView: View {
                         }
                         .glassCard()
                         
-                        // SECTION 0: Профиль пользователя
-                        VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Мой аккаунт".localized, icon: "person.crop.circle.fill")
-                            
-                            HStack(spacing: 12) {
-                                Image(systemName: "person.crop.circle.fill")
-                                    .font(.system(size: 36))
-                                    .foregroundStyle(AppleTheme.primaryGradient)
-                                    .neonShadow(color: Color(hex: "7C3AED"), radius: 4)
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(authManager.currentUserEmail ?? "apple.user@icloud.com")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundStyle(.primary)
-                                    Text("Синхронизация профиля активна".localized)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.green)
-                                }
-                                
-                                Spacer()
-                                
-                                Button(action: {
-                                    HapticHelper.trigger(.medium)
-                                    showingLogoutAlert = true
-                                }) {
-                                    Text("Выйти".localized)
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(.red)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color.red.opacity(0.12))
-                                        .clipShape(Capsule())
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(Color.red.opacity(0.3), lineWidth: 1)
-                                        )
-                                }
-                            }
-                        }
-                        .glassCard()
+
                         
                         // Save Button
                         Button(action: {
@@ -409,14 +368,7 @@ struct SystemSettingsView: View {
                     // Отмена
                 }
             }
-            .alert("Выйти из аккаунта".localized, isPresented: $showingLogoutAlert) {
-                Button("Выйти".localized, role: .destructive) {
-                    authManager.logout()
-                }
-                Button("Отмена".localized, role: .cancel) {}
-            } message: {
-                Text("Вы уверены, что хотите выйти из аккаунта?".localized)
-            }
+
         }
     }
     

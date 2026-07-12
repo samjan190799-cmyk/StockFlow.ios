@@ -279,6 +279,7 @@ struct PlatformDetailSheet: View {
     var testConnection: (StockPlatform) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var showingOAuthHelp = false
+    @State private var showingStockHelper = false
     
     var body: some View {
         NavigationStack {
@@ -307,6 +308,46 @@ struct PlatformDetailSheet: View {
                             customInputField(title: "Имя пользователя (логин)".localized, placeholder: "Username", text: $platform.username, isSecure: false)
                             
                             customInputField(title: "Пароль".localized, placeholder: "••••••••", text: $platform.passwordHash, isSecure: true)
+                            
+                            Button(action: {
+                                HapticHelper.trigger(.light)
+                                showingStockHelper = true
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "safari.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.white)
+                                    
+                                    Text("Войти через Помощник (авто-настройка)".localized)
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(.white)
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(
+                                    LinearGradient(
+                                        colors: [Color(hex: "7C3AED"), Color(hex: "6D28D9")],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .shadow(color: Color(hex: "7C3AED").opacity(0.2), radius: 4)
+                            }
+                            .buttonStyle(PremiumButtonStyle())
+                            .padding(.top, 2)
+                            .sheet(isPresented: $showingStockHelper) {
+                                StockSignInHelperView(platformId: platform.id) { username, password in
+                                    platform.username = username
+                                    platform.passwordHash = password
+                                }
+                            }
                             
                             // Кнопка помощи для входа через Google / Apple
                             Button(action: {
