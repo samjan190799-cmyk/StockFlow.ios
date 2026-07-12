@@ -10,7 +10,6 @@ struct StockSignInHelperView: View {
     var onCredentialsFound: (String, String) -> Void
     
     @State private var webView = WKWebView()
-    @State private var urlString = ""
     @State private var isLoading = true
     @State private var canGoBack = false
     @State private var currentURL: URL? = nil
@@ -64,7 +63,7 @@ struct StockSignInHelperView: View {
     private var webViewPanel: some View {
         StockWebViewRepresentable(
             webView: webView,
-            urlString: $urlString,
+            urlString: config.signInUrl,
             isLoading: $isLoading,
             canGoBack: $canGoBack,
             currentURL: $currentURL,
@@ -169,10 +168,6 @@ struct StockSignInHelperView: View {
                         dismiss()
                     }
                 }
-            }
-            .onAppear {
-                self.urlString = config.signInUrl
-            }
             .alert("Учетные данные обнаружены", isPresented: $showingImportAlert) {
                 Button("Импортировать") {
                     if let username = detectedUsername, let password = detectedPassword {
@@ -441,7 +436,7 @@ struct HelperConfig {
 // MARK: - WebView Representable
 struct StockWebViewRepresentable: UIViewRepresentable {
     let webView: WKWebView
-    @Binding var urlString: String
+    let urlString: String
     @Binding var isLoading: Bool
     @Binding var canGoBack: Bool
     @Binding var currentURL: URL?
