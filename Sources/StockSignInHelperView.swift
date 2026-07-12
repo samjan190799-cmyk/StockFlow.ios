@@ -25,6 +25,7 @@ struct StockSignInHelperView: View {
         HelperConfig.config(for: platformId)
     }
     
+    @ViewBuilder
     private var headerPanel: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
@@ -60,6 +61,7 @@ struct StockSignInHelperView: View {
         )
     }
     
+    @ViewBuilder
     private var webViewPanel: some View {
         StockWebViewRepresentable(
             webView: webView,
@@ -82,6 +84,7 @@ struct StockSignInHelperView: View {
         .background(Color.white)
     }
     
+    @ViewBuilder
     private var controlBar: some View {
         VStack(spacing: 12) {
             Divider().background(Color.primary.opacity(0.08))
