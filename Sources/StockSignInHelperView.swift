@@ -70,7 +70,7 @@ struct StockSignInHelperView: View {
             currentURL: $currentURL,
             config: config,
             onCredentialsDetected: { username, password in
-                HapticHelper.trigger(.success)
+                HapticHelper.notification(.success)
                 self.detectedUsername = username
                 self.detectedPassword = password
                 self.statusMessage = "Данные подключения обнаружены! Нажмите 'Импортировать' для сохранения."
