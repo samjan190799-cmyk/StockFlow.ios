@@ -58,9 +58,10 @@ struct LazyImageView: View {
     private func loadImage() async {
         let key = "\(photoId.uuidString)_\(maxPixelSize)"
         
-        // Быстрый синхронный кэш на главном потоке
+        // Быстрый синхронный кэш на главном потоке без анимации и без мелькания
         if let cached = ImageCacheHelper.shared.getCachedImage(forKey: key) {
             self.image = cached
+            self.isLoading = false
             return
         }
         
@@ -71,9 +72,7 @@ struct LazyImageView: View {
             maxPixelSize: maxPixelSize
         )
         
-        withAnimation(.easeIn(duration: 0.15)) {
-            self.image = loadedImage
-            self.isLoading = false
-        }
+        self.image = loadedImage
+        self.isLoading = false
     }
 }

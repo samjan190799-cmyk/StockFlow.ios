@@ -84,7 +84,7 @@ struct SmartStockApp: App {
                 .id(sysLanguage) // Гарантирует полное уничтожение и пересоздание TabView при смене языка
             }
             .preferredColorScheme(colorScheme)
-            .tint(Color(hex: "7C3AED"))
+            .tint(Color(hex: "007AFF"))
         }
     }
 }

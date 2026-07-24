@@ -1,20 +1,19 @@
 import SwiftUI
 import UIKit
 
-
-// MARK: - Premium Color Palette
+// MARK: - iOS 26 Liquid Minimalist Theme
 struct AppleTheme {
     static let primaryGradient = LinearGradient(
-        colors: [Color(hex: "4F46E5"), Color(hex: "7C3AED"), Color(hex: "EC4899")],
+        colors: [Color(hex: "007AFF"), Color(hex: "5E5CE6")],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
     
-    static let glassBorder = Color.white.opacity(0.18)
-    static let glassBorderDark = Color.white.opacity(0.10)
+    static let accentBlue = Color(hex: "007AFF")
+    static let slateGray = Color(hex: "8E8E93")
     
-    static let glowStart = Color(hex: "6366F1")
-    static let glowEnd = Color(hex: "A855F7")
+    static let glassBorder = Color.white.opacity(0.12)
+    static let glassBorderDark = Color.white.opacity(0.08)
 }
 
 // MARK: - Hex Color Extension
@@ -44,7 +43,7 @@ extension Color {
     }
 }
 
-// MARK: - Liquid Ambient Background (Fixed Layout with Drifting Blobs & Grid Texture)
+// MARK: - Liquid Ambient Background (Clean Deep Space / Snow)
 struct LiquidBackgroundView: View {
     @Environment(\.colorScheme) var colorScheme
     var isAnimated: Bool = false
@@ -54,14 +53,14 @@ struct LiquidBackgroundView: View {
         
         return ZStack {
             if isAnimated {
-                let bgColor = isDark ? Color(hex: "060608") : Color(hex: "F8F9FA")
+                let bgColor = isDark ? Color(hex: "0B0C0E") : Color(hex: "F6F7FA")
                 bgColor
                 
-                // Анимированные сферы (вынесены в отдельный View для изоляции 120 FPS анимации)
+                // Мягкий невидимый свет без неона
                 AnimatedBlobsView(isDark: isDark)
                 
-                // Статическая сетка (никогда не перерисовывается, экономя CPU)
-                let dotColor: Color = isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)
+                // Легкая текстурированная точка
+                let dotColor: Color = isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.03)
                 StaticDotGridView(dotColor: dotColor)
             } else {
                 Color.clear
@@ -71,33 +70,24 @@ struct LiquidBackgroundView: View {
     }
 }
 
-// MARK: - Вспомогательные оптимизированные подпредставления фона
 struct AnimatedBlobsView: View {
     let isDark: Bool
-    @State private var animateBlobs = false
     
     var body: some View {
         ZStack {
             if isDark {
                 Circle()
-                    .fill(Color(hex: "EC4899").opacity(0.06))
-                    .frame(width: 280, height: 280)
-                    .blur(radius: 70)
-                    .offset(x: animateBlobs ? 100 : -90, y: animateBlobs ? 90 : -110)
+                    .fill(Color(hex: "007AFF").opacity(0.025))
+                    .frame(width: 320, height: 320)
+                    .blur(radius: 90)
             } else {
                 Circle()
-                    .fill(Color(hex: "FBCFE8").opacity(0.04))
-                    .frame(width: 300, height: 300)
-                    .blur(radius: 80)
-                    .offset(x: animateBlobs ? 90 : -80, y: animateBlobs ? 80 : -100)
+                    .fill(Color(hex: "007AFF").opacity(0.015))
+                    .frame(width: 320, height: 320)
+                    .blur(radius: 90)
             }
         }
-        .drawingGroup()
-        .onAppear {
-            withAnimation(.easeInOut(duration: 16).repeatForever(autoreverses: true)) {
-                animateBlobs = true
-            }
-        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -107,8 +97,8 @@ struct StaticDotGridView: View {
     var body: some View {
         Canvas { context, size in
             var path = Path()
-            let dotSize: CGFloat = 1.2
-            let spacing: CGFloat = 18.0
+            let dotSize: CGFloat = 1.0
+            let spacing: CGFloat = 20.0
             for x in stride(from: 0, to: size.width, by: spacing) {
                 for y in stride(from: 0, to: size.height, by: spacing) {
                     path.addRect(CGRect(x: x, y: y, width: dotSize, height: dotSize))
@@ -120,8 +110,7 @@ struct StaticDotGridView: View {
     }
 }
 
-
-// MARK: - Premium Neo-Minimalist Card Modifier
+// MARK: - Liquid Minimalist Glass Card Modifier
 struct GlassModifier: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
     var cornerRadius: CGFloat
@@ -139,38 +128,30 @@ struct GlassModifier: ViewModifier {
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(isDark ? 0.22 : 0.50),
-                                Color.white.opacity(isDark ? 0.06 : 0.15),
-                                Color.black.opacity(isDark ? 0.05 : 0.02),
-                                Color.white.opacity(isDark ? 0.12 : 0.30)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.2
+                        Color.white.opacity(isDark ? 0.12 : 0.35),
+                        lineWidth: 1.0
                     )
             )
-            .shadow(color: Color.black.opacity(isDark ? 0.22 : 0.06), radius: 10, x: 0, y: 5)
+            .shadow(color: Color.black.opacity(isDark ? 0.15 : 0.04), radius: 8, x: 0, y: 4)
     }
 }
 
 extension View {
-    func glassCard(cornerRadius: CGFloat = 16, padding: CGFloat = 16) -> some View {
+    func glassCard(cornerRadius: CGFloat = 18, padding: CGFloat = 16) -> some View {
         self.modifier(GlassModifier(cornerRadius: cornerRadius, paddingValue: padding))
     }
     
-    // Custom Multi-layered Neon Shadow for 3D glow effect
-    func neonShadow(color: Color, radius: CGFloat = 8, x: CGFloat = 0, y: CGFloat = 4) -> some View {
-        self
-            .shadow(color: color.opacity(0.22), radius: radius, x: x, y: y)
-            .shadow(color: color.opacity(0.12), radius: radius / 2, x: x, y: y / 2)
+    // Мягкая натуральная тень без ядовитого свечения
+    func ambientShadow(radius: CGFloat = 8, y: CGFloat = 4) -> some View {
+        self.shadow(color: Color.black.opacity(0.12), radius: radius, x: 0, y: y)
+    }
+    
+    func neonShadow(color: Color = .clear, radius: CGFloat = 8, x: CGFloat = 0, y: CGFloat = 4) -> some View {
+        self.shadow(color: Color.black.opacity(0.08), radius: max(2, radius / 2), x: x, y: y / 2)
     }
 }
 
-// MARK: - SwiftUI Vector 3D Glass Logo
-// MARK: - SwiftUI Vector 3D Glass Logo
+// MARK: - SwiftUI Vector Glass Logo
 struct SmartStockLogoView: View {
     @Environment(\.colorScheme) var colorScheme
     var size: CGFloat = 72
@@ -178,33 +159,23 @@ struct SmartStockLogoView: View {
     var body: some View {
         let isDark = colorScheme == .dark
         return ZStack {
-            // Glass base panel (статичный размытый контейнер, не перерисовывается при вращении)
             RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .frame(width: size, height: size)
                 .overlay(
                     RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
                         .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(isDark ? 0.22 : 0.45),
-                                    Color.white.opacity(isDark ? 0.06 : 0.15)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.2
+                            Color.white.opacity(isDark ? 0.14 : 0.35),
+                            lineWidth: 1.0
                         )
                 )
-                .shadow(color: Color.black.opacity(isDark ? 0.20 : 0.06), radius: 8, x: 0, y: 4)
+                .shadow(color: Color.black.opacity(isDark ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
             
-            // Анимированный вращающийся элемент (вынесен отдельно, чтобы не ререндерить ultraThinMaterial)
             RotatingApertureView(size: size)
             
-            // Central Sparkle
             Image(systemName: "sparkles")
-                .font(.system(size: size * 0.24, weight: .semibold))
-                .foregroundStyle(Color(hex: "F59E0B"))
+                .font(.system(size: size * 0.22, weight: .semibold))
+                .foregroundStyle(Color(hex: "007AFF"))
                 .offset(x: size * 0.16, y: -size * 0.16)
         }
     }
@@ -216,23 +187,23 @@ struct RotatingApertureView: View {
     
     var body: some View {
         Image(systemName: "camera.aperture")
-            .font(.system(size: size * 0.48, weight: .light))
+            .font(.system(size: size * 0.46, weight: .light))
             .foregroundStyle(AppleTheme.primaryGradient)
             .rotationEffect(Angle(degrees: rotateLogo ? 360 : 0))
             .onAppear {
-                withAnimation(.linear(duration: 25).repeatForever(autoreverses: false)) {
+                withAnimation(.linear(duration: 30).repeatForever(autoreverses: false)) {
                     rotateLogo = true
                 }
             }
     }
 }
 
-// MARK: - Safe Sendable Binding Wrapper for Strict Concurrency
+// MARK: - Safe Sendable Binding Wrapper
 struct SendableBinding<Value>: @unchecked Sendable {
     let binding: Binding<Value>
 }
 
-// MARK: - Premium Tactile Haptic Helper
+// MARK: - Tactile Haptic Helper
 public struct HapticHelper {
     public static func trigger(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
         let generator = UIImpactFeedbackGenerator(style: style)
@@ -258,20 +229,21 @@ public struct PremiumButtonStyle: ButtonStyle {
     public init() {}
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
-// MARK: - iOS Compatibility View Modifiers & Futuristic Effects
+// MARK: - iOS View Modifiers & Clean Glass Borders
 extension View {
     @ViewBuilder
     public func applyScrollTransitionIfAvailable() -> some View {
         if #available(iOS 17.0, *) {
             self.scrollTransition { content, phase in
                 content
-                    .opacity(phase.isIdentity ? 1.0 : 0.8)
-                    .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
+                    .opacity(phase.isIdentity ? 1.0 : 0.85)
+                    .scaleEffect(phase.isIdentity ? 1.0 : 0.97)
             }
         } else {
             self
@@ -283,94 +255,47 @@ extension View {
     }
     
     public func quantumNeonBorder(cornerRadius: CGFloat = 18) -> some View {
-        self.modifier(QuantumNeonBorderModifier(cornerRadius: cornerRadius))
+        self.modifier(LiquidGlassBorderModifier(cornerRadius: cornerRadius))
+    }
+    
+    public func liquidGlassBorder(cornerRadius: CGFloat = 18) -> some View {
+        self.modifier(LiquidGlassBorderModifier(cornerRadius: cornerRadius))
     }
 }
 
-// MARK: - iOS 26 Quantum & Spatial Modifiers
+// MARK: - iOS 26 Spatial & Liquid Glass Modifiers
 struct Spatial3DTiltModifier: ViewModifier {
-    @State private var tiltAngleX: Double = 0.0
-    @State private var tiltAngleY: Double = 0.0
-    @State private var scale: CGFloat = 1.0
-    @State private var size: CGSize = .zero
-    
     func body(content: Content) -> some View {
-        content
-            .scaleEffect(scale)
-            .rotation3DEffect(.degrees(tiltAngleX), axis: (x: 1, y: 0, z: 0))
-            .rotation3DEffect(.degrees(tiltAngleY), axis: (x: 0, y: 1, z: 0))
-            .background(
-                GeometryReader { geo in
-                    Color.clear
-                        .onAppear {
-                            self.size = geo.size
-                        }
-                        .onChange(of: geo.size) { newSize in
-                            self.size = newSize
-                        }
+        if #available(iOS 17.0, *) {
+            content
+                .scrollTransition(.animated(.spring(response: 0.35, dampingFraction: 0.8))) { view, phase in
+                    view
+                        .scaleEffect(phase.isIdentity ? 1.0 : 0.97)
+                        .rotation3DEffect(
+                            .degrees(phase.value * -4.0),
+                            axis: (x: 1, y: 0, z: 0),
+                            perspective: 0.8
+                        )
                 }
-            )
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        let width = size.width > 0 ? size.width : 340.0
-                        let height = size.height > 0 ? size.height : 220.0
-                        
-                        let dx = value.location.x - (width / 2)
-                        let dy = value.location.y - (height / 2)
-                        
-                        let maxTilt: Double = 10.0
-                        withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.8)) {
-                            scale = 0.97
-                            tiltAngleY = Double(max(-1.0, min(1.0, dx / (width / 2)))) * maxTilt
-                            tiltAngleX = -Double(max(-1.0, min(1.0, dy / (height / 2)))) * maxTilt
-                        }
-                    }
-                    .onEnded { _ in
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
-                            scale = 1.0
-                            tiltAngleX = 0.0
-                            tiltAngleY = 0.0
-                        }
-                    }
-            )
+        } else {
+            content
+        }
     }
 }
 
-struct QuantumNeonBorderModifier: ViewModifier {
+struct LiquidGlassBorderModifier: ViewModifier {
     var cornerRadius: CGFloat
-    @State private var animateGlow = false
+    @Environment(\.colorScheme) var colorScheme
     
     func body(content: Content) -> some View {
+        let isDark = colorScheme == .dark
         content
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color(hex: "4F46E5"),
-                                Color(hex: "7C3AED"),
-                                Color(hex: "EC4899"),
-                                Color(hex: "4F46E5")
-                            ],
-                            startPoint: animateGlow ? .topLeading : .bottomTrailing,
-                            endPoint: animateGlow ? .bottomTrailing : .topLeading
-                        ),
-                        lineWidth: 1.4
+                        Color.white.opacity(isDark ? 0.12 : 0.35),
+                        lineWidth: 1.0
                     )
             )
-            .shadow(
-                color: Color(hex: "7C3AED").opacity(animateGlow ? 0.28 : 0.12),
-                radius: animateGlow ? 10 : 5,
-                x: 0,
-                y: animateGlow ? 4 : 2
-            )
-            .onAppear {
-                withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: true)) {
-                    animateGlow = true
-                }
-            }
     }
 }
-
-

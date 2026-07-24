@@ -92,10 +92,10 @@ struct SimulatedSignInView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(provider == "Apple" ? Color.white : Color(hex: "7C3AED"))
+                            .background(provider == "Apple" ? Color.white : Color(hex: "007AFF"))
                             .foregroundStyle(provider == "Apple" ? Color.black : Color.white)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .shadow(color: (provider == "Apple" ? Color.black : Color(hex: "7C3AED")).opacity(0.2), radius: 6)
+                            .ambientShadow(radius: 6)
                         }
                         .disabled(email.isEmpty || !email.contains("@"))
                         .opacity(email.isEmpty || !email.contains("@") ? 0.6 : 1.0)

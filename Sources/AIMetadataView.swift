@@ -167,7 +167,7 @@ struct AIMetadataView: View {
                         }
                         Text("Заново").font(.system(size: 12, weight: .bold))
                     }
-                    .foregroundStyle(Color(hex: "7C3AED"))
+                    .foregroundStyle(Color(hex: "007AFF"))
                 }
                 .buttonStyle(PremiumButtonStyle())
                 .disabled(isRegenerating)

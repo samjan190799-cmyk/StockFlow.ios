@@ -241,7 +241,7 @@ struct PlatformRowView: View {
                 }
             ))
             .labelsHidden()
-            .tint(Color(hex: "7C3AED"))
+            .tint(Color(hex: "007AFF"))
         }
         .padding(16)
         .background(
@@ -300,7 +300,7 @@ struct PlatformDetailSheet: View {
                                 Spacer()
                                 Toggle("", isOn: $platform.isEnabled)
                                     .labelsHidden()
-                                    .tint(Color(hex: "7C3AED"))
+                                    .tint(Color(hex: "007AFF"))
                             }
                             
                             Divider().background(Color.primary.opacity(0.08))
@@ -332,13 +332,13 @@ struct PlatformDetailSheet: View {
                                 .padding(.vertical, 10)
                                 .background(
                                     LinearGradient(
-                                        colors: [Color(hex: "7C3AED"), Color(hex: "6D28D9")],
+                                        colors: [Color(hex: "007AFF"), Color(hex: "0051A8")],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .shadow(color: Color(hex: "7C3AED").opacity(0.2), radius: 4)
+                                .ambientShadow(radius: 4)
                             }
                             .buttonStyle(PremiumButtonStyle())
                             .padding(.top, 2)
@@ -357,11 +357,11 @@ struct PlatformDetailSheet: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: "questionmark.circle.fill")
                                         .font(.system(size: 14))
-                                        .foregroundStyle(Color(hex: "7C3AED"))
+                                        .foregroundStyle(Color(hex: "007AFF"))
                                     
                                     Text("Вошли через Google или Apple?".localized)
                                         .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(Color(hex: "7C3AED"))
+                                        .foregroundStyle(Color(hex: "007AFF"))
                                     
                                     Spacer()
                                     
@@ -371,7 +371,7 @@ struct PlatformDetailSheet: View {
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
-                                .background(Color(hex: "7C3AED").opacity(0.08))
+                                .background(Color(hex: "007AFF").opacity(0.08))
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
                             }
                             .buttonStyle(PremiumButtonStyle())

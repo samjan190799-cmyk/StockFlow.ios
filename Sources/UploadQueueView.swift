@@ -1803,23 +1803,11 @@ struct PhotoRowView: View, Equatable {
     
     private func photoImage(_ photo: PhotoMetadata) -> some View {
         ZStack(alignment: .topLeading) {
-            ZStack {
-                // Размытый фон для заполнения пропорций по краям
-                LazyImageView(photoId: photo.id, maxPixelSize: 150, contentMode: .fill, isVideo: photo.isVideo)
-                    .frame(height: 200)
-                    .frame(maxWidth: .infinity)
-                    .blur(radius: 16)
-                    .opacity(0.35)
-                    .clipped()
-                
-                // Полное изображение без обрезки
-                LazyImageView(photoId: photo.id, maxPixelSize: 400, contentMode: .fit, isVideo: photo.isVideo)
-                    .frame(height: 200)
-                    .frame(maxWidth: .infinity)
-            }
-            .background(Color.black.opacity(0.2))
-            .frame(height: 200)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            LazyImageView(photoId: photo.id, maxPixelSize: 400, contentMode: .fill, isVideo: photo.isVideo)
+                .frame(height: 200)
+                .frame(maxWidth: .infinity)
+                .background(Color.black.opacity(0.25))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             
             // Статус READY (слева сверху)
             if photo.status == .ready {

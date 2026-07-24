@@ -30,7 +30,7 @@ struct StockSignInHelperView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Image(systemName: "info.circle.fill")
-                    .foregroundStyle(Color(hex: "7C3AED"))
+                    .foregroundStyle(Color(hex: "007AFF"))
                     .font(.system(size: 14))
                 
                 Text("Инструкция по настройке FTP для \(config.name):")
@@ -52,7 +52,7 @@ struct StockSignInHelperView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(colorScheme == .dark ? Color(hex: "1C1C1E").opacity(0.85) : Color.white.opacity(0.85))
+        .background(colorScheme == .dark ? Color(hex: "121318").opacity(0.9) : Color.white.opacity(0.9))
         .overlay(
             VStack {
                 Spacer()
@@ -137,10 +137,10 @@ struct StockSignInHelperView: View {
                     .font(.system(size: 13, weight: .bold))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(Color(hex: "7C3AED"))
+                    .background(Color(hex: "007AFF"))
                     .foregroundStyle(.white)
                     .clipShape(Capsule())
-                    .shadow(color: Color(hex: "7C3AED").opacity(0.3), radius: 6)
+                    .ambientShadow(radius: 4)
                 }
             }
             .padding(.horizontal, 16)

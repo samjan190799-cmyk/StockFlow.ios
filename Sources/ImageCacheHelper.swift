@@ -10,8 +10,9 @@ final class ImageCacheHelper {
     private let cache = NSCache<NSString, UIImage>()
     
     private init() {
-        // Лимитируем количество объектов в кэше для предотвращения утечки ОЗУ
-        cache.countLimit = 150
+        // Лимитируем количество объектов и объём памяти в кэше для предотвращения утечки ОЗУ
+        cache.countLimit = 250
+        cache.totalCostLimit = 80 * 1024 * 1024 // 80 МБ максимум
     }
     
     func getCachedImage(forKey key: String) -> UIImage? {
