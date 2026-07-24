@@ -91,12 +91,34 @@ struct SystemSettingsView: View {
             .onChange(of: retryOnFail) { _ in HapticHelper.trigger(.light) }
             .onChange(of: compressJpeg) { _ in HapticHelper.trigger(.light) }
             .onChange(of: sysNotifications) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: parallelStreams) { newVal in
+                HapticHelper.trigger(.light)
+                showToast("Параллельные потоки: ".localized + "\(newVal)" + " — применится при следующей загрузке".localized)
+            }
+            .onChange(of: upscaleThreshold) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: upscaleFactor) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: pcServerEnabled) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: pcServerAddress) { _ in HapticHelper.trigger(.light) }
             .sheet(isPresented: $showFolderPicker) {
-                FolderPicker { selectedURL in
-                    if let url = selectedURL {
+                FolderPicker { url in
+                    do {
+                        guard url.startAccessingSecurityScopedResource() else {
+                            showToast("Не удалось получить доступ к папке".localized)
+                            return
+                        }
+                        defer { url.stopAccessingSecurityScopedResource() }
+                        
+                        let bookmarkData = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
+                        UserDefaults.standard.set(bookmarkData, forKey: "sys_scheduler_folder_bookmark")
+                        
                         self.folderName = url.lastPathComponent
-                        showToast("Папка выбрана: \(self.folderName)")
+                        
+                        showToast("Папка успешно выбрана: ".localized + url.lastPathComponent)
+                    } catch {
+                        showToast("Ошибка сохранения папки: ".localized + error.localizedDescription)
                     }
+                } onCancel: {
+                    // Отмена
                 }
             }
         }
@@ -324,47 +346,13 @@ struct SystemSettingsView: View {
         }
         .buttonStyle(PremiumButtonStyle())
     }
-            .onChange(of: parallelStreams) { newVal in
-                HapticHelper.trigger(.light)
-                showToast("Параллельные потоки: ".localized + "\(newVal)" + " — применится при следующей загрузке".localized)
-            }
-            .onChange(of: upscaleThreshold) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: upscaleFactor) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: pcServerEnabled) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: pcServerAddress) { _ in HapticHelper.trigger(.light) }
-
-            .sheet(isPresented: $showFolderPicker) {
-                FolderPicker { url in
-                    do {
-                        guard url.startAccessingSecurityScopedResource() else {
-                            showToast("Не удалось получить доступ к папке".localized)
-                            return
-                        }
-                        defer { url.stopAccessingSecurityScopedResource() }
-                        
-                        let bookmarkData = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
-                        UserDefaults.standard.set(bookmarkData, forKey: "sys_scheduler_folder_bookmark")
-                        
-                        self.folderName = url.lastPathComponent
-                        
-                        showToast("Папка успешно выбрана: ".localized + url.lastPathComponent)
-                    } catch {
-                        showToast("Ошибка сохранения папки: ".localized + error.localizedDescription)
-                    }
-                } onCancel: {
-                    // Отмена
-                }
-            }
-
-        }
-    }
     
     // MARK: - Row Helpers
     private func sectionHeader(_ text: String, icon: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color(hex: "7C3AED"))
+                .foregroundStyle(Color(hex: "007AFF"))
             Text(text)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
@@ -394,7 +382,7 @@ struct SystemSettingsView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color(hex: "7C3AED"))
+                .background(Color(hex: "007AFF"))
                 .foregroundStyle(.white)
                 .clipShape(Capsule())
             }
@@ -441,7 +429,7 @@ struct SystemSettingsView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color(hex: "7C3AED"))
+                .background(Color(hex: "007AFF"))
                 .foregroundStyle(.white)
                 .clipShape(Capsule())
             }
