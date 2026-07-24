@@ -135,9 +135,18 @@ class QueueViewModel: ObservableObject {
                 count: 3
             )
         } else {
-            let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).jpg")
-            if let data = try? Data(contentsOf: fileURL) {
-                return [data]
+            let possibleExtensions = ["jpg", "JPG", "jpeg", "JPEG", "png", "PNG", "heic", "HEIC"]
+            for ext in possibleExtensions {
+                let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).\(ext)")
+                if let data = try? Data(contentsOf: fileURL), !data.isEmpty {
+                    // Downsample payload if > 4MB for fast & reliable AI API transmission
+                    if data.count > 4 * 1024 * 1024,
+                       let uiImg = UIImage(data: data),
+                       let compressed = uiImg.jpegData(compressionQuality: 0.85) {
+                        return [compressed]
+                    }
+                    return [data]
+                }
             }
             return []
         }
