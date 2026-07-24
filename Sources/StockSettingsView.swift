@@ -191,41 +191,72 @@ struct PlatformRowView: View {
     let onTap: () -> Void
     let color: Color
     
+    @State private var isPulsing = false
+    
     var body: some View {
+        let isConfigured = !platform.username.isEmpty && !platform.passwordHash.isEmpty
+        let isDark = colorScheme == .dark
+        
         HStack(spacing: 14) {
-            // 3D Brand Logo initials circle
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [color, color.opacity(0.65)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            // 3D Brand Avatar with Glass Overlay
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [color, color.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
-                .frame(width: 52, height: 52)
-                .overlay(
-                    Text(String(platform.name.prefix(2)))
-                        .font(.system(size: 18, weight: .black))
-                        .foregroundStyle(.white)
-                )
-                .shadow(color: color.opacity(platform.isEnabled ? 0.45 : 0.15), radius: platform.isEnabled ? 8 : 4)
+                    .frame(width: 50, height: 50)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.35), lineWidth: 1.0)
+                    )
+                    .shadow(color: color.opacity(platform.isEnabled ? 0.4 : 0.1), radius: 8, x: 0, y: 4)
+                
+                Text(String(platform.name.prefix(2)).uppercased())
+                    .font(.system(size: 17, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+            }
             
-            VStack(alignment: .leading, spacing: 3) {
-                Text(platform.name)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(platform.isEnabled ? Color.primary : Color.primary.opacity(0.6))
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(platform.name)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(platform.isEnabled ? Color.primary : Color.primary.opacity(0.55))
+                    
+                    if platform.id == "adobe" || platform.id == "freepik" {
+                        Text("SFTP")
+                            .font(.system(size: 8, weight: .bold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: "6366F1").opacity(0.18))
+                            .foregroundStyle(Color(hex: "6366F1"))
+                            .clipShape(Capsule())
+                    }
+                }
+                
                 Text(platform.host)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 
-                let isConfigured = !platform.username.isEmpty && !platform.passwordHash.isEmpty
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(isConfigured ? Color.green : Color.orange)
-                        .frame(width: 5, height: 5)
-                    Text(isConfigured ? "Настроен".localized : "Нужна настройка".localized)
-                        .font(.system(size: 10, weight: .semibold))
+                HStack(spacing: 5) {
+                    ZStack {
+                        Circle()
+                            .fill(isConfigured ? Color.green.opacity(0.3) : Color.orange.opacity(0.3))
+                            .frame(width: 10, height: 10)
+                            .scaleEffect(isPulsing && isConfigured ? 1.6 : 1.0)
+                            .opacity(isPulsing && isConfigured ? 0.0 : 0.8)
+                        
+                        Circle()
+                            .fill(isConfigured ? Color.green : Color.orange)
+                            .frame(width: 6, height: 6)
+                    }
+                    
+                    Text(isConfigured ? "Подключено".localized : "Нужна настройка".localized)
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(isConfigured ? Color.green : Color.orange)
                 }
                 .padding(.top, 1)
@@ -243,24 +274,35 @@ struct PlatformRowView: View {
             .labelsHidden()
             .tint(Color(hex: "007AFF"))
         }
-        .padding(16)
+        .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(
-                    platform.isEnabled 
-                    ? color.opacity(0.08) 
-                    : (colorScheme == .dark ? Color(hex: "0D0E15").opacity(0.60) : Color.white.opacity(0.60))
+                    platform.isEnabled
+                    ? (isDark ? color.opacity(0.10) : color.opacity(0.06))
+                    : (isDark ? Color(hex: "10121A").opacity(0.5) : Color.white.opacity(0.6))
                 )
+                .background(.ultraThinMaterial)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.18), lineWidth: 1.2)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(
+                    platform.isEnabled
+                    ? color.opacity(isDark ? 0.35 : 0.25)
+                    : Color.white.opacity(isDark ? 0.08 : 0.30),
+                    lineWidth: 1.0
+                )
         )
-        .shadow(color: color.opacity(platform.isEnabled ? 0.12 : 0.0), radius: 10, x: 0, y: 5)
+        .shadow(color: color.opacity(platform.isEnabled ? 0.10 : 0.0), radius: 8, x: 0, y: 4)
         .contentShape(Rectangle())
         .onTapGesture {
             HapticHelper.selection()
             onTap()
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false)) {
+                isPulsing = true
+            }
         }
     }
 }

@@ -143,7 +143,6 @@ struct AIAssistantView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard(cornerRadius: 18, padding: 14)
-        .neonShadow(color: Color(hex: "7C3AED").opacity(0.12), radius: 8)
     }
     
     private var providerCards: some View {
@@ -160,8 +159,7 @@ struct AIAssistantView: View {
                     name: "Gemini",
                     company: "Google",
                     iconName: "sparkles",
-                    color: Color(hex: "7C3AED"),
-                    glowColor: Color(hex: "4F46E5")
+                    color: Color(hex: "7C3AED")
                 )
                 
                 providerCard(
@@ -169,8 +167,7 @@ struct AIAssistantView: View {
                     name: "GPT-4",
                     company: "OpenAI",
                     iconName: "cpu",
-                    color: Color(hex: "10B981"),
-                    glowColor: Color(hex: "059669")
+                    color: Color(hex: "10B981")
                 )
                 
                 providerCard(
@@ -178,15 +175,14 @@ struct AIAssistantView: View {
                     name: "Claude",
                     company: "Anthropic",
                     iconName: "hourglass",
-                    color: Color(hex: "F97316"),
-                    glowColor: Color(hex: "EA580C")
+                    color: Color(hex: "F97316")
                 )
             }
         }
     }
     
     @ViewBuilder
-    private func providerCard(id: String, name: String, company: String, iconName: String, color: Color, glowColor: Color) -> some View {
+    private func providerCard(id: String, name: String, company: String, iconName: String, color: Color) -> some View {
         let isSelected = selectedProvider == id
         
         Button(action: {
@@ -198,7 +194,7 @@ struct AIAssistantView: View {
             VStack(alignment: .center, spacing: 10) {
                 ZStack {
                     Circle()
-                        .fill(isSelected ? color.opacity(0.25) : color.opacity(0.08))
+                        .fill(isSelected ? color : color.opacity(0.12))
                         .frame(width: 46, height: 46)
                     
                     if #available(iOS 17.0, *) {
@@ -206,12 +202,10 @@ struct AIAssistantView: View {
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(isSelected ? .white : color)
                             .symbolEffect(.bounce, value: selectedProvider)
-                            .shadow(color: color.opacity(isSelected ? 0.8 : 0.0), radius: 4)
                     } else {
                         Image(systemName: iconName)
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(isSelected ? .white : color)
-                            .shadow(color: color.opacity(isSelected ? 0.8 : 0.0), radius: 4)
                     }
                 }
                 
@@ -231,12 +225,11 @@ struct AIAssistantView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(
-                        isSelected ? LinearGradient(colors: [color, glowColor], startPoint: .topLeading, endPoint: .bottomTrailing) : LinearGradient(colors: [Color.white.opacity(0.1)], startPoint: .top, endPoint: .bottom),
-                        lineWidth: isSelected ? 2.2 : 1.0
+                        isSelected ? color : Color.primary.opacity(0.08),
+                        lineWidth: isSelected ? 2.0 : 1.0
                     )
             )
-            .scaleEffect(isSelected ? 1.05 : 0.96)
-            .neonShadow(color: color, radius: isSelected ? 12 : 0, y: isSelected ? 5 : 0)
+            .scaleEffect(isSelected ? 1.03 : 0.97)
         }
         .buttonStyle(PremiumButtonStyle())
     }
@@ -314,7 +307,6 @@ struct AIAssistantView: View {
                             .padding(12)
                             .background(AppleTheme.primaryGradient)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .neonShadow(color: Color(hex: "7C3AED"), radius: 5)
                     }
                     .buttonStyle(PremiumButtonStyle())
                 }

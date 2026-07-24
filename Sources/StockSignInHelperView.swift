@@ -454,9 +454,15 @@ struct StockWebViewRepresentable: UIViewRepresentable {
         
         let configuration = webView.configuration
         configuration.websiteDataStore = WKWebsiteDataStore.default()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         
-        if let url = URL(string: urlString) {
-            let request = URLRequest(url: url)
+        // Маскируемся под полноценный мобильный Safari, чтобы избежать бесконечных редиректов и блокировок Cloudflare/Google Auth
+        webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/605.1.15"
+        webView.allowsBackForwardNavigationGestures = true
+        
+        if webView.url == nil, let url = URL(string: urlString) {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 30.0
             webView.load(request)
         }
         
@@ -472,6 +478,7 @@ struct StockWebViewRepresentable: UIViewRepresentable {
     
     class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: StockWebViewRepresentable
+        private var loadingTimer: Timer?
         
         init(_ parent: StockWebViewRepresentable) {
             self.parent = parent
@@ -480,9 +487,23 @@ struct StockWebViewRepresentable: UIViewRepresentable {
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             parent.isLoading = true
             parent.onStatusChanged("Загрузка страницы...")
+            
+            // Таймаут безопасности: сбрасываем индикатор через 12 секунд, если фоновые скрипты страницы зависли
+            loadingTimer?.invalidate()
+            loadingTimer = Timer.scheduledTimer(withTimeInterval: 12.0, repeats: false) { [weak self] _ in
+                DispatchQueue.main.async {
+                    if self?.parent.isLoading == true {
+                        self?.parent.isLoading = false
+                        self?.parent.canGoBack = webView.canGoBack
+                        self?.parent.currentURL = webView.url
+                        self?.parent.onStatusChanged("Страница загружена. Выполните вход и нажмите 'Сканировать'.")
+                    }
+                }
+            }
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            loadingTimer?.invalidate()
             parent.isLoading = false
             parent.canGoBack = webView.canGoBack
             parent.currentURL = webView.url
@@ -504,8 +525,22 @@ struct StockWebViewRepresentable: UIViewRepresentable {
         }
         
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            loadingTimer?.invalidate()
             parent.isLoading = false
             parent.onStatusChanged("Ошибка соединения: \(error.localizedDescription)")
+        }
+        
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            loadingTimer?.invalidate()
+            parent.isLoading = false
+            let code = (error as NSError).code
+            if code != NSURLErrorCancelled {
+                parent.onStatusChanged("Ошибка загрузки страницы: \(error.localizedDescription)")
+            }
+        }
+        
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            decisionHandler(.allow)
         }
         
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {

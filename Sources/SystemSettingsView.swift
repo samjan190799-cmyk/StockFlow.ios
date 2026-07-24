@@ -349,13 +349,18 @@ struct SystemSettingsView: View {
     
     // MARK: - Row Helpers
     private func sectionHeader(_ text: String, icon: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color(hex: "007AFF"))
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color(hex: "007AFF").opacity(0.14))
+                    .frame(width: 28, height: 28)
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color(hex: "007AFF"))
+            }
             Text(text)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.primary)
                 .textCase(.uppercase)
         }
         .padding(.bottom, 2)
