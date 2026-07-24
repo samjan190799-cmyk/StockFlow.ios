@@ -26,9 +26,9 @@ final class AIManager: Sendable {
         let maxRetries = 3
         let initialDelay: Double = 1.5
         
-        let geminiModels = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro"]
-        let openAIModels = ["gpt-5.5", "gpt-4o-mini", "gpt-4o"]
-        let claudeModels = ["claude-sonnet-5", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"]
+        let geminiModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        let openAIModels = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"]
+        let claudeModels = ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-haiku-20240307"]
         
         while true {
             do {
@@ -48,7 +48,7 @@ final class AIManager: Sendable {
                 attempts += 1
                 
                 let nsError = error as NSError
-                let isTransient = (nsError.domain == "AIManager" && (nsError.code == 503 || nsError.code == 429 || nsError.code == 500 || nsError.code == 502 || nsError.code == 504)) ||
+                let isTransient = (nsError.domain == "AIManager" && (nsError.code == 503 || nsError.code == 429 || nsError.code == 500 || nsError.code == 502 || nsError.code == 504 || nsError.code == 404)) ||
                                   (nsError.domain == NSURLErrorDomain && (nsError.code == URLError.timedOut.rawValue || nsError.code == URLError.cannotConnectToHost.rawValue || nsError.code == URLError.networkConnectionLost.rawValue))
                 
                 if attempts > maxRetries || !isTransient {
