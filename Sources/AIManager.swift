@@ -26,9 +26,9 @@ final class AIManager: Sendable {
         let maxRetries = 3
         let initialDelay: Double = 1.5
         
-        let geminiModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
-        let openAIModels = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"]
-        let claudeModels = ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-haiku-20240307"]
+        let geminiModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+        let openAIModels = ["gpt-5.5", "gpt-4o-mini", "gpt-4o"]
+        let claudeModels = ["claude-sonnet-5", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"]
         
         while true {
             do {
