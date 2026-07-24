@@ -67,8 +67,12 @@ final class AIManager: Sendable {
     
     // MARK: - Gemini Integration
     private func analyzeWithGemini(modelName: String, base64Images: [String], prompt: String, apiKey: String) async throws -> AIResult {
-        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/\(modelName):generateContent?key=\(apiKey)"
-        guard let url = URL(string: urlString) else {
+        let cleanKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanKey.isEmpty else {
+            throw NSError(domain: "AIManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "API-ключ Gemini не установлен. Перейдите во вкладку 'ИИ' и введите ключ."])
+        }
+        guard let encodedKey = cleanKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(modelName):generateContent?key=\(encodedKey)") else {
             throw NSError(domain: "AIManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Некорректный URL Gemini."])
         }
         
@@ -368,7 +372,11 @@ final class AIManager: Sendable {
                 userFriendlyMessage += " Пожалуйста, подождите перед повторной отправкой."
             }
         } else if statusCode == 400 {
-            userFriendlyMessage = "Некорректный запрос (400). Проверьте введенный API-ключ во вкладке 'ИИ'."
+            if rawMessage.contains("API key not valid") || rawMessage.contains("API_KEY_INVALID") {
+                userFriendlyMessage = "Недействительный API-ключ Gemini (400). Перейдите во вкладку 'ИИ' и введите корректный ключ Google AI Studio."
+            } else {
+                userFriendlyMessage = "Ошибка Gemini API (400): \(rawMessage.isEmpty ? "Проверьте введённый API-ключ во вкладке 'ИИ'." : rawMessage)"
+            }
         } else {
             userFriendlyMessage = "Ошибка Gemini API (\(statusCode)): \(rawMessage)"
         }
