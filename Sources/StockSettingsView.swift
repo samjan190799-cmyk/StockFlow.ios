@@ -279,21 +279,20 @@ struct PlatformRowView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(
                     platform.isEnabled
-                    ? (isDark ? color.opacity(0.10) : color.opacity(0.06))
-                    : (isDark ? Color(hex: "10121A").opacity(0.5) : Color.white.opacity(0.6))
+                    ? (isDark ? color.opacity(0.12) : color.opacity(0.06))
+                    : (isDark ? Color(hex: "141620") : Color.white)
                 )
-                .background(.ultraThinMaterial)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(
                     platform.isEnabled
-                    ? color.opacity(isDark ? 0.35 : 0.25)
-                    : Color.white.opacity(isDark ? 0.08 : 0.30),
+                    ? color.opacity(isDark ? 0.40 : 0.25)
+                    : Color.white.opacity(isDark ? 0.08 : 0.25),
                     lineWidth: 1.0
                 )
         )
-        .shadow(color: color.opacity(platform.isEnabled ? 0.10 : 0.0), radius: 8, x: 0, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .contentShape(Rectangle())
         .onTapGesture {
             HapticHelper.selection()

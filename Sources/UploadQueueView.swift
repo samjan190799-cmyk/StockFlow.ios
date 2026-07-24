@@ -1571,10 +1571,10 @@ struct UploadQueueView: View {
                         colorScheme == .dark ? Color(hex: "2C2C2E") : Color(hex: "E5E5EA")
                     )
                     .foregroundStyle(.primary)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(LinearGradient(colors: [Color.white.opacity(0.35), Color.white.opacity(0.08)], startPoint: .top, endPoint: .bottom), lineWidth: 1.2))
-                    .neonShadow(color: .black, radius: 10)
-                    .padding(.horizontal, 24)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(colorScheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.12), lineWidth: 1.0))
+                    .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 94)
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -1794,11 +1794,14 @@ struct PhotoRowView: View, Equatable {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(.ultraThinMaterial)  // Адаптивный фон
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(colorScheme == .dark ? Color(hex: "151821") : Color.white)
         )
-        .quantumNeonBorder(cornerRadius: 18)
-        .spatial3DTilt()
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06), lineWidth: 1.0)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
     
     private func photoImage(_ photo: PhotoMetadata) -> some View {

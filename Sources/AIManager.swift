@@ -350,24 +350,22 @@ final class AIManager: Sendable {
         
         var userFriendlyMessage = ""
         
-        if statusCode == 429 || status == "RESOURCE_EXHAUSTED" {
+        if statusCode == 401 || status == "UNAUTHENTICATED" || rawMessage.contains("API key not valid") || rawMessage.contains("invalid authentication credentials") || rawMessage.contains("Expected OAuth 2") {
+            userFriendlyMessage = "Недействительный API-ключ Gemini (401). Перейдите во вкладку 'ИИ' и введите корректный ключ Google AI Studio."
+        } else if statusCode == 429 || status == "RESOURCE_EXHAUSTED" {
             userFriendlyMessage = "Превышена квота запросов (429: Resource Exhausted). Вы исчерпали лимит бесплатных запросов к Gemini API."
             
-            // Извлечение времени ожидания, если оно указано в сообщении (например: "Please retry in 52.059407285s.")
             if let range = rawMessage.range(of: "Please retry in ([0-9\\.]+s|[0-9\\.]+ seconds)", options: .regularExpression) {
                 let retrySubstring = rawMessage[range]
                 let cleanTime = retrySubstring
                     .replacingOccurrences(of: "Please retry in ", with: "")
                     .replacingOccurrences(of: "s", with: " сек")
-                userFriendlyMessage += " Пожалуйста, повторите попытку через \(cleanTime) или проверьте настройки лимитов/оплаты в Google AI Studio."
+                userFriendlyMessage += " Повторите попытку через \(cleanTime)."
             } else {
-                userFriendlyMessage += " Пожалуйста, подождите перед повторной отправкой или проверьте настройки ключа/оплаты в Google AI Studio."
+                userFriendlyMessage += " Пожалуйста, подождите перед повторной отправкой."
             }
         } else if statusCode == 400 {
-            userFriendlyMessage = "Некорректный запрос (400). Возможно, передан неверный API-ключ или параметры запроса."
-            if rawMessage.contains("API key not valid") {
-                userFriendlyMessage = "Недействительный API-ключ Gemini. Проверьте правильность ключа в настройках приложения."
-            }
+            userFriendlyMessage = "Некорректный запрос (400). Проверьте введенный API-ключ во вкладке 'ИИ'."
         } else {
             userFriendlyMessage = "Ошибка Gemini API (\(statusCode)): \(rawMessage)"
         }

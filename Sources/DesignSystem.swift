@@ -187,8 +187,7 @@ struct SmartStockLogoView: View {
         let isDark = colorScheme == .dark
         return ZStack {
             RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-                .fill(isDark ? Color(hex: "181B26").opacity(0.8) : Color.white.opacity(0.9))
-                .background(.ultraThinMaterial)
+                .fill(isDark ? Color(hex: "181B26") : Color.white)
                 .frame(width: size, height: size)
                 .overlay(
                     RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
@@ -201,7 +200,8 @@ struct SmartStockLogoView: View {
                             lineWidth: 1.0
                         )
                 )
-                .shadow(color: Color.black.opacity(isDark ? 0.25 : 0.08), radius: 8, x: 0, y: 4)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
+                .shadow(color: Color.black.opacity(isDark ? 0.25 : 0.08), radius: 6, x: 0, y: 3)
             
             RotatingApertureView(size: size)
             
