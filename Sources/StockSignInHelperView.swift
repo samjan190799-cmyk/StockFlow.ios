@@ -191,7 +191,6 @@ struct StockSignInHelperView: View {
         HapticHelper.trigger(.medium)
         statusMessage = "Анализируем содержимое страницы..."
         
-        let hostPattern = config.host
         let scanScript = """
         (function() {
             var html = document.body.innerText;

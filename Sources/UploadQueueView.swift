@@ -2110,7 +2110,6 @@ struct QueueStatsWidget: View {
         let total = viewModel.photos.count
         let success = viewModel.photos.filter { $0.status == .success }.count
         let ready = viewModel.photos.filter { $0.status == .ready }.count
-        let uploading = viewModel.photos.filter { $0.status == .uploading }.count
         let error = viewModel.photos.filter { $0.status == .error }.count
         
         HStack(spacing: 16) {
