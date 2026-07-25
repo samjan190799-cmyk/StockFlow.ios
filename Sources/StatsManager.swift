@@ -49,7 +49,7 @@ final class StatsManager: ObservableObject {
     @Published var lastRefreshDate: Date? = nil
 
     // MARK: Ключ хранилища
-    private static let historyKey = "stats_upload_history"
+    private nonisolated static let historyKey = "stats_upload_history"
 
     // MARK: Init
     init() {}

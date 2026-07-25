@@ -1754,6 +1754,7 @@ struct UploadQueueView: View {
 
 // MARK: - Photo Row View (Equatable)
 struct PhotoRowView: View, Equatable {
+    @Environment(\.colorScheme) var colorScheme
     let photo: PhotoMetadata
     let index: Int
     @ObservedObject var viewModel: QueueViewModel
