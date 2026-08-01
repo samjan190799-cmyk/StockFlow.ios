@@ -57,7 +57,8 @@ jobs:
         run: |
           python3 -c "
           import os, base64
-          b64 = os.environ.get('PROFILE_B64', '').strip()
+          raw_b64 = os.environ.get('PROFILE_B64', '')
+          b64 = ''.join(c for c in raw_b64 if ord(c) < 128).strip()
           if not b64:
               raise ValueError('BUILD_PROVISION_PROFILE_BASE64 is empty!')
           data = base64.b64decode(b64)
