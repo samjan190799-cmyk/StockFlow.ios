@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Unsigned IPA for AltStore
+    name: Build SmartStock iOS Application
     runs-on: macos-14
 
     steps:
@@ -42,28 +42,57 @@ jobs:
           sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
           xcodebuild -version
 
+      - name: Import Code Signing Certificates
+        if: ${{ secrets.BUILD_CERTIFICATE_BASE64 != '' }}
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
+
+      - name: Install Provisioning Profile
+        if: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 != '' }}
+        run: |
+          PP_PATH=$HOME/Library/MobileDevice/Provisioning\ Profiles
+          mkdir -p "$PP_PATH"
+          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > "$PP_PATH/appstore.mobileprovision"
+
       - name: Generate Xcode Project
         run: |
           xcodegen generate
 
-      - name: Build for iOS Device (unsigned)
+      - name: Build for iOS Device
         run: |
           set -o pipefail
-          xcodebuild \
-            -project SmartStock.xcodeproj \
-            -scheme SmartStock \
-            -destination 'generic/platform=iOS' \
-            -configuration Release \
-            -derivedDataPath build \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            VALIDATE_PRODUCT=NO \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES \
-            SWIFT_OPTIMIZATION_LEVEL="-O" \
-            build 2>&1 | xcpretty
+          if [ -n "${{ secrets.BUILD_CERTIFICATE_BASE64 }}" ]; then
+            echo "Building with Apple Code Signing Certificate..."
+            xcodebuild \
+              -project SmartStock.xcodeproj \
+              -scheme SmartStock \
+              -destination 'generic/platform=iOS' \
+              -configuration Release \
+              -derivedDataPath build \
+              CODE_SIGN_STYLE="Manual" \
+              CODE_SIGN_IDENTITY="Apple Distribution" \
+              PROVISIONING_PROFILE_SPECIFIER="appstore" \
+              SWIFT_OPTIMIZATION_LEVEL="-O" \
+              build 2>&1 | xcpretty
+          else
+            echo "Building Unsigned IPA for AltStore / Sideloadly..."
+            xcodebuild \
+              -project SmartStock.xcodeproj \
+              -scheme SmartStock \
+              -destination 'generic/platform=iOS' \
+              -configuration Release \
+              -derivedDataPath build \
+              CODE_SIGN_IDENTITY="-" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              VALIDATE_PRODUCT=NO \
+              AD_HOC_CODE_SIGNING_ALLOWED=YES \
+              SWIFT_OPTIMIZATION_LEVEL="-O" \
+              build 2>&1 | xcpretty
+          fi
 
-          # Verify .app executable was built
           ls -l build/Build/Products/Release-iphoneos/SmartStock.app/SmartStock
 
       - name: Package as IPA
@@ -79,7 +108,7 @@ jobs:
       - name: Upload IPA as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SmartStock-Unsigned-IPA
+          name: SmartStock-IPA
           path: build/SmartStock.ipa
           if-no-files-found: error
           retention-days: 30
