@@ -53,11 +53,10 @@ jobs:
 
       - name: Install Provisioning Profile
         run: |
-          PP_PATH="$HOME/Library/MobileDevice/Provisioning Profiles"
-          mkdir -p "$PP_PATH"
-          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > "$PP_PATH/appstore.mobileprovision"
-          echo "Profile installed:"
-          ls -la "$PP_PATH/"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          printf '%s' "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/appstore.mobileprovision
+          echo "Profile UUID: $(grep -a UUID ~/Library/MobileDevice/Provisioning\ Profiles/appstore.mobileprovision | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}')"
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
 
       - name: Generate Xcode Project
         run: |
