@@ -100,7 +100,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload to TestFlight
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.APPSTORE_KEY_ID != ''
+        if: ${{ github.ref == 'refs/heads/main' && secrets.APPSTORE_KEY_ID != '' }}
         run: |
           mkdir -p ~/.private_keys
           echo "${{ secrets.APPSTORE_PRIVATE_KEY }}" > ~/.private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8
