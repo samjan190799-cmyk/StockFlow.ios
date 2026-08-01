@@ -94,41 +94,6 @@ jobs:
           ls -la build/SmartStock.xcarchive/Products/Applications/ 2>/dev/null || \
             find build/SmartStock.xcarchive -name "*.app" -maxdepth 4
 
-      - name: Create ExportOptions.plist
-        run: |
-          mkdir -p build
-          /usr/libexec/PlistBuddy -c "Clear" build/ExportOptions.plist 2>/dev/null || true
-          cat > build/ExportOptions.plist << 'EXPORT_EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>method</key>
-  <string>app-store</string>
-  <key>teamID</key>
-  <string>V7J345DY58</string>
-  <key>signingStyle</key>
-  <string>manual</string>
-  <key>signingCertificate</key>
-  <string>Apple Distribution</string>
-  <key>provisioningProfiles</key>
-  <dict>
-    <key>com.samvel.smartstock.SmartStock</key>
-    <string>SmartStock AppStore</string>
-  </dict>
-  <key>uploadBitcode</key>
-  <false/>
-  <key>uploadSymbols</key>
-  <true/>
-  <key>stripSwiftSymbols</key>
-  <true/>
-</dict>
-</plist>
-EXPORT_EOF
-          echo "=== ExportOptions.plist created ==="
-          cat build/ExportOptions.plist
-          plutil -lint build/ExportOptions.plist && echo "plist is valid"
-
 
       - name: Export IPA
         run: |
@@ -136,7 +101,7 @@ EXPORT_EOF
           xcodebuild -exportArchive \
             -archivePath build/SmartStock.xcarchive \
             -exportPath build/export \
-            -exportOptionsPlist build/ExportOptions.plist \
+            -exportOptionsPlist ExportOptions.plist \
             2>&1 | xcpretty
 
           echo "Export directory:"
