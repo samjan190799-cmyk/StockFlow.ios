@@ -102,9 +102,9 @@ jobs:
           # 1. Embed Provisioning Profile
           cp "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" build/Payload/SmartStock.app/embedded.mobileprovision
           
-          # 2. Extract Entitlements using native macOS security cms
+          # 2. Extract Entitlements via strings + grep
           mkdir -p build
-          security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" > build/profile.plist
+          strings "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" | grep -A 2000 "<plist" | grep -B 2000 "</plist>" > build/profile.plist
           plutil -extract Entitlements xml1 -o build/entitlements.plist build/profile.plist
           
           # 3. Re-sign app bundle with Apple Distribution certificate
