@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
+
 permissions:
   contents: write
 
@@ -91,15 +92,7 @@ jobs:
           name: "SmartStock v1.6 (Build ${{ github.run_number }})"
           body: |
             ## SmartStock iOS IPA
-
-            **Как установить через AltStore:**
-            1. Скачай `SmartStock.ipa` ниже
-            2. Открой AltStore на iPhone → "My Apps" → "+" → выбери IPA
-            3. Готово!
-
-            **Изменения:**
-            - FTPClient переведен на использование EPSV режима
-            - Увеличен таймаут соединения (data channel) до 20 сек для стабильной загрузки на Shutterstock
+            SmartStock v1.6 Release
           files: build/SmartStock.ipa
           draft: false
           prerelease: false
