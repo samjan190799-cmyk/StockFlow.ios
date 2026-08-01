@@ -379,18 +379,26 @@ struct SystemSettingsView: View {
     }
     
     private func pickerRow(_ label: String, selection: Binding<String>, options: [String]) -> some View {
-        Menu {
-            Picker("", selection: selection) {
+        HStack(alignment: .center) {
+            Text(label)
+                .font(.system(size: 14))
+                .foregroundStyle(.primary)
+            Spacer()
+            Menu {
                 ForEach(options, id: \.self) { option in
-                    Text(option.localized).tag(option)
+                    Button(action: {
+                        HapticHelper.trigger(.selection)
+                        selection.wrappedValue = option
+                    }) {
+                        HStack {
+                            Text(option.localized)
+                            if selection.wrappedValue == option {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
                 }
-            }
-        } label: {
-            HStack(alignment: .center) {
-                Text(label)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.primary)
-                Spacer()
+            } label: {
                 HStack(spacing: 4) {
                     Text(selection.wrappedValue.localized)
                         .font(.system(size: 12, weight: .semibold))
@@ -404,7 +412,6 @@ struct SystemSettingsView: View {
                 .clipShape(Capsule())
             }
         }
-        .buttonStyle(.plain)
     }
     
     private func saveSettings() {
@@ -424,20 +431,27 @@ struct SystemSettingsView: View {
         }
     }
     
-    
     private func pickerIntRow(_ label: String, selection: Binding<Int>, options: [Int]) -> some View {
-        Menu {
-            Picker("", selection: selection) {
+        HStack(alignment: .center) {
+            Text(label)
+                .font(.system(size: 14))
+                .foregroundStyle(.primary)
+            Spacer()
+            Menu {
                 ForEach(options, id: \.self) { option in
-                    Text("\(option) \(getStreamWord(option).localized)").tag(option)
+                    Button(action: {
+                        HapticHelper.trigger(.selection)
+                        selection.wrappedValue = option
+                    }) {
+                        HStack {
+                            Text("\(option) \(getStreamWord(option).localized)")
+                            if selection.wrappedValue == option {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
                 }
-            }
-        } label: {
-            HStack(alignment: .center) {
-                Text(label)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.primary)
-                Spacer()
+            } label: {
                 HStack(spacing: 4) {
                     Text("\(selection.wrappedValue) \(getStreamWord(selection.wrappedValue).localized)")
                         .font(.system(size: 12, weight: .semibold))
@@ -451,7 +465,6 @@ struct SystemSettingsView: View {
                 .clipShape(Capsule())
             }
         }
-        .buttonStyle(.plain)
     }
     
     private func getStreamWord(_ count: Int) -> String {

@@ -13,8 +13,8 @@ extension String {
 }
 
 struct Localizer {
-    /// Блокировка для защиты обращения к словарям из фоновых потоков (Data Race Prevention)
-    private static let lock = NSLock()
+    /// Рекурсивная блокировка для защиты обращения к словарям из любых потоков (Data Race & Deadlock Prevention)
+    private static let lock = NSRecursiveLock()
     
     private static let enTranslations: [String: String] = [
         // Экран параметров системы
