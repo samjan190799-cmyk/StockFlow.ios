@@ -91,20 +91,21 @@ jobs:
           # 1. Embed Provisioning Profile
           cp "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" build/Payload/SmartStock.app/embedded.mobileprovision
           
-          # 2. Extract Entitlements using Python XML parser
+          # 2. Extract Entitlements using Python XML slicer
           python3 -c "
-          import re, os
+          import os
           prov_path = os.path.expanduser('~/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision')
           with open(prov_path, 'rb') as f:
               content = f.read()
-          match = re.search(rb'<plist.*?</plist>', content, re.DOTALL)
-          if match:
+          start = content.find(b'<?xml')
+          end = content.find(b'</plist>')
+          if start != -1 and end != -1:
               os.makedirs('build', exist_ok=True)
               with open('build/profile.plist', 'wb') as out:
-                  out.write(match.group(0))
+                  out.write(content[start:end + 8])
               print('Extracted profile.plist successfully')
           else:
-              raise RuntimeError('Failed to find <plist> XML in mobileprovision file')
+              raise RuntimeError('Failed to locate XML tags in mobileprovision file')
           "
           plutil -extract Entitlements xml1 -o build/entitlements.plist build/profile.plist
           
