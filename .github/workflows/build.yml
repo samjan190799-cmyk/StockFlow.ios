@@ -97,12 +97,14 @@ jobs:
           prov_path = os.path.expanduser('~/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision')
           with open(prov_path, 'rb') as f:
               content = f.read()
-          match = re.search(rb'(<plist[\s\S]*?</plist>)', content)
+          match = re.search(rb'<plist.*?</plist>', content, re.DOTALL)
           if match:
               os.makedirs('build', exist_ok=True)
               with open('build/profile.plist', 'wb') as out:
-                  out.write(match.group(1))
+                  out.write(match.group(0))
               print('Extracted profile.plist successfully')
+          else:
+              raise RuntimeError('Failed to find <plist> XML in mobileprovision file')
           "
           plutil -extract Entitlements xml1 -o build/entitlements.plist build/profile.plist
           
