@@ -56,9 +56,9 @@ jobs:
           PROFILE_B64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
         run: |
           python3 -c "
-          import os, base64
+          import os, base64, re
           raw_b64 = os.environ.get('PROFILE_B64', '')
-          b64 = ''.join(c for c in raw_b64 if ord(c) < 128).strip()
+          b64 = re.sub(r'[^A-Za-z0-9+/=]', '', raw_b64)
           if not b64:
               raise ValueError('BUILD_PROVISION_PROFILE_BASE64 is empty!')
           b64 += '=' * ((4 - len(b64) % 4) % 4)
