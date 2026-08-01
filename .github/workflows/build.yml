@@ -15,6 +15,9 @@ jobs:
     name: Build SmartStock iOS Application
     runs-on: macos-14
 
+    env:
+      HAS_SIGNING: ${{ secrets.BUILD_CERTIFICATE_BASE64 != '' && secrets.BUILD_PROVISION_PROFILE_BASE64 != '' && 'true' || 'false' }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -43,55 +46,37 @@ jobs:
           xcodebuild -version
 
       - name: Import Code Signing Certificates
-        if: ${{ secrets.BUILD_CERTIFICATE_BASE64 != '' }}
         uses: apple-actions/import-codesign-certs@v3
         with:
           p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           p12-password: ${{ secrets.P12_PASSWORD }}
 
       - name: Install Provisioning Profile
-        if: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 != '' }}
         run: |
-          PP_PATH=$HOME/Library/MobileDevice/Provisioning\ Profiles
+          PP_PATH="$HOME/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "$PP_PATH"
           echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > "$PP_PATH/appstore.mobileprovision"
+          echo "Profile installed:"
+          ls -la "$PP_PATH/"
 
       - name: Generate Xcode Project
         run: |
           xcodegen generate
 
-      - name: Build for iOS Device
+      - name: Build for iOS Device (signed)
         run: |
           set -o pipefail
-          if [ -n "${{ secrets.BUILD_CERTIFICATE_BASE64 }}" ]; then
-            echo "Building with Apple Code Signing Certificate..."
-            xcodebuild \
-              -project SmartStock.xcodeproj \
-              -scheme SmartStock \
-              -destination 'generic/platform=iOS' \
-              -configuration Release \
-              -derivedDataPath build \
-              CODE_SIGN_STYLE="Manual" \
-              CODE_SIGN_IDENTITY="Apple Distribution" \
-              PROVISIONING_PROFILE_SPECIFIER="appstore" \
-              SWIFT_OPTIMIZATION_LEVEL="-O" \
-              build 2>&1 | xcpretty
-          else
-            echo "Building Unsigned IPA for AltStore / Sideloadly..."
-            xcodebuild \
-              -project SmartStock.xcodeproj \
-              -scheme SmartStock \
-              -destination 'generic/platform=iOS' \
-              -configuration Release \
-              -derivedDataPath build \
-              CODE_SIGN_IDENTITY="-" \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
-              VALIDATE_PRODUCT=NO \
-              AD_HOC_CODE_SIGNING_ALLOWED=YES \
-              SWIFT_OPTIMIZATION_LEVEL="-O" \
-              build 2>&1 | xcpretty
-          fi
+          xcodebuild \
+            -project SmartStock.xcodeproj \
+            -scheme SmartStock \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_STYLE="Manual" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="SmartStock AppStore" \
+            SWIFT_OPTIMIZATION_LEVEL="-O" \
+            build 2>&1 | xcpretty
 
           ls -l build/Build/Products/Release-iphoneos/SmartStock.app/SmartStock
 
@@ -129,9 +114,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload to TestFlight
-        if: ${{ github.ref == 'refs/heads/main' && env.APPSTORE_KEY_ID != '' }}
-        env:
-          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: apple-actions/upload-testflight-build@v1
         with:
           app-path: 'build/SmartStock.ipa'
