@@ -75,6 +75,17 @@ jobs:
         run: |
           xcodegen generate
 
+      - name: Diagnose Signing Environment
+        run: |
+          echo "=== Installed Profiles ==="
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/" 2>/dev/null || echo "No profiles directory"
+
+          echo "=== Profile Name ==="
+          security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" 2>/dev/null | grep -A1 "Name" | head -5 || echo "Could not read profile"
+
+          echo "=== Certificates in Keychain ==="
+          security find-identity -v -p codesigning 2>/dev/null | head -20 || echo "No certificates"
+
       - name: Archive App
         run: |
           set -o pipefail
@@ -87,12 +98,15 @@ jobs:
             CODE_SIGN_STYLE="Manual" \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             PROVISIONING_PROFILE_SPECIFIER="SmartStock AppStore" \
+            DEVELOPMENT_TEAM="V7J345DY58" \
             SWIFT_OPTIMIZATION_LEVEL="-O" \
-            2>&1 | xcpretty
+            2>&1
 
-          echo "Archive contents:"
+          echo "=== Archive status: $? ==="
+          echo "=== Archive contents ==="
           ls -la build/SmartStock.xcarchive/Products/Applications/ 2>/dev/null || \
-            find build/SmartStock.xcarchive -name "*.app" -maxdepth 4
+            find build/SmartStock.xcarchive -name "*.app" -maxdepth 4 2>/dev/null || \
+            echo "Archive directory not found"
 
 
       - name: Export IPA
