@@ -102,22 +102,29 @@ jobs:
           # 1. Embed Provisioning Profile
           cp "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" build/Payload/SmartStock.app/embedded.mobileprovision
           
-          # 2. Extract Entitlements using Python XML slicer
+          # 2. Extract Entitlements using Python XML slicer & security cms fallback
           python3 -c "
-          import os
+          import os, subprocess
           prov_path = os.path.expanduser('~/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision')
           with open(prov_path, 'rb') as f:
               content = f.read()
           print('Reading mobileprovision file, total size:', len(content), 'bytes')
-          start = content.find(b'<?xml')
+          start = content.find(b'<plist')
           end = content.find(b'</plist>')
           if start != -1 and end != -1:
               os.makedirs('build', exist_ok=True)
               with open('build/profile.plist', 'wb') as out:
                   out.write(content[start:end + 8])
-              print('Extracted profile.plist successfully')
+              print('Extracted profile.plist via byte slice successfully')
           else:
-              raise RuntimeError(f'Failed to locate XML tags in mobileprovision file of size {len(content)}')
+              os.makedirs('build', exist_ok=True)
+              res = subprocess.run(['security', 'cms', '-D', '-i', prov_path], capture_output=True)
+              if res.returncode == 0 and res.stdout:
+                  with open('build/profile.plist', 'wb') as out:
+                      out.write(res.stdout)
+                  print('Extracted profile.plist via security cms fallback successfully')
+              else:
+                  raise RuntimeError('Failed to extract XML plist from mobileprovision file')
           "
           plutil -extract Entitlements xml1 -o build/entitlements.plist build/profile.plist
           
