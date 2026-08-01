@@ -75,47 +75,78 @@ jobs:
         run: |
           xcodegen generate
 
-      - name: Build for iOS Device (signed)
+      - name: Archive App
         run: |
           set -o pipefail
-          xcodebuild \
+          xcodebuild archive \
             -project SmartStock.xcodeproj \
             -scheme SmartStock \
             -destination 'generic/platform=iOS' \
             -configuration Release \
-            -derivedDataPath build \
+            -archivePath build/SmartStock.xcarchive \
             CODE_SIGN_STYLE="Manual" \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             PROVISIONING_PROFILE_SPECIFIER="SmartStock AppStore" \
             SWIFT_OPTIMIZATION_LEVEL="-O" \
-            build 2>&1 | xcpretty
+            2>&1 | xcpretty
 
-          ls -l build/Build/Products/Release-iphoneos/SmartStock.app/SmartStock
+          echo "Archive contents:"
+          ls -la build/SmartStock.xcarchive/Products/Applications/ 2>/dev/null || \
+            find build/SmartStock.xcarchive -name "*.app" -maxdepth 4
 
-      - name: Package as IPA
+      - name: Create ExportOptions.plist
         run: |
-          mkdir -p build/Payload
-          APP_PATH=$(find build/Build/Products/Release-iphoneos -name "*.app" | head -1)
-          echo "App path: $APP_PATH"
-          cp -r "$APP_PATH" build/Payload/SmartStock.app
-          
-          # 1. Embed Provisioning Profile
-          cp "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" build/Payload/SmartStock.app/embedded.mobileprovision
-          
-          # 2. Extract Entitlements via strings + grep
-          mkdir -p build
-          strings "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" | grep -A 2000 "<plist" | grep -B 2000 "</plist>" > build/profile.plist
-          plutil -extract Entitlements xml1 -o build/entitlements.plist build/profile.plist
-          
-          # 3. Re-sign app bundle with Apple Distribution certificate
-          codesign --force --deep --sign "Apple Distribution" \
-            --entitlements build/entitlements.plist \
-            --timestamp \
-            build/Payload/SmartStock.app
-          
-          cd build
-          zip -r SmartStock.ipa Payload/
-          echo "IPA size: $(du -h SmartStock.ipa | cut -f1)"
+          PROFILE_UUID=$(python3 -c "
+          import subprocess, plistlib, os
+          prov = os.path.expanduser('~/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision')
+          result = subprocess.run(['security', 'cms', '-D', '-i', prov], capture_output=True)
+          data = plistlib.loads(result.stdout)
+          print(data['UUID'])
+          ")
+          echo "Profile UUID: $PROFILE_UUID"
+
+          cat > build/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>V7J345DY58</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.samvel.smartstock.SmartStock</key>
+              <string>$PROFILE_UUID</string>
+            </dict>
+            <key>uploadBitcode</key>
+            <false/>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+          cat build/ExportOptions.plist
+
+      - name: Export IPA
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath build/SmartStock.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist build/ExportOptions.plist \
+            2>&1 | xcpretty
+
+          echo "Export directory:"
+          ls -la build/export/
+          IPA_PATH=$(find build/export -name "*.ipa" | head -1)
+          echo "IPA found: $IPA_PATH"
+          cp "$IPA_PATH" build/SmartStock.ipa
+          echo "IPA size: $(du -h build/SmartStock.ipa | cut -f1)"
 
       - name: Upload IPA as Artifact
         uses: actions/upload-artifact@v4
@@ -149,17 +180,11 @@ jobs:
         run: |
           mkdir -p ~/.private_keys
           echo "$PRIVATE_KEY" > ~/.private_keys/AuthKey_${KEY_ID}.p8
-          
-          echo "Validating App with Apple..."
-          xcrun altool --validate-app \
-            -f build/SmartStock.ipa \
-            -t ios \
-            --apiKey "$KEY_ID" \
-            --apiIssuer "$ISSUER_ID"
-            
-          echo "Uploading App to TestFlight..."
+
+          echo "Uploading App to TestFlight via xcrun altool..."
           xcrun altool --upload-app \
             -f build/SmartStock.ipa \
             -t ios \
             --apiKey "$KEY_ID" \
-            --apiIssuer "$ISSUER_ID"
+            --apiIssuer "$ISSUER_ID" \
+            --verbose
