@@ -387,7 +387,7 @@ struct SystemSettingsView: View {
             Menu {
                 ForEach(options, id: \.self) { option in
                     Button(action: {
-                        HapticHelper.trigger(.selection)
+                        HapticHelper.selection()
                         selection.wrappedValue = option
                     }) {
                         HStack {
@@ -440,7 +440,7 @@ struct SystemSettingsView: View {
             Menu {
                 ForEach(options, id: \.self) { option in
                     Button(action: {
-                        HapticHelper.trigger(.selection)
+                        HapticHelper.selection()
                         selection.wrappedValue = option
                     }) {
                         HStack {
