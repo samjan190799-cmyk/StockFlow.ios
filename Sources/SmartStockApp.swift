@@ -76,12 +76,11 @@ struct SmartStockApp: App {
                             Label(Localizer.translate("Агентства", to: sysLanguage), systemImage: "arrow.left.and.right")
                         }
                     
-                    SystemSettingsView()
-                        .tabItem {
-                            Label(Localizer.translate("Настройки", to: sysLanguage), systemImage: "gearshape")
-                        }
+                        SystemSettingsView()
+                            .tabItem {
+                                Label(Localizer.translate("Настройки", to: sysLanguage), systemImage: "gearshape")
+                            }
                 }
-                .id(sysLanguage) // Гарантирует полное уничтожение и пересоздание TabView при смене языка
             }
             .preferredColorScheme(colorScheme)
             .tint(Color(hex: "007AFF"))

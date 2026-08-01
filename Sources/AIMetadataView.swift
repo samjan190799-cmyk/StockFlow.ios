@@ -63,7 +63,7 @@ struct AIMetadataView: View {
                 .padding()
             }
         }
-        .navigationTitle("Метаданные")
+        .navigationTitle("Метаданные".localized)
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -114,7 +114,7 @@ struct AIMetadataView: View {
             Spacer()
 
             VStack(spacing: 2) {
-                Text("Фото \(currentIndex + 1) из \(photos.count)")
+                Text("Файл".localized + " \(currentIndex + 1) " + "из".localized + " \(photos.count)")
                     .font(.system(size: 13, weight: .black))
                 Text(photos[currentIndex].filename)
                     .font(.system(size: 11))
@@ -147,7 +147,7 @@ struct AIMetadataView: View {
     private var titleField: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Заголовок")
+                Text("Заголовок".localized)
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
@@ -165,7 +165,7 @@ struct AIMetadataView: View {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 11))
                         }
-                        Text("Заново").font(.system(size: 12, weight: .bold))
+                        Text("Заново".localized).font(.system(size: 12, weight: .bold))
                     }
                     .foregroundStyle(Color(hex: "007AFF"))
                 }
@@ -173,7 +173,7 @@ struct AIMetadataView: View {
                 .disabled(isRegenerating)
             }
             
-            TextField("Заголовок фото", text: binding(\.title))
+            TextField("Заголовок фото".localized, text: binding(\.title))
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .padding(12)
@@ -188,7 +188,7 @@ struct AIMetadataView: View {
 
     private var keywordsField: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Ключевые слова")
+            Text("Ключевые слова".localized)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
@@ -200,7 +200,7 @@ struct AIMetadataView: View {
             }
 
             HStack(spacing: 8) {
-                TextField("Добавить слово", text: $newKeyword)
+                TextField("Добавить слово".localized, text: $newKeyword)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
                     .padding(10)
@@ -212,7 +212,7 @@ struct AIMetadataView: View {
                     )
                     .onSubmit(addKeyword)
                 
-                Button("Добавить", action: {
+                Button("Добавить".localized, action: {
                     HapticHelper.trigger(.light)
                     addKeyword()
                 })
@@ -231,7 +231,7 @@ struct AIMetadataView: View {
 
     private var descriptionField: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Описание")
+            Text("Описание".localized)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
@@ -254,7 +254,7 @@ struct AIMetadataView: View {
     private var categoriesField: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Категории (Макс. 2)")
+                Text("Категории (Макс. 2)".localized)
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
@@ -273,20 +273,20 @@ struct AIMetadataView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
                                 .font(.system(size: 11, weight: .bold))
-                            Text("Добавить")
+                            Text("Добавить".localized)
                                 .font(.system(size: 12, weight: .bold))
                         }
                         .foregroundStyle(Color(hex: "7C3AED"))
                     }
                 } else {
-                    Text("Лимит достигнут")
+                    Text("Лимит достигнут".localized)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
             }
 
             if photos[currentIndex].categories.isEmpty {
-                Text("Категории не выбраны. Выберите до 2 категорий.")
+                Text("Категории не выбраны. Выберите до 2 категорий.".localized)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
@@ -305,7 +305,7 @@ struct AIMetadataView: View {
             HapticHelper.trigger(.medium)
             onContinue?(photos)
         }) {
-            Text("Сохранить изменения")
+            Text("Сохранить изменения".localized)
                 .font(.system(size: 14, weight: .black))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)

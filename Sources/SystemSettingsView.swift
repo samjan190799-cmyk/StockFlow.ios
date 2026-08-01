@@ -74,6 +74,18 @@ struct SystemSettingsView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+            .onChange(of: sysLanguage) { newLang in
+                HapticHelper.trigger(.light)
+                let toastMsg: String
+                if newLang == "English" {
+                    toastMsg = "Language changed to English"
+                } else if newLang == "Հայերեն" {
+                    toastMsg = "Լեզուն փոխվեց Հայերենի"
+                } else {
+                    toastMsg = "Язык изменён на Русский"
+                }
+                showToast(toastMsg)
+            }
             .onChange(of: bgScheduler) { newVal in
                 HapticHelper.trigger(.light)
                 SchedulerManager.shared.setSchedulerEnabled(newVal)

@@ -33,7 +33,7 @@ struct StockSignInHelperView: View {
                     .foregroundStyle(Color(hex: "007AFF"))
                     .font(.system(size: 14))
                 
-                Text("Инструкция по настройке FTP для \(config.name):")
+                Text("Инструкция по настройке FTP для ".localized + "\(config.name):")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.primary)
                 
@@ -162,26 +162,26 @@ struct StockSignInHelperView: View {
                     controlBar
                 }
             }
-            .navigationTitle("Вход: \(config.name)")
+            .navigationTitle("Вход через ".localized + "\(config.name)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") {
+                    Button("Отмена".localized) {
                         HapticHelper.trigger(.light)
                         dismiss()
                     }
                 }
             }
-            .alert("Учетные данные обнаружены", isPresented: $showingImportAlert) {
-                Button("Импортировать") {
+            .alert("Учетные данные обнаружены".localized, isPresented: $showingImportAlert) {
+                Button("Импортировать".localized) {
                     if let username = detectedUsername, let password = detectedPassword {
                         onCredentialsFound(username, password)
                         dismiss()
                     }
                 }
-                Button("Отмена", role: .cancel) {}
+                Button("Отмена".localized, role: .cancel) {}
             } message: {
-                Text("Обнаружены данные для настройки \(config.name):\n\nЛогин: \(detectedUsername ?? "")\nПароль: ••••••••\n\nИмпортировать в настройки приложения?")
+                Text("Обнаружены данные для настройки ".localized + "\(config.name):\n\nЛогин: \(detectedUsername ?? "")\nПароль: ••••••••\n\nИмпортировать в настройки приложения?")
             }
         }
     }

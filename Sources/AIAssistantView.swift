@@ -100,9 +100,9 @@ struct AIAssistantView: View {
                     .padding()
                 }
             }
-            .navigationTitle("ИИ-Ассистент")
+            .navigationTitle("ИИ-Ассистент".localized)
             .navigationBarTitleDisplayMode(.inline)
-            .alert("Проверка ключа", isPresented: $showingKeyVerificationAlert) {
+            .alert("Проверка ключа".localized, isPresented: $showingKeyVerificationAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(verificationMessage)
@@ -115,7 +115,7 @@ struct AIAssistantView: View {
                             VStack(spacing: 12) {
                                 ProgressView()
                                     .tint(.primary)
-                                Text("Проверка подключения к \(activeProviderName)...")
+                                Text("Проверка подключения к ".localized + "\(activeProviderName)...")
                                     .font(.system(size: 14, weight: .medium))
                             }
                             .glassCard(cornerRadius: 16, padding: 24)
@@ -132,10 +132,10 @@ struct AIAssistantView: View {
             SmartStockLogoView(size: 60)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("Интеллектуальный Помощник")
+                Text("Интеллектуальный Помощник".localized)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.primary)
-                Text("Настройте ИИ для мгновенной индексации ваших кадров. Генерация коммерческих названий и SEO-тегов.")
+                Text("Настройте ИИ для мгновенной индексации ваших кадров. Генерация коммерческих названий и SEO-тегов.".localized)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
@@ -147,7 +147,7 @@ struct AIAssistantView: View {
     
     private var providerCards: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("ИИ провайдеры")
+            Text("ИИ провайдеры".localized)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
@@ -236,7 +236,7 @@ struct AIAssistantView: View {
     
     private var apiKeyConfigSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Параметры подключения")
+            Text("Параметры подключения".localized)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
@@ -249,7 +249,7 @@ struct AIAssistantView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(activeProviderName)
                             .font(.system(size: 15, weight: .bold))
-                        Text("Введите личный токен аутентификации API")
+                        Text("Введите личный токен аутентификации API".localized)
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
@@ -261,7 +261,7 @@ struct AIAssistantView: View {
                             .fill(hasKey ? Color.green : Color.red)
                             .frame(width: 5, height: 5)
                         
-                        Text(hasKey ? "Настроен" : "Не настроен")
+                        Text((hasKey ? "Настроен" : "Не настроен").localized)
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(hasKey ? Color.green : Color.red)
                     }
@@ -283,7 +283,7 @@ struct AIAssistantView: View {
                             .foregroundStyle(hasKey ? .green : .red)
                             .animation(.default, value: hasKey)
                         
-                        SecureField("Вставьте ключ API...", text: activeKey)
+                        SecureField("Вставьте ключ API...".localized, text: activeKey)
                             .textFieldStyle(.plain)
                             .font(.system(size: 13, design: .monospaced))
                     }
@@ -317,7 +317,7 @@ struct AIAssistantView: View {
     
     private var promptSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Промпт для ИИ-анализа")
+            Text("Промпт для ИИ-анализа".localized)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
@@ -337,7 +337,7 @@ struct AIAssistantView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: template.icon)
                                     .font(.system(size: 11))
-                                Text(template.name)
+                                Text(template.name.localized)
                                     .font(.system(size: 11, weight: .black))
                             }
                             .padding(.horizontal, 14)
@@ -370,7 +370,7 @@ struct AIAssistantView: View {
                             .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
                     )
                 
-                Text("Промпт определяет формат возвращаемого JSON-файла с заголовком и ключевыми словами.")
+                Text("Промпт определяет формат возвращаемого JSON-файла с заголовком и ключевыми словами.".localized)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 2)

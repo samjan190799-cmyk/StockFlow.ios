@@ -1336,10 +1336,10 @@ struct UploadQueueView: View {
                     VStack(spacing: 12) {
                         SmartStockLogoView(size: 64)
                             .padding(.bottom, 6)
-                        Text("Очередь пуста")
+                        Text("Очередь пуста".localized)
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.primary)
-                        Text("Выберите снимки, чтобы запустить ИИ-подбор метаданных и отправить их на микростоки.")
+                        Text("Выберите снимки, чтобы запустить ИИ-подбор метаданных и отправить их на микростоки.".localized)
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -1469,7 +1469,7 @@ struct UploadQueueView: View {
                         }) {
                             HStack(spacing: 6) {
                                 Image(systemName: "sparkles")
-                                Text("ИИ для выбранных")
+                                Text("ИИ для выбранных".localized)
                             }
                             .font(.system(size: 11, weight: .black))
                             .frame(maxWidth: .infinity)
@@ -1495,7 +1495,7 @@ struct UploadQueueView: View {
                         }) {
                             HStack(spacing: 6) {
                                 Image(systemName: "paperplane.fill")
-                                Text("Отправить выбр.")
+                                Text("Отправить выбр.".localized)
                             }
                             .font(.system(size: 11, weight: .black))
                             .frame(maxWidth: .infinity)
@@ -1522,7 +1522,7 @@ struct UploadQueueView: View {
                                 } else {
                                     Image(systemName: "sparkles")
                                 }
-                                Text("Заполнить все ИИ")
+                                Text("Заполнить все ИИ".localized)
                             }
                             .font(.system(size: 11, weight: .black))
                             .frame(maxWidth: .infinity)
@@ -1541,7 +1541,7 @@ struct UploadQueueView: View {
                         }) {
                             HStack(spacing: 6) {
                                 Image(systemName: "paperplane.fill")
-                                Text("Отправить")
+                                Text("Отправить".localized)
                             }
                             .font(.system(size: 11, weight: .black))
                             .frame(maxWidth: .infinity)
@@ -2271,7 +2271,7 @@ struct DetailCardView: View {
                         .foregroundStyle(.secondary)
                     
                     if photo.keywords.isEmpty {
-                        Text("Ключевые слова отсутствуют. Запустите ИИ-анализ.")
+                        Text("Ключевые слова отсутствуют. Запустите ИИ-анализ.".localized)
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .italic()

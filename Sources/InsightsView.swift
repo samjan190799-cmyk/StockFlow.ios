@@ -301,11 +301,11 @@ struct InsightsView: View {
                     // Счётчик файлов
                     if selectedStock != "Все стоки" {
                         let count = stats.successUploads(for: selectedStock)
-                        Text("\(count) загрузок")
+                        Text("\(count) " + "загрузок".localized)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("\(stats.totalSuccessUploads) всего")
+                        Text("\(stats.totalSuccessUploads) " + "всего".localized)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
@@ -767,14 +767,14 @@ struct InsightsView: View {
         return VStack(alignment: .leading, spacing: 10) {
             // Заголовок + кнопка развернуть/свернуть
             HStack {
-                Text("История загрузок")
+                Text("История загрузок".localized)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.primary)
                 
                 Spacer()
                 
                 if !records.isEmpty {
-                    Text("\(records.count) записей")
+                    Text("\(records.count) " + "записей".localized)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
@@ -798,7 +798,7 @@ struct InsightsView: View {
                             Image(systemName: "clock.arrow.circlepath")
                                 .font(.system(size: 28))
                                 .foregroundStyle(.secondary)
-                            Text("История пуста")
+                            Text("История пуста".localized)
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(.secondary)
                         }
@@ -882,7 +882,7 @@ struct InsightsView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "trash")
                                 .font(.system(size: 11))
-                            Text("Очистить историю")
+                            Text("Очистить историю".localized)
                                 .font(.system(size: 11, weight: .semibold))
                         }
                         .foregroundStyle(Color.red.opacity(0.7))
@@ -895,14 +895,14 @@ struct InsightsView: View {
                 }
             }
         }
-        .confirmationDialog("Очистить историю?", isPresented: $showClearConfirm, titleVisibility: .visible) {
-            Button("Очистить", role: .destructive) {
+        .confirmationDialog("Очистить историю?".localized, isPresented: $showClearConfirm, titleVisibility: .visible) {
+            Button("Очистить".localized, role: .destructive) {
                 stats.clearHistory()
                 stats.refresh()
             }
-            Button("Отмена", role: .cancel) {}
+            Button("Отмена".localized, role: .cancel) {}
         } message: {
-            Text("Вся история загрузок будет удалена. Это действие нельзя отменить.")
+            Text("Вся история загрузок будет удалена. Это действие нельзя отменить.".localized)
         }
     }
     
@@ -916,7 +916,7 @@ struct InsightsView: View {
 
                 Spacer()
 
-                Text("\(connectedPlatforms.count) подключено")
+                Text("\(connectedPlatforms.count) " + "подключено".localized)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
             }
@@ -1038,18 +1038,18 @@ struct InsightsView: View {
             .neonShadow(color: Color(hex: "7C3AED"), radius: 10)
 
             VStack(spacing: 6) {
-                Text("Нет подключённых стоков")
+                Text("Нет подключённых стоков".localized)
                     .font(.system(size: 18, weight: .black))
                     .foregroundStyle(.primary)  // Адаптивный
 
-                Text("Перейдите в раздел «Агентства» и настройте учётные данные для Shutterstock, Adobe Stock или других стоков — статистика загрузок появится здесь автоматически.")
+                Text("Перейдите в раздел «Агентства» и настройте учётные данные для Shutterstock, Adobe Stock или других стоков — статистика загрузок появится здесь автоматически.".localized)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
             }
 
-            Text("Перейти в настройки агентств →")
+            Text("Перейти в настройки агентств →".localized)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(Color(hex: "7C3AED"))
                 .padding(.top, 4)

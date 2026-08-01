@@ -38,11 +38,11 @@ struct SimulatedSignInView: View {
                         .shadow(color: (provider == "Apple" ? Color.black : Color.orange).opacity(0.2), radius: 10)
                     
                     VStack(spacing: 6) {
-                        Text("Вход через \(provider)")
+                        Text("Вход через ".localized + "\(provider)")
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(.primary)
                         
-                        Text("Введите вашу электронную почту для синхронизации аккаунта.")
+                        Text("Введите вашу электронную почту для синхронизации аккаунта.".localized)
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -63,7 +63,7 @@ struct SimulatedSignInView: View {
                         .glassCard(cornerRadius: 16)
                     } else {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text("Адрес электронной почты")
+                            Text("Адрес электронной почты".localized)
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(.secondary)
                                 .textCase(.uppercase)
@@ -87,7 +87,7 @@ struct SimulatedSignInView: View {
                         
                         Button(action: handleSignIn) {
                             HStack {
-                                Text("Продолжить")
+                                Text("Продолжить".localized)
                                     .font(.system(size: 15, weight: .bold))
                             }
                             .frame(maxWidth: .infinity)
@@ -107,7 +107,7 @@ struct SimulatedSignInView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 11))
-                        Text("Безопасное соединение по стандарту OAuth 2.0")
+                        Text("Безопасное соединение по стандарту OAuth 2.0".localized)
                             .font(.system(size: 11))
                     }
                     .foregroundStyle(.secondary)
@@ -115,11 +115,11 @@ struct SimulatedSignInView: View {
                 }
                 .padding(.horizontal, 20)
             }
-            .navigationTitle("Вход в аккаунт")
+            .navigationTitle("Мой аккаунт".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") {
+                    Button("Отмена".localized) {
                         isPresented = false
                     }
                 }
