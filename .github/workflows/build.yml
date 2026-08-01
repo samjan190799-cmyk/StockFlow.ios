@@ -87,6 +87,11 @@ jobs:
           APP_PATH=$(find build/Build/Products/Release-iphoneos -name "*.app" | head -1)
           echo "App path: $APP_PATH"
           cp -r "$APP_PATH" build/Payload/SmartStock.app
+          if [ -f "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" ]; then
+            echo "Embedding appstore.mobileprovision into SmartStock.app..."
+            cp "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" build/Payload/SmartStock.app/embedded.mobileprovision
+          fi
+          ls -la build/Payload/SmartStock.app/embedded.mobileprovision
           cd build
           zip -r SmartStock.ipa Payload/
           echo "IPA size: $(du -h SmartStock.ipa | cut -f1)"
