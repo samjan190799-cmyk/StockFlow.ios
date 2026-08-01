@@ -61,6 +61,7 @@ jobs:
           b64 = ''.join(c for c in raw_b64 if ord(c) < 128).strip()
           if not b64:
               raise ValueError('BUILD_PROVISION_PROFILE_BASE64 is empty!')
+          b64 += '=' * ((4 - len(b64) % 4) % 4)
           data = base64.b64decode(b64)
           dest = os.path.expanduser('~/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision')
           os.makedirs(os.path.dirname(dest), exist_ok=True)
