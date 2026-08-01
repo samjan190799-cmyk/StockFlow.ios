@@ -88,7 +88,7 @@ jobs:
 
       - name: Archive App
         run: |
-          set -o pipefail
+          echo "=== Starting xcodebuild archive ==="
           xcodebuild archive \
             -project SmartStock.xcodeproj \
             -scheme SmartStock \
@@ -100,14 +100,18 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="SmartStock AppStore" \
             DEVELOPMENT_TEAM="V7J345DY58" \
             SWIFT_OPTIMIZATION_LEVEL="-O" \
-            2>&1
+            2>&1 || ARCHIVE_EXIT=$?
 
-          echo "=== Archive status: $? ==="
+          echo "=== Archive exit code: ${ARCHIVE_EXIT:-0} ==="
           echo "=== Archive contents ==="
           ls -la build/SmartStock.xcarchive/Products/Applications/ 2>/dev/null || \
-            find build/SmartStock.xcarchive -name "*.app" -maxdepth 4 2>/dev/null || \
+            find build/SmartStock.xcarchive -name "*.app" -maxdepth 5 2>/dev/null || \
             echo "Archive directory not found"
 
+          if [ -n "$ARCHIVE_EXIT" ]; then
+            echo "=== ARCHIVE FAILED with exit code $ARCHIVE_EXIT ==="
+            exit $ARCHIVE_EXIT
+          fi
 
       - name: Export IPA
         run: |
