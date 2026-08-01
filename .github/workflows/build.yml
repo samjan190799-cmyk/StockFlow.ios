@@ -91,8 +91,17 @@ jobs:
           # 1. Embed Provisioning Profile
           cp "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" build/Payload/SmartStock.app/embedded.mobileprovision
           
-          # 2. Extract Entitlements from Provisioning Profile
-          security cms -D -i build/Payload/SmartStock.app/embedded.mobileprovision > build/profile.plist
+          # 2. Extract Entitlements using Python XML parser
+          python3 -c "
+import re
+with open('build/Payload/SmartStock.app/embedded.mobileprovision', 'rb') as f:
+    content = f.read()
+match = re.search(rb'(<plist[\s\S]*?</plist>)', content)
+if match:
+    with open('build/profile.plist', 'wb') as out:
+        out.write(match.group(1))
+    print('Extracted plist successfully')
+"
           plutil -extract Entitlements xml1 -o build/entitlements.plist build/profile.plist
           
           # 3. Re-sign app bundle with Apple Distribution certificate
