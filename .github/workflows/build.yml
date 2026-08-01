@@ -96,10 +96,9 @@ jobs:
           plutil -extract Entitlements xml1 -o build/entitlements.plist build/profile.plist
           
           # 3. Re-sign app bundle with Apple Distribution certificate
-          codesign --force --sign "Apple Distribution: Samvel Hayrapetyan" \
+          codesign --force --deep --sign "Apple Distribution" \
             --entitlements build/entitlements.plist \
             --timestamp \
-            --generate-entitlement-der \
             build/Payload/SmartStock.app
           
           cd build
