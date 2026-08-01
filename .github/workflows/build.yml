@@ -103,13 +103,9 @@ jobs:
         if: ${{ github.ref == 'refs/heads/main' && env.APPSTORE_KEY_ID != '' }}
         env:
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
-          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
-          APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/.private_keys
-          echo "$APPSTORE_PRIVATE_KEY" > ~/.private_keys/AuthKey_${APPSTORE_KEY_ID}.p8
-          xcrun altool --upload-app \
-            -f build/SmartStock.ipa \
-            -t ios \
-            --apiKey "$APPSTORE_KEY_ID" \
-            --apiIssuer "$APPSTORE_ISSUER_ID"
+        uses: apple-actions/upload-testflight-build@v1
+        with:
+          app-path: 'build/SmartStock.ipa'
+          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPSTORE_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_PRIVATE_KEY }}
