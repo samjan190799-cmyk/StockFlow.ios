@@ -92,21 +92,18 @@ jobs:
           security find-identity -v 2>/dev/null | grep -E "(Apple|iPhone|iOS|Distribution)" | head -10 || echo "None"
 
       - name: Archive App
+        shell: bash
         run: |
+          set +e  # отключаем exit-on-error чтобы диагностика выводилась всегда
           echo "=== Starting xcodebuild archive ==="
 
-          # Get actual certificate name from keychain
+          # Точное имя сертификата из keychain
           CERT_NAME=$(security find-identity -v -p codesigning 2>/dev/null \
             | grep -E "(Apple Distribution|iPhone Distribution)" \
-            | head -1 \
-            | sed 's/.*"\(.*\)".*/\1/')
-
-          if [ -z "$CERT_NAME" ]; then
-            CERT_NAME="Apple Distribution"
-          fi
+            | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          [ -z "$CERT_NAME" ] && CERT_NAME="Apple Distribution"
           echo "Using certificate: $CERT_NAME"
 
-          # Запускаем xcodebuild и захватываем выход + лог
           xcodebuild archive \
             -project SmartStock.xcodeproj \
             -scheme SmartStock \
@@ -121,21 +118,15 @@ jobs:
             CODE_SIGNING_ALLOWED="YES" \
             SWIFT_OPTIMIZATION_LEVEL="-O" \
             SKIP_INSTALL="NO" \
-            INSTALL_PATH="/Applications" \
-            2>&1 | tee /tmp/xcodebuild_archive.log; ARCHIVE_EXIT="${PIPESTATUS[0]}"
+            INSTALL_PATH="/Applications"
+          ARCHIVE_EXIT=$?
 
           echo "=== Archive exit code: $ARCHIVE_EXIT ==="
-          echo "=== Last 200 lines of xcodebuild log ==="
-          tail -200 /tmp/xcodebuild_archive.log
-
-          echo "=== Build directory contents ==="
+          echo "=== Build dir ==="
           ls -la build/ 2>/dev/null || echo "No build dir"
-          ls -la build/SmartStock.xcarchive/ 2>/dev/null || echo "No xcarchive found"
+          ls -la build/SmartStock.xcarchive/Products/Applications/ 2>/dev/null || echo "No xcarchive"
 
-          if [ "$ARCHIVE_EXIT" != "0" ]; then
-            echo "=== ARCHIVE FAILED — exit $ARCHIVE_EXIT ==="
-            exit "$ARCHIVE_EXIT"
-          fi
+          exit $ARCHIVE_EXIT
 
       - name: Export IPA
         run: |
