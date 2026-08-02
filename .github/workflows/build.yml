@@ -117,6 +117,8 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="SmartStock AppStore" \
             DEVELOPMENT_TEAM="V7J345DY58" \
             SWIFT_OPTIMIZATION_LEVEL="-O" \
+            SKIP_INSTALL="NO" \
+            INSTALL_PATH="/Applications" \
             2>&1 || ARCHIVE_EXIT=$?
 
           echo "=== Archive exit code: ${ARCHIVE_EXIT:-0} ==="
@@ -137,7 +139,7 @@ jobs:
             -archivePath build/SmartStock.xcarchive \
             -exportPath build/export \
             -exportOptionsPlist ExportOptions.plist \
-            2>&1 | xcpretty
+            2>&1 || { echo "Export failed!"; exit 1; }
 
           echo "Export directory:"
           ls -la build/export/

@@ -44,3 +44,5 @@ targets:
         PROVISIONING_PROFILE_SPECIFIER: "SmartStock AppStore"
         GENERATE_INFOPLIST_FILE: "NO"
         CODE_SIGN_ENTITLEMENTS: Sources/SmartStock.entitlements
+        SKIP_INSTALL: "NO"
+        INSTALL_PATH: "/Applications"
