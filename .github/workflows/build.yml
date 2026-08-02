@@ -106,6 +106,7 @@ jobs:
           fi
           echo "Using certificate: $CERT_NAME"
 
+          # Запускаем xcodebuild и захватываем выход + лог
           xcodebuild archive \
             -project SmartStock.xcodeproj \
             -scheme SmartStock \
@@ -121,19 +122,19 @@ jobs:
             SWIFT_OPTIMIZATION_LEVEL="-O" \
             SKIP_INSTALL="NO" \
             INSTALL_PATH="/Applications" \
-            2>&1 | tee /tmp/xcodebuild_archive.log || ARCHIVE_EXIT=${PIPESTATUS[0]}
+            2>&1 | tee /tmp/xcodebuild_archive.log; ARCHIVE_EXIT="${PIPESTATUS[0]}"
 
-          echo "=== Archive exit code: ${ARCHIVE_EXIT:-0} ==="
-          echo "=== Last 150 lines of build log ==="
-          tail -150 /tmp/xcodebuild_archive.log
-          echo "=== Archive contents ==="
-          ls -la build/SmartStock.xcarchive/Products/Applications/ 2>/dev/null || \
-            find build/SmartStock.xcarchive -name "*.app" -maxdepth 5 2>/dev/null || \
-            echo "Archive directory not found"
+          echo "=== Archive exit code: $ARCHIVE_EXIT ==="
+          echo "=== Last 200 lines of xcodebuild log ==="
+          tail -200 /tmp/xcodebuild_archive.log
 
-          if [ -n "$ARCHIVE_EXIT" ]; then
-            echo "=== ARCHIVE FAILED with exit code $ARCHIVE_EXIT ==="
-            exit $ARCHIVE_EXIT
+          echo "=== Build directory contents ==="
+          ls -la build/ 2>/dev/null || echo "No build dir"
+          ls -la build/SmartStock.xcarchive/ 2>/dev/null || echo "No xcarchive found"
+
+          if [ "$ARCHIVE_EXIT" != "0" ]; then
+            echo "=== ARCHIVE FAILED — exit $ARCHIVE_EXIT ==="
+            exit "$ARCHIVE_EXIT"
           fi
 
       - name: Export IPA
