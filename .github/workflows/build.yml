@@ -116,12 +116,16 @@ jobs:
             CODE_SIGN_IDENTITY="$CERT_NAME" \
             PROVISIONING_PROFILE_SPECIFIER="SmartStock AppStore" \
             DEVELOPMENT_TEAM="V7J345DY58" \
+            CODE_SIGNING_REQUIRED="YES" \
+            CODE_SIGNING_ALLOWED="YES" \
             SWIFT_OPTIMIZATION_LEVEL="-O" \
             SKIP_INSTALL="NO" \
             INSTALL_PATH="/Applications" \
-            2>&1 || ARCHIVE_EXIT=$?
+            2>&1 | tee /tmp/xcodebuild_archive.log || ARCHIVE_EXIT=${PIPESTATUS[0]}
 
           echo "=== Archive exit code: ${ARCHIVE_EXIT:-0} ==="
+          echo "=== Last 150 lines of build log ==="
+          tail -150 /tmp/xcodebuild_archive.log
           echo "=== Archive contents ==="
           ls -la build/SmartStock.xcarchive/Products/Applications/ 2>/dev/null || \
             find build/SmartStock.xcarchive -name "*.app" -maxdepth 5 2>/dev/null || \
