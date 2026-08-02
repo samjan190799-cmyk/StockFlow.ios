@@ -78,17 +78,34 @@ jobs:
       - name: Diagnose Signing Environment
         run: |
           echo "=== Installed Profiles ==="
-          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/" 2>/dev/null || echo "No profiles directory"
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/" 2>/dev/null || echo "No profiles"
 
-          echo "=== Profile Name ==="
-          security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" 2>/dev/null | grep -A1 "Name" | head -5 || echo "Could not read profile"
+          echo "=== Profile UUID and Name ==="
+          security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" 2>/dev/null \
+            | grep -E "(UUID|Name|TeamIdentifier|ExpirationDate|application-identifier)" \
+            | head -20 || echo "Could not read profile"
 
-          echo "=== Certificates in Keychain ==="
-          security find-identity -v -p codesigning 2>/dev/null | head -20 || echo "No certificates"
+          echo "=== All code signing identities ==="
+          security find-identity -v -p codesigning 2>/dev/null || echo "No certificates found"
+
+          echo "=== Raw certificate names ==="
+          security find-identity -v 2>/dev/null | grep -E "(Apple|iPhone|iOS|Distribution)" | head -10 || echo "None"
 
       - name: Archive App
         run: |
           echo "=== Starting xcodebuild archive ==="
+
+          # Get actual certificate name from keychain
+          CERT_NAME=$(security find-identity -v -p codesigning 2>/dev/null \
+            | grep -E "(Apple Distribution|iPhone Distribution)" \
+            | head -1 \
+            | sed 's/.*"\(.*\)".*/\1/')
+
+          if [ -z "$CERT_NAME" ]; then
+            CERT_NAME="Apple Distribution"
+          fi
+          echo "Using certificate: $CERT_NAME"
+
           xcodebuild archive \
             -project SmartStock.xcodeproj \
             -scheme SmartStock \
@@ -96,7 +113,7 @@ jobs:
             -configuration Release \
             -archivePath build/SmartStock.xcarchive \
             CODE_SIGN_STYLE="Manual" \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
+            CODE_SIGN_IDENTITY="$CERT_NAME" \
             PROVISIONING_PROFILE_SPECIFIER="SmartStock AppStore" \
             DEVELOPMENT_TEAM="V7J345DY58" \
             SWIFT_OPTIMIZATION_LEVEL="-O" \
