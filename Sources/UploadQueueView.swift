@@ -107,6 +107,38 @@ class QueueViewModel: ObservableObject {
         }
     }
     
+    func addGoogleMediaItems(_ items: [GoogleMediaItem]) {
+        Task {
+            for item in items {
+                do {
+                    let data = try await GooglePhotosManager.shared.downloadItemData(item)
+                    let ext = item.isVideo ? "mp4" : "jpg"
+                    let newId = UUID()
+                    let fileURL = self.photosDirectoryURL.appendingPathComponent("\(newId.uuidString).\(ext)")
+                    try data.write(to: fileURL, options: .atomic)
+                    
+                    let sizeStr = String(format: "%.1f MB", Double(data.count) / (1024.0 * 1024.0))
+                    let newPhoto = PhotoMetadata(
+                        id: newId,
+                        filename: item.filename,
+                        fileSize: sizeStr,
+                        title: "",
+                        keywords: [],
+                        description: "",
+                        status: .new,
+                        selectedStocks: Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]),
+                        imageData: data,
+                        isVideo: item.isVideo
+                    )
+                    self.photos.append(newPhoto)
+                    self.triggerToast("Добавлен файл из Google Фото: \(item.filename)".localized)
+                } catch {
+                    self.triggerToast("Ошибка импорта \(item.filename): \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     func loadPhotosFromDisk() {
         do {
             let metaURL = self.metadataURL
@@ -1046,6 +1078,7 @@ struct UploadQueueView: View {
     @State private var selectedPhotoIds = Set<UUID>()
     @State private var showCSVMenu = false
     @State private var isReorderMode = false
+    @State private var showGooglePhotosPicker = false
     /// 0 = Фото, 1 = Видео
     @State private var mediaTab: Int = 0
     
@@ -1419,12 +1452,23 @@ struct UploadQueueView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    PhotosPicker(
-                        selection: $selectedItems,
-                        maxSelectionCount: 50,
-                        matching: mediaTab == 0 ? .images : .videos,
-                        photoLibrary: .shared()
-                    ) {
+                    Menu {
+                        PhotosPicker(
+                            selection: $selectedItems,
+                            maxSelectionCount: 50,
+                            matching: mediaTab == 0 ? .images : .videos,
+                            photoLibrary: .shared()
+                        ) {
+                            Label("Галерея iOS".localized, systemImage: "photo.on.rectangle")
+                        }
+                        
+                        Button(action: {
+                            HapticHelper.trigger(.medium)
+                            showGooglePhotosPicker = true
+                        }) {
+                            Label("Google Фото".localized, systemImage: "photo.stack.fill")
+                        }
+                    } label: {
                         ZStack {
                             Circle()
                                 .fill(LinearGradient(colors: [Color(hex: "7C3AED"), Color(hex: "A855F7")], startPoint: .topLeading, endPoint: .bottomTrailing))
@@ -1444,6 +1488,11 @@ struct UploadQueueView: View {
                     }
                     .padding(.trailing, 20)
                     .padding(.bottom, viewModel.photos.isEmpty ? 20 : 94) // Сдвигаем вверх, если виден Floating Action Bar
+                }
+            }
+            .sheet(isPresented: $showGooglePhotosPicker) {
+                GooglePhotosPickerView { items in
+                    viewModel.addGoogleMediaItems(items)
                 }
             }
         }
