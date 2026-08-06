@@ -47,6 +47,7 @@ struct SystemSettingsView: View {
                         upscaleSection
                         uploadSection
                         pcServerSection
+                        cacheSection
                         saveButtonSection
                     }
                     .padding()
@@ -502,6 +503,80 @@ struct SystemSettingsView: View {
             isRunningScheduler = false
             showToast("Проверка папки завершена!")
         }
+    }
+    
+    @State private var cacheSizeMB: Double = 0.0
+    
+    private var cacheSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("ХРАНИЛИЩЕ И КЭШ".localized)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Spacer()
+                Image(systemName: "internaldrive.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+            
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Кэш скачанных файлов из облака".localized)
+                        .font(.system(size: 14, weight: .medium))
+                    Text("Размер кэша: ".localized + String(format: "%.1f MB", cacheSizeMB))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                
+                Button(action: clearCache) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trash")
+                        Text("Очистить кэш".localized)
+                    }
+                    .font(.system(size: 12, weight: .bold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.red.opacity(0.15))
+                    .foregroundStyle(.red)
+                    .clipShape(Capsule())
+                }
+            }
+        }
+        .glassCard(cornerRadius: 16, padding: 16)
+        .onAppear {
+            calculateCacheSize()
+        }
+    }
+    
+    private func calculateCacheSize() {
+        let photosDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Photos")
+        guard let files = try? FileManager.default.contentsOfDirectory(at: photosDir, includingPropertiesForKeys: [.fileSizeKey]) else { return }
+        
+        var totalBytes: Int64 = 0
+        for file in files {
+            if let res = try? file.resourceValues(forKeys: [.fileSizeKey]), let size = res.fileSize {
+                totalBytes += Int64(size)
+            }
+        }
+        
+        self.cacheSizeMB = Double(totalBytes) / (1024.0 * 1024.0)
+    }
+    
+    private func clearCache() {
+        HapticHelper.trigger(.medium)
+        ImageCacheHelper.shared.clearCache()
+        
+        let photosDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Photos")
+        if let files = try? FileManager.default.contentsOfDirectory(at: photosDir, includingPropertiesForKeys: nil) {
+            for file in files {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
+        
+        calculateCacheSize()
+        showToast("Кэш скачанных медиафайлов очищен!".localized)
     }
 }
 
