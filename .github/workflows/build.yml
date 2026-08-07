@@ -13,7 +13,7 @@ permissions:
 jobs:
   build:
     name: Build SmartStock iOS Application
-    runs-on: macos-14
+    runs-on: macos-15
 
     env:
       HAS_SIGNING: ${{ secrets.BUILD_CERTIFICATE_BASE64 != '' && secrets.BUILD_PROVISION_PROFILE_BASE64 != '' && 'true' || 'false' }}
