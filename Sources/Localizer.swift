@@ -210,7 +210,6 @@ struct Localizer {
         "Метрики": "Metrics",
         "Загрузки": "Uploads",
         "Успешно": "Success",
-        "Ошибки": "Errors",
         "Покупки": "Sales",
         "Ошибок": "Errors",
         "Синхронизация": "Sync",

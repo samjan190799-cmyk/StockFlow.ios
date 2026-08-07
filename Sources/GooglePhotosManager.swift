@@ -63,7 +63,7 @@ final class GooglePhotosManager: ObservableObject {
     // MARK: - Auth & Keychain
     
     private func checkExistingToken() {
-        if let token = KeychainHelper.standard.read(service: "com.stockflow.googlephotos", account: "accesstoken"),
+        if let token = KeychainHelper.shared.read(for: "com.stockflow.googlephotos"),
            !token.isEmpty {
             self.accessToken = token
             self.isAuthenticated = true
@@ -79,7 +79,7 @@ final class GooglePhotosManager: ObservableObject {
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         
         let demoToken = "google_photos_demo_token_\(UUID().uuidString)"
-        KeychainHelper.standard.save(demoToken, service: "com.stockflow.googlephotos", account: "accesstoken")
+        KeychainHelper.shared.save(password: demoToken, for: "com.stockflow.googlephotos")
         
         self.accessToken = demoToken
         self.isAuthenticated = true
@@ -91,7 +91,7 @@ final class GooglePhotosManager: ObservableObject {
     }
     
     func signOut() {
-        KeychainHelper.standard.delete(service: "com.stockflow.googlephotos", account: "accesstoken")
+        KeychainHelper.shared.delete(for: "com.stockflow.googlephotos")
         self.accessToken = nil
         self.isAuthenticated = false
         self.mediaItems = []
