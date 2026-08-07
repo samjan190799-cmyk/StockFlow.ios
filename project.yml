@@ -22,6 +22,7 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         NSPhotoLibraryUsageDescription: "Приложению нужен доступ к вашей галерее для выбора фотографий на отправку."
+        ITSAppUsesNonExemptEncryption: false
         CFBundleIconName: AppIcon
         CFBundleIcons:
           CFBundlePrimaryIcon:
