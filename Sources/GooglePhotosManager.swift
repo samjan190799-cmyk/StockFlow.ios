@@ -43,17 +43,16 @@ struct GoogleVideoMetadata: Codable, Sendable {
     let status: String?
 }
 
-/// Сервис управления авторизацией и загрузкой медиа из Google Photos (Swift 6 Strict Concurrency, @Observable)
-@Observable
+/// Сервис управления авторизацией и загрузкой медиа из Google Photos (Swift Concurrency, ObservableObject)
 @MainActor
-final class GooglePhotosManager {
+final class GooglePhotosManager: ObservableObject {
     static let shared = GooglePhotosManager()
     
-    var isAuthenticated = false
-    var isLoading = false
-    var mediaItems: [GoogleMediaItem] = []
-    var statusMessage: String = ""
-    var downloadProgress: [String: Double] = [:]
+    @Published var isAuthenticated = false
+    @Published var isLoading = false
+    @Published var mediaItems: [GoogleMediaItem] = []
+    @Published var statusMessage: String = ""
+    @Published var downloadProgress: [String: Double] = [:]
     
     private var accessToken: String?
     

@@ -3,7 +3,7 @@ import SwiftUI
 /// Полноэкранный/Sheet пикер файлов из облака Google Фото
 struct GooglePhotosPickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @Bindable private var manager = GooglePhotosManager.shared
+    @ObservedObject private var manager = GooglePhotosManager.shared
     
     var onSelectItems: ([GoogleMediaItem]) -> Void
     
@@ -43,14 +43,14 @@ struct GooglePhotosPickerView: View {
             .navigationTitle("Google Фото".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("Отмена".localized) {
                         dismiss()
                     }
                     .foregroundStyle(.secondary)
                 }
                 
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     if manager.isAuthenticated && !selectedItems.isEmpty {
                         Button(action: importSelectedItems) {
                             HStack(spacing: 6) {
@@ -157,7 +157,7 @@ struct GooglePhotosPickerView: View {
                 }
                 .toggleStyle(.button)
                 .tint(.purple)
-                .onChange(of: filterOnlyVideos) { _, newValue in
+                .onChange(of: filterOnlyVideos) { newValue in
                     triggerHaptic()
                     Task {
                         await manager.loadMediaItems(filterVideoOnly: newValue)
