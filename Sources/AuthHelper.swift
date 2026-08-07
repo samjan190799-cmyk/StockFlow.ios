@@ -118,7 +118,7 @@ struct SimulatedSignInView: View {
             .navigationTitle("Мой аккаунт".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("Отмена".localized) {
                         isPresented = false
                     }

@@ -165,7 +165,7 @@ struct StockSignInHelperView: View {
             .navigationTitle("Вход через ".localized + "\(config.name)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("Отмена".localized) {
                         HapticHelper.trigger(.light)
                         dismiss()

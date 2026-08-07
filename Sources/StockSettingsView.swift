@@ -480,7 +480,7 @@ struct PlatformDetailSheet: View {
             .navigationTitle(platform.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Готово".localized) {
                         HapticHelper.trigger(.light)
                         onSave()
@@ -628,7 +628,7 @@ struct OAuthHelpSheet: View {
             .navigationTitle("Вход через Google / Apple".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Готово".localized) {
                         dismiss()
                     }

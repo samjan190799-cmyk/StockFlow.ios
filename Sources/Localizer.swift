@@ -292,7 +292,6 @@ struct Localizer {
         "Вход в систему": "Sign In",
         "Регистрация": "Register",
         "Email": "Email",
-        "Пароль": "Password",
         "Зарегистрироваться": "Register",
         "Войти": "Sign In",
         "или": "or",

@@ -1204,7 +1204,7 @@ struct UploadQueueView: View {
                         editingPhoto = nil
                     }
                     .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
+                        ToolbarItem(placement: .navigationBarLeading) {
                             Button("Закрыть") {
                                 editingPhoto = nil
                             }
