@@ -71,6 +71,21 @@ jobs:
           "
           ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/"
 
+      - name: Update Build Number
+        run: |
+          BUILD_NUM="${{ github.run_number }}"
+          echo "Setting Build Number (CFBundleVersion) to $BUILD_NUM"
+          python3 -c "
+          import re
+          for filepath in ['Sources/Info.plist', 'project.yml']:
+              with open(filepath, 'r', encoding='utf-8') as f:
+                  content = f.read()
+              content = re.sub(r'(<key>CFBundleVersion</key>\s*<string>)[^<]+(</string>)', r'\g<1>' + '$BUILD_NUM' + r'\g<2>', content)
+              content = re.sub(r'(CFBundleVersion:\s*\")[^\"]+(\")', r'\g<1>' + '$BUILD_NUM' + r'\g<2>', content)
+              with open(filepath, 'w', encoding='utf-8') as f:
+                  f.write(content)
+          "
+
       - name: Generate Xcode Project
         run: |
           xcodegen generate
