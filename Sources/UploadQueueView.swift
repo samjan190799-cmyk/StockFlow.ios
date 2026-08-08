@@ -139,6 +139,44 @@ class QueueViewModel: ObservableObject {
         }
     }
 
+    func addLocalFiles(_ urls: [URL]) {
+        Task {
+            for url in urls {
+                guard url.startAccessingSecurityScopedResource() else { continue }
+                defer { url.stopAccessingSecurityScopedResource() }
+                
+                do {
+                    let data = try Data(contentsOf: url)
+                    let ext = url.pathExtension.lowercased()
+                    let isVideo = ["mp4", "mov", "m4v", "avi", "mkv"].contains(ext)
+                    let newId = UUID()
+                    let targetExt = isVideo ? (ext.isEmpty ? "mp4" : ext) : "jpg"
+                    let targetURL = self.photosDirectoryURL.appendingPathComponent("\(newId.uuidString).\(targetExt)")
+                    
+                    try data.write(to: targetURL, options: .atomic)
+                    
+                    let sizeStr = String(format: "%.1f MB", Double(data.count) / (1024.0 * 1024.0))
+                    let newPhoto = PhotoMetadata(
+                        id: newId,
+                        filename: url.lastPathComponent,
+                        fileSize: sizeStr,
+                        title: "",
+                        keywords: [],
+                        description: "",
+                        status: .new,
+                        selectedStocks: Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]),
+                        imageData: isVideo ? nil : data,
+                        isVideo: isVideo
+                    )
+                    self.photos.append(newPhoto)
+                    self.triggerToast("Добавлен файл: \(url.lastPathComponent)".localized)
+                } catch {
+                    self.triggerToast("Ошибка загрузки \(url.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     func loadPhotosFromDisk() {
         do {
             let metaURL = self.metadataURL
@@ -1079,6 +1117,8 @@ struct UploadQueueView: View {
     @State private var showCSVMenu = false
     @State private var isReorderMode = false
     @State private var showGooglePhotosPicker = false
+    @State private var showPhotosPicker = false
+    @State private var showFileImporter = false
     /// 0 = Фото, 1 = Видео
     @State private var mediaTab: Int = 0
     
@@ -1453,12 +1493,10 @@ struct UploadQueueView: View {
                 HStack {
                     Spacer()
                     Menu {
-                        PhotosPicker(
-                            selection: $selectedItems,
-                            maxSelectionCount: 50,
-                            matching: mediaTab == 0 ? .images : .videos,
-                            photoLibrary: .shared()
-                        ) {
+                        Button(action: {
+                            HapticHelper.trigger(.medium)
+                            showPhotosPicker = true
+                        }) {
                             Label("Галерея iOS".localized, systemImage: "photo.on.rectangle")
                         }
                         
@@ -1467,6 +1505,13 @@ struct UploadQueueView: View {
                             showGooglePhotosPicker = true
                         }) {
                             Label("Google Фото".localized, systemImage: "photo.stack.fill")
+                        }
+                        
+                        Button(action: {
+                            HapticHelper.trigger(.medium)
+                            showFileImporter = true
+                        }) {
+                            Label("Файлы на устройстве".localized, systemImage: "folder.badge.plus")
                         }
                     } label: {
                         ZStack {
@@ -1493,6 +1538,25 @@ struct UploadQueueView: View {
             .sheet(isPresented: $showGooglePhotosPicker) {
                 GooglePhotosPickerView { items in
                     viewModel.addGoogleMediaItems(items)
+                }
+            }
+            .photosPicker(
+                isPresented: $showPhotosPicker,
+                selection: $selectedItems,
+                maxSelectionCount: 50,
+                matching: mediaTab == 0 ? .images : .videos,
+                photoLibrary: .shared()
+            )
+            .fileImporter(
+                isPresented: $showFileImporter,
+                allowedContentTypes: mediaTab == 0 ? [.image] : [.movie, .video],
+                allowsMultipleSelection: true
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    viewModel.addLocalFiles(urls)
+                case .failure(let error):
+                    viewModel.triggerToast("Ошибка выбора файлов: \(error.localizedDescription)")
                 }
             }
         }
