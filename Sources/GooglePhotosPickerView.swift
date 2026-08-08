@@ -138,6 +138,29 @@ struct GooglePhotosPickerView: View {
     
     private var authenticatedContent: some View {
         VStack(spacing: 12) {
+            // Информация об аккаунте
+            HStack {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                Text(manager.userEmail.isEmpty ? "Google Фото подключено".localized : manager.userEmail)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer()
+                Button(action: {
+                    triggerHaptic()
+                    manager.signOut()
+                }) {
+                    Text("Выйти".localized)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.red)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            
             // Поиск и Фильтры
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
