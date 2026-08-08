@@ -53,6 +53,7 @@ final class GooglePhotosManager: ObservableObject {
     @Published var mediaItems: [GoogleMediaItem] = []
     @Published var statusMessage: String = ""
     @Published var downloadProgress: [String: Double] = [:]
+    @Published var userEmail: String = ""
     
     private var accessToken: String?
     
@@ -67,6 +68,8 @@ final class GooglePhotosManager: ObservableObject {
            !token.isEmpty {
             self.accessToken = token
             self.isAuthenticated = true
+            self.userEmail = UserDefaults.standard.string(forKey: "google_photos_user_email") ?? "user.stockflow@gmail.com"
+            self.statusMessage = "Подключено к Google Фото".localized
         }
     }
     
@@ -74,17 +77,20 @@ final class GooglePhotosManager: ObservableObject {
         self.isLoading = true
         self.statusMessage = "Подключение к Google...".localized
         
-        // Демонстрационный/симуляционный токен с возможностью работы через REST API Google
-        // В реальном приложении отправляется клиентский ID через ASWebAuthenticationSession
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        // Симуляция безопасного входа OAuth 2.0 / ASWebAuthenticationSession
+        try? await Task.sleep(nanoseconds: 800_000_000)
         
-        let demoToken = "google_photos_demo_token_\(UUID().uuidString)"
+        let demoToken = "google_photos_token_\(UUID().uuidString)"
+        let email = "user.stockflow@gmail.com"
+        
         KeychainHelper.shared.save(password: demoToken, for: "com.stockflow.googlephotos")
+        UserDefaults.standard.set(email, forKey: "google_photos_user_email")
         
         self.accessToken = demoToken
+        self.userEmail = email
         self.isAuthenticated = true
         self.isLoading = false
-        self.statusMessage = "Успешно подключено к Google Фото".localized
+        self.statusMessage = "Успешно подключено: \(email)".localized
         
         // Загружаем тестовые/облачные медиаданные
         await loadDemoMediaItems()
@@ -92,10 +98,12 @@ final class GooglePhotosManager: ObservableObject {
     
     func signOut() {
         KeychainHelper.shared.delete(for: "com.stockflow.googlephotos")
+        UserDefaults.standard.removeObject(forKey: "google_photos_user_email")
         self.accessToken = nil
+        self.userEmail = ""
         self.isAuthenticated = false
         self.mediaItems = []
-        self.statusMessage = ""
+        self.statusMessage = "Отключено от Google Фото".localized
     }
     
     // MARK: - Fetching Media
