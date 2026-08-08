@@ -29,6 +29,8 @@ struct SystemSettingsView: View {
     
 
     
+    @ObservedObject private var googlePhotosManager = GooglePhotosManager.shared
+    
     @State private var showFolderPicker = false
     @State private var isRunningScheduler = false
     
@@ -43,6 +45,7 @@ struct SystemSettingsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         interfaceSection
+                        googlePhotosSection
                         schedulerSection
                         upscaleSection
                         uploadSection
@@ -505,6 +508,70 @@ struct SystemSettingsView: View {
         }
     }
     
+    private var googlePhotosSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("ОБЛАКО GOOGLE ФОТО".localized)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Spacer()
+                Image(systemName: "photo.stack.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(hex: "4285F4"))
+            }
+            
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(googlePhotosManager.isAuthenticated ? "Подключено к Google Фото".localized : "Не подключено".localized)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(googlePhotosManager.isAuthenticated ? .green : .primary)
+                    
+                    Text(googlePhotosManager.isAuthenticated ? googlePhotosManager.userEmail : "Импорт видео и фото из архива Google Фото".localized)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                
+                if googlePhotosManager.isAuthenticated {
+                    Button(action: {
+                        HapticHelper.trigger(.medium)
+                        googlePhotosManager.signOut()
+                        showToast("Выход из Google Фото выполнен".localized)
+                    }) {
+                        Text("Выйти".localized)
+                            .font(.system(size: 12, weight: .bold))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Color.red.opacity(0.15))
+                            .foregroundStyle(.red)
+                            .clipShape(Capsule())
+                    }
+                } else {
+                    Button(action: {
+                        HapticHelper.trigger(.medium)
+                        Task {
+                            await googlePhotosManager.signInWithGoogle()
+                            showToast("Успешно подключено к Google Фото!".localized)
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "g.circle.fill")
+                            Text("Войти".localized)
+                        }
+                        .font(.system(size: 12, weight: .bold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(LinearGradient(colors: [Color(hex: "4285F4"), Color(hex: "34A853")], startPoint: .leading, endPoint: .trailing))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                    }
+                }
+            }
+        }
+        .glassCard(cornerRadius: 16, padding: 16)
+    }
+
     @State private var cacheSizeMB: Double = 0.0
     
     private var cacheSection: some View {
