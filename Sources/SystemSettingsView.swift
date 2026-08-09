@@ -4,6 +4,7 @@ import AuthenticationServices
 @MainActor
 struct SystemSettingsView: View {
     @Environment(\.colorScheme) var colorScheme
+    
     // Left Column settings
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @AppStorage("sys_theme") private var sysTheme: String = "Темная"
@@ -18,12 +19,13 @@ struct SystemSettingsView: View {
     @AppStorage("sys_upscale_threshold") private var upscaleThreshold: String = "Меньше 4 МБ (Рекомендуется)"
     @AppStorage("sys_upscale_factor") private var upscaleFactor: String = "Увеличение 2x (Бикубическое)"
     
-    @AppStorage("sys_parallel_streams") private var parallelStreams: Int = 3
-    @AppStorage("sys_seq_video") private var seqVideo: Bool = false
-    @AppStorage("sys_seq_photo") private var seqPhoto: Bool = false
+    @AppStorage("sys_parallel_streams") private var parallelStreams: Int = 1
+    @AppStorage("sys_seq_video") private var seqVideo: Bool = true
+    @AppStorage("sys_seq_photo") private var seqPhoto: Bool = true
     @AppStorage("sys_retry_on_fail") private var retryOnFail: Bool = true
     @AppStorage("sys_compress_jpeg") private var compressJpeg: Bool = false
     @AppStorage("sys_notifications") private var sysNotifications: Bool = true
+    @AppStorage("sys_no_cache_mode") private var noCacheMode: Bool = true
     
     // PC Server settings
     @AppStorage("sys_pc_server_enabled") private var pcServerEnabled: Bool = false
@@ -36,6 +38,7 @@ struct SystemSettingsView: View {
     
     @State private var showFolderPicker = false
     @State private var isRunningScheduler = false
+    @State private var cacheSizeMB: Double = 0.0
     
     @State private var showingSavedToast = false
     @State private var savedToastMessage = ""
@@ -107,14 +110,18 @@ struct SystemSettingsView: View {
             }
             .onChange(of: autoUpscale) { newVal in
                 HapticHelper.trigger(.light)
-                showToast(newVal ? "Авто-апскейл включён — работает при добавлении фото" : "Авто-апскейл отключён")
+                showToast(newVal ? "Авто-апскейл включён — работает при добавлении фото".localized : "Авто-апскейл отключён".localized)
             }
             .onChange(of: retryOnFail) { _ in HapticHelper.trigger(.light) }
             .onChange(of: compressJpeg) { _ in HapticHelper.trigger(.light) }
             .onChange(of: sysNotifications) { _ in HapticHelper.trigger(.light) }
+            .onChange(of: noCacheMode) { newVal in
+                HapticHelper.trigger(.light)
+                showToast(newVal ? "Режим проводника активен: 0 МБ кэша".localized : "Кэширование включено".localized)
+            }
             .onChange(of: parallelStreams) { newVal in
                 HapticHelper.trigger(.light)
-                showToast("Параллельные потоки: ".localized + "\(newVal)" + " — применится при следующей загрузке".localized)
+                showToast("Параллельные потоки: ".localized + "\(newVal)")
             }
             .onChange(of: seqVideo) { newVal in
                 HapticHelper.trigger(.light)
@@ -124,10 +131,6 @@ struct SystemSettingsView: View {
                 HapticHelper.trigger(.light)
                 showToast(newVal ? "Загрузка фото по очереди включена".localized : "Загрузка фото по очереди отключена".localized)
             }
-            .onChange(of: upscaleThreshold) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: upscaleFactor) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: pcServerEnabled) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: pcServerAddress) { _ in HapticHelper.trigger(.light) }
             .sheet(isPresented: $showFolderPicker) {
                 FolderPicker { url in
                     do {
@@ -141,24 +144,22 @@ struct SystemSettingsView: View {
                         UserDefaults.standard.set(bookmarkData, forKey: "sys_scheduler_folder_bookmark")
                         
                         self.folderName = url.lastPathComponent
-                        
                         showToast("Папка успешно выбрана: ".localized + url.lastPathComponent)
                     } catch {
                         showToast("Ошибка сохранения папки: ".localized + error.localizedDescription)
                     }
-                } onCancel: {
-                    // Отмена
-                }
+                } onCancel: {}
             }
         }
     }
     
     // MARK: - Sections
+    
     @ViewBuilder
     private var interfaceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Интерфейс".localized, icon: "paintpalette.fill")
-            pickerRow("Язык интерфейса".localized, selection: $sysLanguage, options: ["Русский", "English", "Հայերեն"])
+            sectionHeader("Интерфейс и Оформление".localized, icon: "paintbrush.fill")
+            pickerRow("Язык приложения".localized, selection: $sysLanguage, options: ["Русский", "English", "Հայերեն"])
             Divider().background(Color.primary.opacity(0.08))
             pickerRow("Тема оформления".localized, selection: $sysTheme, options: ["Темная", "Светлая", "Системная"])
         }
@@ -166,62 +167,108 @@ struct SystemSettingsView: View {
     }
     
     @ViewBuilder
+    private var googlePhotosSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("ОБЛАКО GOOGLE ФОТО".localized)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Spacer()
+                Image(systemName: "photo.stack.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(hex: "4285F4"))
+            }
+            
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(googlePhotosManager.isAuthenticated ? "Подключено к Google Фото".localized : "Не подключено".localized)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(googlePhotosManager.isAuthenticated ? .green : .primary)
+                    
+                    Text(googlePhotosManager.isAuthenticated ? googlePhotosManager.userEmail : "Импорт видео и фото из архива Google Фото".localized)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                
+                if googlePhotosManager.isAuthenticated {
+                    Button(action: {
+                        HapticHelper.trigger(.medium)
+                        googlePhotosManager.signOut()
+                        showToast("Выход из Google Фото выполнен".localized)
+                    }) {
+                        Text("Выйти".localized)
+                            .font(.system(size: 12, weight: .bold))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Color.red.opacity(0.15))
+                            .foregroundStyle(.red)
+                            .clipShape(Capsule())
+                    }
+                } else {
+                    Button(action: {
+                        HapticHelper.trigger(.medium)
+                        Task {
+                            await googlePhotosManager.signInWithGoogle()
+                            if googlePhotosManager.isAuthenticated {
+                                showToast("Успешно подключено к Google Фото!".localized)
+                            }
+                        }
+                    }) {
+                        Text("Подключить".localized)
+                            .font(.system(size: 12, weight: .bold))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Color(hex: "4285F4"))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+        }
+        .glassCard()
+    }
+    
+    @ViewBuilder
     private var schedulerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Планировщик".localized, icon: "clock.fill")
-            Toggle("Фоновый планировщик выгрузки".localized, isOn: $bgScheduler)
+            sectionHeader("Автозагрузка папки (Планировщик)".localized, icon: "clock.arrow.circlepath")
+            Toggle("Фоновый авто-сканер".localized, isOn: $bgScheduler)
                 .tint(Color(hex: "007AFF"))
             
             if bgScheduler {
                 Divider().background(Color.primary.opacity(0.08))
                 
-                Button(action: {
-                    HapticHelper.trigger(.light)
-                    showFolderPicker = true
-                }) {
-                    HStack {
-                        Text("Папка для импорта".localized)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Папка для сканирования".localized)
                             .font(.system(size: 14))
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        Text(folderName.isEmpty ? "Выбрать...".localized : folderName)
-                            .font(.system(size: 13))
+                        Text(folderName.isEmpty ? "Не выбрана".localized : folderName)
+                            .font(.system(size: 12))
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Image(systemName: "folder.badge.gearshape")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color(hex: "007AFF"))
+                    }
+                    Spacer()
+                    Button(action: {
+                        HapticHelper.trigger(.light)
+                        showFolderPicker = true
+                    }) {
+                        Text(folderName.isEmpty ? "Выбрать".localized : "Изменить".localized)
+                            .font(.system(size: 12, weight: .semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color(hex: "007AFF"))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
                     }
                 }
                 
                 Divider().background(Color.primary.opacity(0.08))
                 
-                Menu {
-                    Picker("", selection: $schedulerIntervalHours) {
-                        ForEach([1, 2, 4, 8, 12, 24], id: \.self) { hr in
-                            Text("Каждые".localized + " \(hr) " + getHoursWord(hr).localized).tag(hr)
-                        }
-                    }
-                } label: {
-                    HStack {
-                        Text("Интервал проверки".localized)
-                            .font(.system(size: 14))
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Text("Каждые".localized + " \(schedulerIntervalHours) " + getHoursWord(schedulerIntervalHours).localized)
-                                .font(.system(size: 12, weight: .semibold))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .bold))
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color(hex: "007AFF"))
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                    }
-                }
-                .buttonStyle(.plain)
+                pickerRow("Интервал проверки".localized, selection: Binding(
+                    get: { "\(schedulerIntervalHours) ч" },
+                    set: { schedulerIntervalHours = Int($0.replacingOccurrences(of: " ч", with: "")) ?? 1 }
+                ), options: ["1 ч", "2 ч", "4 ч", "8 ч", "12 ч", "24 ч"])
                 
                 Divider().background(Color.primary.opacity(0.08))
                 
@@ -262,10 +309,6 @@ struct SystemSettingsView: View {
                 }
                 .disabled(isRunningScheduler || folderName.isEmpty)
             }
-            
-            Text("При активации планировщика система будет проверять новые фото в выбранной папке и отправлять их в фоновом режиме.".localized)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
         }
         .glassCard()
     }
@@ -297,13 +340,13 @@ struct SystemSettingsView: View {
     @ViewBuilder
     private var uploadSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Параметры выгрузки".localized, icon: "arrow.up.forward.app.fill")
-            pickerIntRow("Потоки параллельной загрузки".localized, selection: $parallelStreams, options: [1, 3, 5])
+            sectionHeader("Параметры выгрузки и очередность".localized, icon: "arrow.up.forward.app.fill")
+            pickerIntRow("Потоки параллельной загрузки".localized, selection: $parallelStreams, options: [1, 2, 3, 5])
             Divider().background(Color.primary.opacity(0.08))
             
-            Toggle("Загрузка видео по очереди".localized, isOn: $seqVideo)
+            Toggle("Загрузка видео по очереди (Строго 1 за 1)".localized, isOn: $seqVideo)
                 .tint(Color(hex: "007AFF"))
-            Text("Видеофайлы будут отправляться строго по одному друг за другом для стабильности FTP.".localized)
+            Text("Видеофайлы отправляются строго по очереди один за другим без перегрева процессора.".localized)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
             
@@ -311,12 +354,12 @@ struct SystemSettingsView: View {
             
             Toggle("Загрузка фото по очереди".localized, isOn: $seqPhoto)
                 .tint(Color(hex: "007AFF"))
-            Text("Фотографии будут отправляться строго по одной по очереди.".localized)
+            Text("Фотографии будут отправляться строго последовательно по одной.".localized)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
             
             Divider().background(Color.primary.opacity(0.08))
-            Toggle("Автоповтор при сбоях".localized, isOn: $retryOnFail)
+            Toggle("Автоповтор при сбоях (3 попытки)".localized, isOn: $retryOnFail)
                 .tint(Color(hex: "007AFF"))
             Divider().background(Color.primary.opacity(0.08))
             Toggle("Сжатие JPEG перед загрузкой".localized, isOn: $compressJpeg)
@@ -355,23 +398,57 @@ struct SystemSettingsView: View {
                         )
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
-                        .onChange(of: pcServerAddress) { newValue in
-                            let cleaned = newValue
-                                .replacingOccurrences(of: "http://", with: "")
-                                .replacingOccurrences(of: "https://", with: "")
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                            if cleaned != newValue {
-                                pcServerAddress = cleaned
-                            }
-                        }
                 }
             }
             
-            Text("Позволяет отправлять фото через программу на вашем компьютере. Полезно, если на телефоне блокируется FTPS к Shutterstock.".localized)
+            Text("Позволяет отправлять фото через программу на вашем компьютере.".localized)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
         .glassCard()
+    }
+    
+    @ViewBuilder
+    private var cacheSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader("Память и Очистка кэша".localized, icon: "internaldrive.fill")
+            
+            Toggle("Режим проводника (Прямая выгрузка без кэша)".localized, isOn: $noCacheMode)
+                .tint(Color(hex: "007AFF"))
+            Text("Приложение работает как прямой проводник: файлы отправляются без дублирования на диск телефона.".localized)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            
+            Divider().background(Color.primary.opacity(0.08))
+            
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Очистка остаточного кэша".localized)
+                        .font(.system(size: 14, weight: .medium))
+                    Text("Использовано диска: ".localized + String(format: "%.1f MB", cacheSizeMB))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                
+                Button(action: clearCache) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trash")
+                        Text("Очистить".localized)
+                    }
+                    .font(.system(size: 12, weight: .bold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.red.opacity(0.15))
+                    .foregroundStyle(.red)
+                    .clipShape(Capsule())
+                }
+            }
+        }
+        .glassCard(cornerRadius: 16, padding: 16)
+        .onAppear {
+            calculateCacheSize()
+        }
     }
     
     @ViewBuilder
@@ -396,12 +473,33 @@ struct SystemSettingsView: View {
     private var versionFooterSection: some View {
         HStack {
             Spacer()
-            Text("SmartStock v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6") (Сборка \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0")) — OAuth PKCE")
+            Text("StockFlow v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6") (Сборка \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"))")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
             Spacer()
         }
         .padding(.vertical, 4)
+    }
+
+    private var disclaimerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(Color(hex: "007AFF"))
+                    .font(.system(size: 14))
+                Text("Правовая информация и товарные знаки".localized)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+            }
+            
+            Text("StockFlow является независимым инструментом и не связан с Shutterstock, Adobe Stock, Getty Images, Depositphotos, Freepik, Alamy, Dreamstime, 123RF, Pond5 или Google.".localized)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(2)
+        }
+        .glassCard(cornerRadius: 16, padding: 16)
     }
     
     // MARK: - Row Helpers
@@ -459,23 +557,6 @@ struct SystemSettingsView: View {
         }
     }
     
-    private func saveSettings() {
-        showToast("Настройки успешно сохранены!")
-    }
-    
-    private func showToast(_ message: String) {
-        savedToastMessage = message
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-            showingSavedToast = true
-        }
-        Task {
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
-            withAnimation(.easeOut(duration: 0.3)) {
-                showingSavedToast = false
-            }
-        }
-    }
-    
     private func pickerIntRow(_ label: String, selection: Binding<Int>, options: [Int]) -> some View {
         HStack(alignment: .center) {
             Text(label)
@@ -520,7 +601,6 @@ struct SystemSettingsView: View {
         }
     }
     
-    
     private var lastRunText: String {
         if lastRunTimestamp == 0 {
             return "Еще не запускался".localized
@@ -532,155 +612,12 @@ struct SystemSettingsView: View {
         return formatter.string(from: date)
     }
     
-    private func getHoursWord(_ count: Int) -> String {
-        switch count {
-        case 1: return "час"
-        case 2, 3, 4: return "часа"
-        default: return "часов"
-        }
-    }
-    
     private func runSchedulerNow() {
         isRunningScheduler = true
         Task {
             await SchedulerManager.shared.runSchedulerUploadCycle()
             isRunningScheduler = false
-            showToast("Проверка папки завершена!")
-        }
-    }
-    
-    private var googlePhotosSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("ОБЛАКО GOOGLE ФОТО".localized)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                Spacer()
-                Image(systemName: "photo.stack.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color(hex: "4285F4"))
-            }
-            
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(googlePhotosManager.isAuthenticated ? "Подключено к Google Фото".localized : "Не подключено".localized)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(googlePhotosManager.isAuthenticated ? .green : .primary)
-                    
-                    Text(googlePhotosManager.isAuthenticated ? googlePhotosManager.userEmail : "Импорт видео и фото из архива Google Фото".localized)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                
-                if googlePhotosManager.isAuthenticated {
-                    Button(action: {
-                        HapticHelper.trigger(.medium)
-                        googlePhotosManager.signOut()
-                        showToast("Выход из Google Фото выполнен".localized)
-                    }) {
-                        Text("Выйти".localized)
-                            .font(.system(size: 12, weight: .bold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Color.red.opacity(0.15))
-                            .foregroundStyle(.red)
-                            .clipShape(Capsule())
-                    }
-                } else {
-                    Button(action: {
-                        HapticHelper.trigger(.medium)
-                        Task {
-                            await googlePhotosManager.signInWithGoogle()
-                            if googlePhotosManager.isAuthenticated {
-                                showToast("Успешно подключено к Google Фото!".localized)
-                            }
-                        }
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "g.circle.fill")
-                            Text("Войти".localized)
-                        }
-                        .font(.system(size: 12, weight: .bold))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(LinearGradient(colors: [Color(hex: "4285F4"), Color(hex: "34A853")], startPoint: .leading, endPoint: .trailing))
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                    }
-                }
-            }
-            
-            if !googlePhotosManager.isAuthenticated {
-                Divider().background(Color.primary.opacity(0.08))
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Google OAuth Client ID (необязательно)".localized)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.secondary)
-                    
-                    TextField("123456789-xxxx.apps.googleusercontent.com", text: $customGoogleClientId)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                        .padding(10)
-                        .background(Color.primary.opacity(0.06))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
-                    
-                    Text("Если в окне Google выводится 'invalid_client (401)', введите ваш свой Client ID из Google Cloud Console (APIs & Services -> Credentials).".localized)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-        .glassCard(cornerRadius: 16, padding: 16)
-    }
-
-    @State private var cacheSizeMB: Double = 0.0
-    
-    private var cacheSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("ХРАНИЛИЩЕ И КЭШ".localized)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                Spacer()
-                Image(systemName: "internaldrive.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
-            
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Кэш скачанных файлов из облака".localized)
-                        .font(.system(size: 14, weight: .medium))
-                    Text("Размер кэша: ".localized + String(format: "%.1f MB", cacheSizeMB))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                
-                Button(action: clearCache) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trash")
-                        Text("Очистить кэш".localized)
-                    }
-                    .font(.system(size: 12, weight: .bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.red.opacity(0.15))
-                    .foregroundStyle(.red)
-                    .clipShape(Capsule())
-                }
-            }
-        }
-        .glassCard(cornerRadius: 16, padding: 16)
-        .onAppear {
-            calculateCacheSize()
+            showToast("Проверка папки завершена!".localized)
         }
     }
     
@@ -713,25 +650,20 @@ struct SystemSettingsView: View {
         showToast("Кэш скачанных медиафайлов очищен!".localized)
     }
     
-    private var disclaimerSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(Color(hex: "007AFF"))
-                    .font(.system(size: 14))
-                Text("Правовая информация и товарные знаки".localized)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-            }
-            
-            Text("SmartStock является независимым инструментом и не связан, не авторизован и не спонсируется Shutterstock, Adobe Stock, Getty Images, Depositphotos, Freepik, Alamy, Dreamstime, 123RF, Pond5 или Google. Все товарные знаки и названия брендов принадлежат их правообладателям.".localized)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .lineSpacing(2)
+    private func saveSettings() {
+        showToast("Настройки успешно сохранены!".localized)
+    }
+    
+    private func showToast(_ message: String) {
+        savedToastMessage = message
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            showingSavedToast = true
         }
-        .glassCard(cornerRadius: 16, padding: 16)
+        Task {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            withAnimation(.easeOut(duration: 0.3)) {
+                showingSavedToast = false
+            }
+        }
     }
 }
-

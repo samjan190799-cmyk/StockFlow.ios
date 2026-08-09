@@ -17,6 +17,26 @@ struct SmartStockApp: App {
     }
     
     init() {
+        // Регистрация базовых дефолтных настроек системы
+        UserDefaults.standard.register(defaults: [
+            "sys_language": "Русский",
+            "sys_theme": "Темная",
+            "sys_bg_scheduler": false,
+            "sys_scheduler_interval_hours": 1,
+            "sys_auto_upscale": false,
+            "sys_upscale_threshold": "Меньше 4 МБ (Рекомендуется)",
+            "sys_upscale_factor": "Увеличение 2x (Бикубическое)",
+            "sys_parallel_streams": 1,
+            "sys_seq_video": true,
+            "sys_seq_photo": true,
+            "sys_retry_on_fail": true,
+            "sys_compress_jpeg": false,
+            "sys_notifications": true,
+            "sys_no_cache_mode": true,
+            "sys_pc_server_enabled": false,
+            "sys_pc_server_address": "192.168.1.50:5000"
+        ])
+        
         // Pre-configure initial state of platforms in UserDefaults if not present
         if UserDefaults.standard.data(forKey: "stock_platforms") == nil {
             if let encoded = try? JSONEncoder().encode(StockPlatform.defaults) {

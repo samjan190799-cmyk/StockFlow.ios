@@ -2,26 +2,56 @@ import Foundation
 import ImageIO
 import UIKit
 import AVFoundation
+import CoreImage
 
-/// Фоновый актор для ресурсоемких операций с изображениями
+/// Фоновый актор для ресурсоемких операций с изображениями и видео
 actor ImageProcessor {
     static let shared = ImageProcessor()
     private init() {}
     
-    /// Записывает метаданные IPTC/EXIF и сжимает JPEG в фоновом потоке
+    /// Записывает метаданные IPTC/EXIF, выполняет авто-апскейл и сжимает JPEG в фоновом потоке
     func prepareImageForUpload(
         imageData: Data,
         photo: PhotoMetadata,
         compress: Bool
     ) -> Data {
+        var processedData = imageData
+        
+        // 1. Проверяем включение Авто-апскейла в системных настройках
+        let autoUpscale = UserDefaults.standard.bool(forKey: "sys_auto_upscale")
+        if autoUpscale {
+            let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? "Меньше 4 МБ (Рекомендуется)"
+            let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? "Увеличение 2x (Бикубическое)"
+            
+            let thresholdMB: Double
+            if thresholdStr.contains("2") {
+                thresholdMB = 2.0
+            } else if thresholdStr.contains("8") {
+                thresholdMB = 8.0
+            } else {
+                thresholdMB = 4.0
+            }
+            
+            let fileSizeMB = Double(imageData.count) / (1024.0 * 1024.0)
+            if fileSizeMB < thresholdMB, let uiImage = UIImage(data: imageData) {
+                let scaleFactor: CGFloat = factorStr.contains("4x") ? 4.0 : 2.0
+                if let upscaledImage = upscaleImage(uiImage, scaleFactor: scaleFactor),
+                   let upscaledJPEG = upscaledImage.jpegData(compressionQuality: 0.95) {
+                    processedData = upscaledJPEG
+                }
+            }
+        }
+        
+        // 2. Внедрение метаданных IPTC / EXIF
         let preparedData = writeMetadata(
-            to: imageData,
+            to: processedData,
             title: photo.title,
             description: photo.description,
             keywords: photo.keywords,
             categories: photo.categories
-        ) ?? imageData
+        ) ?? processedData
         
+        // 3. Сжатие JPEG по требованию
         var finalData = preparedData
         if compress {
             if let uiImage = UIImage(data: preparedData),
@@ -36,6 +66,21 @@ actor ImageProcessor {
             }
         }
         return finalData
+    }
+    
+    /// Апскейл изображения с использованием высшего качества фильтрации
+    private func upscaleImage(_ image: UIImage, scaleFactor: CGFloat) -> UIImage? {
+        let targetSize = CGSize(width: image.size.width * scaleFactor, height: image.size.height * scaleFactor)
+        
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = true
+        
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+        return renderer.image { context in
+            context.cgContext.interpolationQuality = .high
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
     }
     
     private func writeMetadata(
@@ -59,7 +104,6 @@ actor ImageProcessor {
         iptc[kCGImagePropertyIPTCObjectName as String] = title
         iptc[kCGImagePropertyIPTCCaptionAbstract as String] = description
         
-        // Объединяем ключевые слова с категориями
         var mergedKeywords = keywords
         for category in categories {
             if !mergedKeywords.contains(category) {
@@ -98,20 +142,17 @@ actor ImageProcessor {
     }
     
     /// Внедряет метаданные (Title, Description, Keywords) в MP4/QuickTime видеофайл без перекодирования.
-    /// Возвращает URL нового временного файла.
     func prepareVideoForUpload(
         videoURL: URL,
         photo: PhotoMetadata
     ) async throws -> URL {
         let asset = AVAsset(url: videoURL)
         
-        // Создаем уникальный временный файл с тем же расширением
         let ext = videoURL.pathExtension.lowercased()
         let actualExt = ext.isEmpty ? "mp4" : ext
         let tempDir = FileManager.default.temporaryDirectory
         let outputURL = tempDir.appendingPathComponent("\(UUID().uuidString).\(actualExt)")
         
-        // Определяем тип файла по расширению
         let fileType: AVFileType
         if actualExt == "mov" {
             fileType = .mov
@@ -130,28 +171,22 @@ actor ImageProcessor {
         exportSession.outputFileType = fileType
         exportSession.shouldOptimizeForNetworkUse = true
         
-        // Формируем метаданные
         var metadataItems: [AVMetadataItem] = []
         
-        // Common Keys
-        // Title
         let titleItem = AVMutableMetadataItem()
         titleItem.keySpace = AVMetadataKeySpace.common
         titleItem.key = AVMetadataKey.commonKeyTitle as NSCopying & NSObjectProtocol
         titleItem.value = photo.title as NSString
         metadataItems.append(titleItem)
         
-        // Description
         let descItem = AVMutableMetadataItem()
         descItem.keySpace = AVMetadataKeySpace.common
         descItem.key = AVMetadataKey.commonKeyDescription as NSCopying & NSObjectProtocol
         descItem.value = photo.description as NSString
         metadataItems.append(descItem)
         
-        // Keywords
         let keywordsString = photo.keywords.joined(separator: ", ")
         
-        // QuickTime Metadata Keys
         let qtTitleItem = AVMutableMetadataItem()
         qtTitleItem.keySpace = AVMetadataKeySpace.quickTimeMetadata
         qtTitleItem.key = AVMetadataKey.quickTimeMetadataKeyTitle as NSCopying & NSObjectProtocol

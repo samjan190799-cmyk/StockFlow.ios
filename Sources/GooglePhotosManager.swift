@@ -18,15 +18,31 @@ struct GoogleMediaItem: Identifiable, Codable, Sendable {
     }
     
     var downloadURL: URL? {
+        guard !baseUrl.isEmpty else { return nil }
+        let cleanBase = baseUrl.components(separatedBy: "=")[0]
         if isVideo {
-            return URL(string: "\(baseUrl)=dv")
+            return URL(string: "\(cleanBase)=dv")
         } else {
-            return URL(string: "\(baseUrl)=d")
+            return URL(string: "\(cleanBase)=d")
         }
     }
     
     var thumbnailURL: URL? {
-        return URL(string: "\(baseUrl)=w400-h400-c")
+        if let productUrl = productUrl, productUrl.contains("http") && !productUrl.contains("drive.google.com") {
+            return URL(string: productUrl)
+        }
+        guard !baseUrl.isEmpty else { return nil }
+        
+        if baseUrl.contains("drive.google.com") || baseUrl.contains("googleusercontent.com/drive") {
+            if baseUrl.contains("?") || baseUrl.contains("=") {
+                return URL(string: baseUrl)
+            }
+            return URL(string: "\(baseUrl)?sz=w400")
+        }
+        
+        let cleanBase = baseUrl.components(separatedBy: "=")[0]
+        guard !cleanBase.isEmpty else { return nil }
+        return URL(string: "\(cleanBase)=w400-h400-c")
     }
 }
 
@@ -430,7 +446,16 @@ final class GooglePhotosManager: ObservableObject {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        var (data, response) = try await URLSession.shared.data(for: request)
+        
+        if let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 401 {
+            if await refreshAccessTokenIfNeeded(), let newToken = accessToken {
+                request.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                let (retryData, retryResponse) = try await URLSession.shared.data(for: request)
+                data = retryData
+                response = retryResponse
+            }
+        }
         
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw URLError(.badServerResponse)

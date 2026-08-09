@@ -35,6 +35,88 @@ final class UploadSpeedTracker {
     var lastTime: Date = Date()
 }
 
+// MARK: - Central Upload Queue Manager (Strict Execution & Thermal Protection)
+actor UploadQueueManager {
+    static let shared = UploadQueueManager()
+    
+    private struct PendingSlot {
+        let isVideo: Bool
+        let seqVideo: Bool
+        let seqPhoto: Bool
+        let parallelStreams: Int
+        let continuation: CheckedContinuation<Void, Never>
+    }
+    
+    private var activeStreams = 0
+    private var activeVideoCount = 0
+    private var activePhotoCount = 0
+    private var waiters: [PendingSlot] = []
+    
+    func acquireSlot(isVideo: Bool, seqVideo: Bool, seqPhoto: Bool, parallelStreams: Int) async {
+        let maxStreams = max(1, parallelStreams)
+        
+        let canExecuteNow = waiters.isEmpty &&
+            activeStreams < maxStreams &&
+            (!isVideo || !seqVideo || activeVideoCount == 0) &&
+            (isVideo || !seqPhoto || activePhotoCount == 0)
+            
+        if canExecuteNow {
+            activeStreams += 1
+            if isVideo {
+                activeVideoCount += 1
+            } else {
+                activePhotoCount += 1
+            }
+            return
+        }
+        
+        await withCheckedContinuation { continuation in
+            waiters.append(PendingSlot(
+                isVideo: isVideo,
+                seqVideo: seqVideo,
+                seqPhoto: seqPhoto,
+                parallelStreams: maxStreams,
+                continuation: continuation
+            ))
+        }
+    }
+    
+    func releaseSlot(isVideo: Bool, seqVideo: Bool, seqPhoto: Bool) {
+        activeStreams = max(0, activeStreams - 1)
+        if isVideo {
+            activeVideoCount = max(0, activeVideoCount - 1)
+        } else {
+            activePhotoCount = max(0, activePhotoCount - 1)
+        }
+        
+        processWaiters()
+    }
+    
+    private func processWaiters() {
+        var index = 0
+        while index < waiters.count {
+            let waiter = waiters[index]
+            let canExecute = activeStreams < waiter.parallelStreams &&
+                (!waiter.isVideo || !waiter.seqVideo || activeVideoCount == 0) &&
+                (waiter.isVideo || !waiter.seqPhoto || activePhotoCount == 0)
+                
+            if canExecute {
+                activeStreams += 1
+                if waiter.isVideo {
+                    activeVideoCount += 1
+                } else {
+                    activePhotoCount += 1
+                }
+                
+                let next = waiters.remove(at: index)
+                next.continuation.resume()
+            } else {
+                index += 1
+            }
+        }
+    }
+}
+
 // MARK: - Queue View Model (MainActor Isolated, Safe Concurrency)
 @MainActor
 class QueueViewModel: ObservableObject {
@@ -68,43 +150,51 @@ class QueueViewModel: ObservableObject {
         QueueViewModel.shared = self
     }
     
+    /// Сохраняет строго маловесные метаданные JSON (<10KB) без тяжелых бинарников на диске!
     func savePhotosToDisk() {
         let photosCopy = self.photos
         let metaURL = self.metadataURL
-        let dirURL = self.photosDirectoryURL
         
         Task.detached(priority: .background) {
             do {
-                for photo in photosCopy {
-                    if let data = photo.imageData {
-                        let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
-                        let actualExt = ext.isEmpty ? "mp4" : ext
-                        let fileURL = dirURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
-                        try data.write(to: fileURL, options: .atomic)
-                    }
-                }
-                
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = .prettyPrinted
                 let data = try encoder.encode(photosCopy)
                 try data.write(to: metaURL, options: .atomic)
-                
-                let idsInQueue = Set(photosCopy.map { photo -> String in
-                    let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
-                    let actualExt = ext.isEmpty ? "mp4" : ext
-                    return "\(photo.id.uuidString).\(actualExt)"
-                })
-                let existingFiles = try FileManager.default.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: nil)
-                for file in existingFiles {
-                    // Также не удаляем временные файлы ИИ-кадров, если они нужны
-                    if !idsInQueue.contains(file.lastPathComponent) && !file.lastPathComponent.contains("_thumb.jpg") {
-                        try? FileManager.default.removeItem(at: file)
-                    }
-                }
             } catch {
-                print("Error saving photos to disk: \(error.localizedDescription)")
+                print("Error saving photos metadata: \(error.localizedDescription)")
             }
         }
+    }
+    
+    /// Разрешает реальный URL медиафайла для чтения без копирования его в папку приложения
+    func resolveSourceURL(for photo: PhotoMetadata) -> (url: URL, needAccessStop: Bool)? {
+        if let bookmarkData = photo.localBookmarkData {
+            var isStale = false
+            if let resolved = try? URL(resolvingBookmarkData: bookmarkData, options: .withoutUI, relativeTo: nil, bookmarkDataIsStale: &isStale) {
+                let accessed = resolved.startAccessingSecurityScopedResource()
+                if FileManager.default.fileExists(atPath: resolved.path) {
+                    return (resolved, accessed)
+                }
+                if accessed { resolved.stopAccessingSecurityScopedResource() }
+            }
+        }
+        
+        if let path = photo.localURLPath {
+            let url = URL(fileURLWithPath: path)
+            if FileManager.default.fileExists(atPath: url.path) {
+                return (url, false)
+            }
+        }
+        
+        let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
+        let actualExt = ext.isEmpty ? "mp4" : ext
+        let fallbackURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
+        if FileManager.default.fileExists(atPath: fallbackURL.path) {
+            return (fallbackURL, false)
+        }
+        
+        return nil
     }
     
     func addGoogleMediaItems(_ items: [GoogleMediaItem]) {
@@ -117,7 +207,10 @@ class QueueViewModel: ObservableObject {
                     let fileURL = self.photosDirectoryURL.appendingPathComponent("\(newId.uuidString).\(ext)")
                     try data.write(to: fileURL, options: .atomic)
                     
+                    let thumbImg = await ImageCacheHelper.shared.loadAndDownsample(fileURL: fileURL, maxPixelSize: 300)
+                    let thumbData = thumbImg?.jpegData(compressionQuality: 0.75)
                     let sizeStr = String(format: "%.1f MB", Double(data.count) / (1024.0 * 1024.0))
+                    
                     let newPhoto = PhotoMetadata(
                         id: newId,
                         filename: item.filename,
@@ -127,10 +220,12 @@ class QueueViewModel: ObservableObject {
                         description: "",
                         status: .new,
                         selectedStocks: Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]),
+                        localURLPath: fileURL.path,
+                        thumbnailData: thumbData,
                         imageData: data,
                         isVideo: item.isVideo
                     )
-                    self.photos.append(newPhoto)
+                    self.addPhoto(newPhoto)
                     self.triggerToast("Добавлен файл из Google Фото: \(item.filename)".localized)
                 } catch {
                     self.triggerToast("Ошибка импорта \(item.filename): \(error.localizedDescription)")
@@ -142,37 +237,39 @@ class QueueViewModel: ObservableObject {
     func addLocalFiles(_ urls: [URL]) {
         Task {
             for url in urls {
-                guard url.startAccessingSecurityScopedResource() else { continue }
-                defer { url.stopAccessingSecurityScopedResource() }
-                
-                do {
-                    let data = try Data(contentsOf: url)
-                    let ext = url.pathExtension.lowercased()
-                    let isVideo = ["mp4", "mov", "m4v", "avi", "mkv"].contains(ext)
-                    let newId = UUID()
-                    let targetExt = isVideo ? (ext.isEmpty ? "mp4" : ext) : "jpg"
-                    let targetURL = self.photosDirectoryURL.appendingPathComponent("\(newId.uuidString).\(targetExt)")
-                    
-                    try data.write(to: targetURL, options: .atomic)
-                    
-                    let sizeStr = String(format: "%.1f MB", Double(data.count) / (1024.0 * 1024.0))
-                    let newPhoto = PhotoMetadata(
-                        id: newId,
-                        filename: url.lastPathComponent,
-                        fileSize: sizeStr,
-                        title: "",
-                        keywords: [],
-                        description: "",
-                        status: .new,
-                        selectedStocks: Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]),
-                        imageData: isVideo ? nil : data,
-                        isVideo: isVideo
-                    )
-                    self.photos.append(newPhoto)
-                    self.triggerToast("Добавлен файл: \(url.lastPathComponent)".localized)
-                } catch {
-                    self.triggerToast("Ошибка загрузки \(url.lastPathComponent): \(error.localizedDescription)")
+                let accessed = url.startAccessingSecurityScopedResource()
+                defer {
+                    if accessed { url.stopAccessingSecurityScopedResource() }
                 }
+                
+                let ext = url.pathExtension.lowercased()
+                let isVideo = ["mp4", "mov", "m4v", "avi", "mkv"].contains(ext)
+                let newId = UUID()
+                let bookmarkData = try? url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
+                
+                let thumbImage = await ImageCacheHelper.shared.loadAndDownsample(fileURL: url, maxPixelSize: 300)
+                let thumbData = thumbImage?.jpegData(compressionQuality: 0.75)
+                
+                let fileAttrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+                let fileSizeByte = (fileAttrs?[.size] as? Int64) ?? 0
+                let sizeStr = ByteCountFormatter.string(fromByteCount: fileSizeByte, countStyle: .file)
+                
+                let newPhoto = PhotoMetadata(
+                    id: newId,
+                    filename: url.lastPathComponent,
+                    fileSize: sizeStr,
+                    title: "",
+                    keywords: [],
+                    description: "",
+                    status: .new,
+                    selectedStocks: Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]),
+                    localURLPath: url.path,
+                    localBookmarkData: bookmarkData,
+                    thumbnailData: thumbData,
+                    isVideo: isVideo
+                )
+                self.photos.append(newPhoto)
+                self.triggerToast("Добавлен файл: \(url.lastPathComponent)".localized)
             }
         }
     }
@@ -180,43 +277,30 @@ class QueueViewModel: ObservableObject {
     func loadPhotosFromDisk() {
         do {
             let metaURL = self.metadataURL
-            
             guard FileManager.default.fileExists(atPath: metaURL.path) else { return }
             let data = try Data(contentsOf: metaURL)
             let decoded = try JSONDecoder().decode([PhotoMetadata].self, from: data)
-            
-            var loadedPhotos: [PhotoMetadata] = []
-            for var photo in decoded {
-                photo.imageData = nil // Не загружаем тяжелые оригинальные байты в ОЗУ при старте
-                loadedPhotos.append(photo)
-            }
-            self.photos = loadedPhotos
+            self.photos = decoded
         } catch {
             print("Error loading photos from disk: \(error.localizedDescription)")
         }
     }
     
     private func getAIImagesData(for photo: PhotoMetadata) async -> [Data] {
-        let photoId = photo.id
+        guard let (sourceURL, needStop) = resolveSourceURL(for: photo) else { return [] }
+        defer {
+            if needStop { sourceURL.stopAccessingSecurityScopedResource() }
+        }
         if photo.isVideo {
-            return await ImageCacheHelper.shared.extractFrames(
-                photoId: photoId,
-                fromDir: self.photosDirectoryURL,
-                count: 3
-            )
+            return await ImageCacheHelper.shared.extractFrames(fileURL: sourceURL, count: 3)
         } else {
-            let possibleExtensions = ["jpg", "JPG", "jpeg", "JPEG", "png", "PNG", "heic", "HEIC"]
-            for ext in possibleExtensions {
-                let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).\(ext)")
-                if let data = try? Data(contentsOf: fileURL), !data.isEmpty {
-                    // Downsample payload if > 4MB for fast & reliable AI API transmission
-                    if data.count > 4 * 1024 * 1024,
-                       let uiImg = UIImage(data: data),
-                       let compressed = uiImg.jpegData(compressionQuality: 0.85) {
-                        return [compressed]
-                    }
-                    return [data]
+            if let data = try? Data(contentsOf: sourceURL), !data.isEmpty {
+                if data.count > 4 * 1024 * 1024,
+                   let uiImg = UIImage(data: data),
+                   let compressed = uiImg.jpegData(compressionQuality: 0.85) {
+                    return [compressed]
                 }
+                return [data]
             }
             return []
         }
@@ -237,124 +321,82 @@ class QueueViewModel: ObservableObject {
             apiKey = UserDefaults.standard.string(forKey: "api_key_claude") ?? ""
         }
         
-        // Check if API key is blank
         guard !apiKey.trimmingCharacters(in: .whitespaces).isEmpty else {
-            // No Key: Demo Mode
             photos[idx].status = .aiAnalyzing
-            triggerToast("Запущен демо-анализ (ключ API не введен)")
+            triggerToast("Запущен демо-анализ (ключ API не введен)".localized)
             
             Task {
                 try? await Task.sleep(nanoseconds: 1_200_000_000)
                 if self.photos.count > idx {
-                    self.photos[idx].title = "Драматичный закат в горах (Демо)"
+                    self.photos[idx].title = "Драматичный закат в горах (Демо)".localized
                     self.photos[idx].keywords = ["закат", "облака", "небо", "горы", "пейзаж", "демо"]
-                    self.photos[idx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
+                    self.photos[idx].description = "Демо-описание: Живописный закат солнца над горным хребтом.".localized
+                    self.photos[idx].categories = ["Природа", "Пейзаж"]
                     self.photos[idx].status = .ready
-                    self.triggerToast("Демо-анализ завершен")
+                    self.savePhotosToDisk()
                 }
             }
             return
         }
         
         photos[idx].status = .aiAnalyzing
-        triggerToast("ИИ анализирует файл...")
+        let photo = photos[idx]
         
         Task {
+            let imagesData = await getAIImagesData(for: photo)
+            
             do {
-                let photo = self.photos[idx]
-                let imagesData = await getAIImagesData(for: photo)
-                let result = try await AIManager.shared.analyzePhoto(
+                let metadata = try await AIService.shared.analyzeImages(
                     imagesData: imagesData,
-                    customPrompt: customPrompt,
+                    filename: photo.filename,
                     provider: provider,
-                    apiKey: apiKey
+                    apiKey: apiKey,
+                    customPrompt: customPrompt
                 )
                 
-                self.photos[idx].title = result.title
-                self.photos[idx].description = result.description
-                self.photos[idx].keywords = result.keywords
-                self.photos[idx].categories = result.categories ?? []
-                self.photos[idx].status = .ready
-                self.triggerToast("Анализ ИИ успешно завершен!")
+                if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                    self.photos[index].title = metadata.title
+                    self.photos[index].keywords = metadata.keywords
+                    self.photos[index].description = metadata.description
+                    self.photos[index].categories = metadata.categories
+                    self.photos[index].status = .ready
+                    self.savePhotosToDisk()
+                    self.triggerToast("ИИ успешно заполнил метаданные для".localized + " \(photo.filename)!")
+                }
             } catch {
-                self.photos[idx].description = "Ошибка: \(error.localizedDescription)"
-                self.photos[idx].status = .error
-                self.photos[idx].errorMessage = error.localizedDescription
-                self.triggerToast("Ошибка ИИ: \(error.localizedDescription)")
+                if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                    self.photos[index].status = .error
+                    self.photos[index].errorMessage = "Ошибка ИИ: \(error.localizedDescription)"
+                    self.savePhotosToDisk()
+                    self.triggerToast("Ошибка ИИ-анализа для".localized + " \(photo.filename): \(error.localizedDescription)")
+                }
             }
         }
     }
     
     func runAIForAll() {
-        let newOrErrorPhotos = photos.filter { $0.status == .new || $0.status == .error }
-        guard !newOrErrorPhotos.isEmpty else { return }
-        
-        isAnalyzingAll = true
-        triggerToast("Запущен ИИ-анализ для \(newOrErrorPhotos.count) файлов...")
-        
-        let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? AIProvider.gemini.rawValue
-        let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
-        let apiKey: String
-        if provider.contains("Gemini") {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_gemini") ?? ""
-        } else if provider.contains("OpenAI") {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_openai") ?? ""
-        } else {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_claude") ?? ""
+        let unanalyzed = photos.filter { $0.status == .new || $0.status == .error }
+        guard !unanalyzed.isEmpty else {
+            triggerToast("Нет новых файлов для ИИ-анализа.".localized)
+            return
         }
         
-        // Loop and run
+        isAnalyzingAll = true
+        triggerToast("Запущен ИИ-анализ для".localized + " \(unanalyzed.count) " + "файлов...".localized)
+        
         Task {
-            for photo in newOrErrorPhotos {
-                if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
-                    self.photos[idx].status = .aiAnalyzing
-                    
-                    if apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
-                        // Demo mode delay
-                        try? await Task.sleep(nanoseconds: 1_000_000_000)
-                        if self.photos.count > idx {
-                            self.photos[idx].title = "Красивый снимок (Демо)"
-                            self.photos[idx].keywords = ["фотография", "снимок", "стоки", "демо", "пейзаж"]
-                            self.photos[idx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
-                            self.photos[idx].status = .ready
-                        }
-                    } else {
-                        // Real analysis
-                        do {
-                            let currentPhoto = self.photos[idx]
-                            let imagesData = await getAIImagesData(for: currentPhoto)
-                            let result = try await AIManager.shared.analyzePhoto(
-                                imagesData: imagesData,
-                                customPrompt: customPrompt,
-                                provider: provider,
-                                apiKey: apiKey
-                            )
-                            if self.photos.count > idx {
-                                self.photos[idx].title = result.title
-                                self.photos[idx].description = result.description
-                                self.photos[idx].keywords = result.keywords
-                                self.photos[idx].categories = result.categories ?? []
-                                self.photos[idx].status = .ready
-                            }
-                        } catch {
-                            if self.photos.count > idx {
-                                self.photos[idx].status = .error
-                                self.photos[idx].description = "Ошибка: \(error.localizedDescription)"
-                            }
-                        }
-                    }
-                }
+            for photo in unanalyzed {
+                self.runAIForPhoto(photo.id)
+                try? await Task.sleep(nanoseconds: 800_000_000)
             }
-            
             self.isAnalyzingAll = false
-            self.triggerToast("ИИ-анализ всех файлов завершен")
         }
     }
     
-    private func parseFileSizeToBytes(_ fileSizeStr: String) -> Double {
-        let clean = fileSizeStr.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: ",", with: ".").lowercased()
-        let numberString = clean.filter { "0123456789.".contains($0) }
-        let num = Double(numberString) ?? 0.0
+    private func parseFileSizeToBytes(_ sizeStr: String) -> Double {
+        let clean = sizeStr.lowercased().replacingOccurrences(of: ",", with: ".")
+        let components = clean.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
+        guard let first = components.first, let num = Double(first) else { return 10 * 1024 * 1024 }
         
         if clean.contains("gb") || clean.contains("гб") {
             return num * 1024 * 1024 * 1024
@@ -367,89 +409,108 @@ class QueueViewModel: ObservableObject {
     
     func uploadPhoto(_ id: UUID) {
         guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
-        
         guard checkStockCredentials() else {
             triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!".localized)
             return
         }
         
-        // Регистрируем фоновую задачу для стабильной загрузки при сворачивании
-        let bgTask = UIApplication.shared.beginBackgroundTask(withName: "UploadPhoto-\(id.uuidString)") {
-            // Принудительное завершение системой при нехватке времени
-        }
+        let bgTask = UIApplication.shared.beginBackgroundTask(withName: "UploadPhoto-\(id.uuidString)") {}
         
-        photos[idx].status = .uploading
+        photos[idx].status = .inQueue
         photos[idx].uploadProgress = 0.0
         photos[idx].errorMessage = nil
-        triggerToast("Загрузка файла".localized + " \(photos[idx].filename)...")
+        let targetPhoto = photos[idx]
         
-        // Переменные для замера скорости загрузки
-        let tracker = UploadSpeedTracker()
-        let totalBytes = max(parseFileSizeToBytes(photos[idx].fileSize), 1.0)
-        
-        let box = ContinuationBox<Double>()
-        let progressStream = AsyncStream<Double> { cont in
-            box.continuation = cont
-        }
-        guard let progressContinuation = box.continuation else {
-            UIApplication.shared.endBackgroundTask(bgTask)
-            return
-        }
-        
-        // Потребляем прогресс на @MainActor
-        Task { @MainActor in
-            for await prog in progressStream {
-                if let index = self.photos.firstIndex(where: { $0.id == id }) {
-                    self.photos[index].uploadProgress = prog
-                    
-                    // Замер скорости KB/s
-                    let now = Date()
-                    let dt = now.timeIntervalSince(tracker.lastTime)
-                    if dt > 0.4 {
-                        let dprog = prog - tracker.lastProgress
-                        if dprog > 0 {
-                            let bytesPerSec = (dprog * totalBytes) / dt
-                            self.uploadSpeedKBps[id] = bytesPerSec / 1024.0
+        Task {
+            let maxStreams = UserDefaults.standard.integer(forKey: "sys_parallel_streams")
+            let streamLimit = maxStreams > 0 ? maxStreams : 1
+            let seqVideo = UserDefaults.standard.bool(forKey: "sys_seq_video")
+            let seqPhoto = UserDefaults.standard.bool(forKey: "sys_seq_photo")
+            
+            await UploadQueueManager.shared.acquireSlot(
+                isVideo: targetPhoto.isVideo,
+                seqVideo: seqVideo,
+                seqPhoto: seqPhoto,
+                parallelStreams: streamLimit
+            )
+            
+            defer {
+                Task {
+                    await UploadQueueManager.shared.releaseSlot(
+                        isVideo: targetPhoto.isVideo,
+                        seqVideo: seqVideo,
+                        seqPhoto: seqPhoto
+                    )
+                    UIApplication.shared.endBackgroundTask(bgTask)
+                }
+            }
+            
+            await MainActor.run {
+                if let i = self.photos.firstIndex(where: { $0.id == id }) {
+                    self.photos[i].status = .uploading
+                    self.triggerToast("Загрузка файла".localized + " \(self.photos[i].filename)...")
+                }
+            }
+            
+            let tracker = UploadSpeedTracker()
+            let totalBytes = max(parseFileSizeToBytes(targetPhoto.fileSize), 1.0)
+            
+            let box = ContinuationBox<Double>()
+            let progressStream = AsyncStream<Double> { cont in box.continuation = cont }
+            guard let progressContinuation = box.continuation else { return }
+            
+            let progressTask = Task { @MainActor in
+                for await prog in progressStream {
+                    if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                        self.photos[index].uploadProgress = prog
+                        let now = Date()
+                        let dt = now.timeIntervalSince(tracker.lastTime)
+                        if dt > 0.4 {
+                            let dprog = prog - tracker.lastProgress
+                            if dprog > 0 {
+                                let bytesPerSec = (dprog * totalBytes) / dt
+                                self.uploadSpeedKBps[id] = bytesPerSec / 1024.0
+                            }
+                            tracker.lastProgress = prog
+                            tracker.lastTime = now
                         }
-                        tracker.lastProgress = prog
-                        tracker.lastTime = now
                     }
                 }
             }
-        }
-        
-        Task {
-            defer {
-                UIApplication.shared.endBackgroundTask(bgTask)
-            }
+            
             do {
-                let photo = self.photos[idx]
-                try await performRealUpload(for: photo) { prog in
+                try await performRealUpload(for: targetPhoto) { prog in
                     progressContinuation.yield(prog)
                 }
                 progressContinuation.finish()
+                _ = await progressTask.result
                 
-                if let index = self.photos.firstIndex(where: { $0.id == id }) {
-                    self.photos[index].status = .success
-                    self.photos[index].uploadProgress = 1.0
-                    self.uploadSpeedKBps.removeValue(forKey: id)
-                    self.triggerToast("Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized)
-                    NotificationHelper.sendNotification(
-                        title: "Успешная выгрузка".localized,
-                        body: "Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized
-                    )
+                await MainActor.run {
+                    if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                        self.photos[index].status = .success
+                        self.photos[index].uploadProgress = 1.0
+                        self.uploadSpeedKBps.removeValue(forKey: id)
+                        self.triggerToast("Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized)
+                        NotificationHelper.sendNotification(
+                            title: "Успешная выгрузка".localized,
+                            body: "Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized
+                        )
+                    }
                 }
             } catch {
                 progressContinuation.finish()
-                if let index = self.photos.firstIndex(where: { $0.id == id }) {
-                    self.photos[index].status = .error
-                    self.photos[index].errorMessage = error.localizedDescription
-                    self.uploadSpeedKBps.removeValue(forKey: id)
-                    self.triggerToast("Ошибка выгрузки".localized + " \(self.photos[index].filename): \(error.localizedDescription)")
-                    NotificationHelper.sendNotification(
-                        title: "Ошибка выгрузки".localized,
-                        body: "Файл".localized + " \(self.photos[index].filename): \(error.localizedDescription)"
-                    )
+                _ = await progressTask.result
+                await MainActor.run {
+                    if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                        self.photos[index].status = .error
+                        self.photos[index].errorMessage = error.localizedDescription
+                        self.uploadSpeedKBps.removeValue(forKey: id)
+                        self.triggerToast("Ошибка выгрузки".localized + " \(self.photos[index].filename): \(error.localizedDescription)")
+                        NotificationHelper.sendNotification(
+                            title: "Ошибка выгрузки".localized,
+                            body: "Файл".localized + " \(self.photos[index].filename): \(error.localizedDescription)"
+                        )
+                    }
                 }
             }
         }
@@ -461,151 +522,31 @@ class QueueViewModel: ObservableObject {
             triggerToast("Нет файлов, готовых к отправке.".localized)
             return
         }
-        
         guard checkStockCredentials() else {
             triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!".localized)
             return
         }
         
-        // Регистрируем фоновую задачу для групповой выгрузки
-        let bgTask = UIApplication.shared.beginBackgroundTask(withName: "UploadAllReady") {
-            // Принудительное завершение
-        }
-        
-        // Читаем лимит параллельных потоков из настроек (по умолчанию 3)
         let maxStreams = UserDefaults.standard.integer(forKey: "sys_parallel_streams")
-        let streamLimit = maxStreams > 0 ? maxStreams : 3
-        
-        triggerToast("Началась отправка".localized + " \(readyPhotos.count) " + "файлов".localized + " (\(streamLimit) " + getStreamWord(streamLimit).localized + ")...")
+        let streamLimit = maxStreams > 0 ? maxStreams : 1
+        triggerToast("Началась отправка".localized + " \(readyPhotos.count) " + "файлов...".localized)
         
         for photo in readyPhotos {
-            let pId = photo.id
-            if let idx = self.photos.firstIndex(where: { $0.id == pId }) {
-                self.photos[idx].status = .inQueue
-                self.photos[idx].uploadProgress = 0.0
-                self.photos[idx].errorMessage = nil
-            }
-        }
-        
-        Task { @MainActor in
-            defer {
-                UIApplication.shared.endBackgroundTask(bgTask)
-            }
-            let seqVideo = UserDefaults.standard.bool(forKey: "sys_seq_video")
-            let seqPhoto = UserDefaults.standard.bool(forKey: "sys_seq_photo")
-            
-            let mainSemaphore = UploadSemaphore(limit: streamLimit)
-            let videoSemaphore = UploadSemaphore(limit: 1)
-            let photoSemaphore = UploadSemaphore(limit: 1)
-            
-            await withTaskGroup(of: Void.self) { group in
-                for photo in readyPhotos {
-                    let pId = photo.id
-                    group.addTask { @MainActor in
-                        guard let currentPhoto = self.photos.first(where: { $0.id == pId }) else { return }
-                        
-                        let isVideoFile = currentPhoto.isVideo || currentPhoto.filename.lowercased().hasSuffix(".mp4") || currentPhoto.filename.lowercased().hasSuffix(".mov") || currentPhoto.filename.lowercased().hasSuffix(".avi")
-                        
-                        let activeSemaphore: UploadSemaphore
-                        if isVideoFile && seqVideo {
-                            activeSemaphore = videoSemaphore
-                        } else if !isVideoFile && seqPhoto {
-                            activeSemaphore = photoSemaphore
-                        } else {
-                            activeSemaphore = mainSemaphore
-                        }
-                        
-                        await activeSemaphore.wait()
-                        
-                        if let idx = self.photos.firstIndex(where: { $0.id == pId }) {
-                            self.photos[idx].status = .uploading
-                        }
-                        
-                        do {
-                            let tracker = UploadSpeedTracker()
-                            let totalBytes = max(self.parseFileSizeToBytes(currentPhoto.fileSize), 1.0)
-                            
-                            let box = ContinuationBox<Double>()
-                            let progressStream = AsyncStream<Double> { cont in
-                                box.continuation = cont
-                            }
-                            guard let progressContinuation = box.continuation else {
-                                await activeSemaphore.signal()
-                                return
-                            }
-                            
-                            let progressTask = Task { @MainActor in
-                                for await prog in progressStream {
-                                    if let index = self.photos.firstIndex(where: { $0.id == pId }) {
-                                        self.photos[index].uploadProgress = prog
-                                        
-                                        // Замер скорости KB/s
-                                        let now = Date()
-                                        let dt = now.timeIntervalSince(tracker.lastTime)
-                                        if dt > 0.4 {
-                                            let dprog = prog - tracker.lastProgress
-                                            if dprog > 0 {
-                                                let bytesPerSec = (dprog * totalBytes) / dt
-                                                self.uploadSpeedKBps[pId] = bytesPerSec / 1024.0
-                                            }
-                                            tracker.lastProgress = prog
-                                            tracker.lastTime = now
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            try await self.performRealUpload(for: currentPhoto) { prog in
-                                progressContinuation.yield(prog)
-                            }
-                            progressContinuation.finish()
-                            _ = await progressTask.result
-                            
-                            if let index = self.photos.firstIndex(where: { $0.id == pId }) {
-                                self.photos[index].status = .success
-                                self.photos[index].uploadProgress = 1.0
-                                self.uploadSpeedKBps.removeValue(forKey: pId)
-                                self.triggerToast("Файл \(self.photos[index].filename) успешно загружен!")
-                                NotificationHelper.sendNotification(
-                                    title: "Успешная выгрузка".localized,
-                                    body: "Файл".localized + " \(self.photos[index].filename) " + "успешно загружен!".localized
-                                )
-                            }
-                        } catch {
-                            if let index = self.photos.firstIndex(where: { $0.id == pId }) {
-                                self.photos[index].status = .error
-                                self.photos[index].errorMessage = error.localizedDescription
-                                self.uploadSpeedKBps.removeValue(forKey: pId)
-                                self.triggerToast("Ошибка выгрузки".localized + " \(self.photos[index].filename): \(error.localizedDescription)")
-                                NotificationHelper.sendNotification(
-                                    title: "Ошибка выгрузки".localized,
-                                    body: "Файл".localized + " \(self.photos[index].filename): \(error.localizedDescription)"
-                                )
-                            }
-                        }
-                        
-                        await activeSemaphore.signal()
-                    }
-                }
-            }
-            
-            let remaining = self.photos.filter { $0.status == .uploading }.count
-            if remaining == 0 {
-                self.triggerToast("Все файлы обработаны!")
-            }
+            uploadPhoto(photo.id)
         }
     }
     
     private func performRealUpload(for photo: PhotoMetadata, progress: (@Sendable (Double) -> Void)? = nil) async throws {
-        let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
-        let actualExt = ext.isEmpty ? "mp4" : ext
-        let sourceFileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
-        
-        guard FileManager.default.fileExists(atPath: sourceFileURL.path) else {
-            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Файл не найден на диске"])
+        guard let resolved = resolveSourceURL(for: photo) else {
+            throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Исходный файл \(photo.filename) не найден на устройстве"])
+        }
+        let sourceFileURL = resolved.url
+        defer {
+            if resolved.needAccessStop {
+                sourceFileURL.stopAccessingSecurityScopedResource()
+            }
         }
         
-        // Массив временных URL для удаления в конце
         var tempURLsToDelete: [URL] = []
         defer {
             for tempURL in tempURLsToDelete {
@@ -615,7 +556,6 @@ class QueueViewModel: ObservableObject {
         
         let fileURLToUpload: URL
         if photo.isVideo {
-            // Внедряем метаданные в видеофайл в режиме passthrough (очень быстро)
             do {
                 let preparedVideoURL = try await ImageProcessor.shared.prepareVideoForUpload(
                     videoURL: sourceFileURL,
@@ -624,8 +564,6 @@ class QueueViewModel: ObservableObject {
                 fileURLToUpload = preparedVideoURL
                 tempURLsToDelete.append(preparedVideoURL)
             } catch {
-                print("Error preparing video metadata: \(error.localizedDescription)")
-                // В случае ошибки используем исходный файл
                 fileURLToUpload = sourceFileURL
             }
         } else {
@@ -1835,8 +1773,8 @@ struct UploadQueueView: View {
                         // Авто-апскейл
                         let autoUpscaleEnabled = UserDefaults.standard.bool(forKey: "sys_auto_upscale")
                         if autoUpscaleEnabled {
-                            let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? ""
-                            let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? ""
+                            let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? "Меньше 4 МБ (Рекомендуется)"
+                            let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? "Увеличение 2x (Бикубическое)"
                             let thresholdMB: Double = thresholdStr.contains("2 МБ") ? 2.0 : (thresholdStr.contains("8 МБ") ? 8.0 : 4.0)
                             let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
                             if sizeMB < thresholdMB, let uiImage = UIImage(data: finalData) {

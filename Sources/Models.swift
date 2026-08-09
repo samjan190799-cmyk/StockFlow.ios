@@ -25,7 +25,7 @@ enum PhotoStatus: String, Codable, CaseIterable, Sendable {
     }
 }
 
-// MARK: - Photo Metadata Model
+// MARK: - Photo Metadata Model (Conduit Pass-Through Architecture — Zero Local File Duplication)
 struct PhotoMetadata: Identifiable, Sendable, Codable {
     let id: UUID
     var filename: String
@@ -36,14 +36,20 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
     var categories: [String]
     var status: PhotoStatus
     var selectedStocks: Set<String>
-    var imageData: Data? = nil
-    var isVideo: Bool = false
     
+    /// Ссылка на оригинальный файл (URL / Bookmark) без дублирования на диск приложения
+    var localURLPath: String? = nil
+    var localBookmarkData: Data? = nil
+    
+    /// Маловесный тумбнейл (JPEG ~20KB) строго для быстрого отображения UI списка без раздувания ОЗУ
+    var thumbnailData: Data? = nil
+    
+    var isVideo: Bool = false
     var uploadProgress: Double = 0.0
     var errorMessage: String? = nil
     
     enum CodingKeys: String, CodingKey {
-        case id, filename, fileSize, title, keywords, description, categories, status, selectedStocks, uploadProgress, errorMessage, isVideo
+        case id, filename, fileSize, title, keywords, description, categories, status, selectedStocks, localURLPath, localBookmarkData, thumbnailData, isVideo, uploadProgress, errorMessage
     }
     
     init(
@@ -56,7 +62,9 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         categories: [String] = [],
         status: PhotoStatus = .new,
         selectedStocks: Set<String> = ["Shutterstock", "Adobe Stock"],
-        imageData: Data? = nil,
+        localURLPath: String? = nil,
+        localBookmarkData: Data? = nil,
+        thumbnailData: Data? = nil,
         isVideo: Bool = false
     ) {
         self.id = id
@@ -68,7 +76,9 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         self.categories = categories
         self.status = status
         self.selectedStocks = selectedStocks
-        self.imageData = imageData
+        self.localURLPath = localURLPath
+        self.localBookmarkData = localBookmarkData
+        self.thumbnailData = thumbnailData
         self.isVideo = isVideo
     }
     
@@ -83,10 +93,12 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         categories = (try? container.decode([String].self, forKey: .categories)) ?? []
         status = try container.decode(PhotoStatus.self, forKey: .status)
         selectedStocks = try container.decode(Set<String>.self, forKey: .selectedStocks)
+        localURLPath = try? container.decode(String.self, forKey: .localURLPath)
+        localBookmarkData = try? container.decode(Data.self, forKey: .localBookmarkData)
+        thumbnailData = try? container.decode(Data.self, forKey: .thumbnailData)
         uploadProgress = (try? container.decode(Double.self, forKey: .uploadProgress)) ?? 0.0
         errorMessage = try? container.decode(String.self, forKey: .errorMessage)
         isVideo = (try? container.decode(Bool.self, forKey: .isVideo)) ?? false
-        imageData = nil
     }
 }
 
@@ -128,7 +140,6 @@ struct StockPlatform: Identifiable, Codable, Sendable {
         let decodedId = (try? container.decode(String.self, forKey: .id)) ?? ""
         self.id = decodedId
         
-        // Find default platform matching this ID to use as fallback values
         let defaultPlatform = StockPlatform.defaults.first(where: { $0.id == decodedId })
         
         self.name = (try? container.decode(String.self, forKey: .name)) ?? defaultPlatform?.name ?? ""

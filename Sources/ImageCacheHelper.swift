@@ -10,16 +10,21 @@ final class ImageCacheHelper {
     private let cache = NSCache<NSString, UIImage>()
     
     private init() {
-        // Лимитируем количество объектов и объём памяти в кэше для предотвращения утечки ОЗУ
         cache.countLimit = 250
-        cache.totalCostLimit = 80 * 1024 * 1024 // 80 МБ максимум
+        cache.totalCostLimit = 60 * 1024 * 1024 // 60 МБ максимум
     }
     
     func getCachedImage(forKey key: String) -> UIImage? {
+        if UserDefaults.standard.bool(forKey: "sys_no_cache_mode") {
+            return nil
+        }
         return cache.object(forKey: key as NSString)
     }
     
     func cacheImage(_ image: UIImage, forKey key: String) {
+        if UserDefaults.standard.bool(forKey: "sys_no_cache_mode") {
+            return
+        }
         cache.setObject(image, forKey: key as NSString)
     }
     
@@ -27,39 +32,18 @@ final class ImageCacheHelper {
         cache.removeAllObjects()
     }
     
-    /// Асинхронно загружает изображение с диска, сжимает (downsample) до нужного размера и сохраняет в NSCache
+    /// Асинхронно загружает изображение по прямом URL, сжимает (downsample) до нужного размера и сохраняет в NSCache
     func loadAndDownsample(
-        photoId: UUID,
-        fromDir dirURL: URL,
+        fileURL: URL,
         maxPixelSize: Int = 400
     ) async -> UIImage? {
-        let key = "\(photoId.uuidString)_\(maxPixelSize)"
+        let key = "\(fileURL.lastPathComponent)_\(maxPixelSize)"
         
         if let cached = getCachedImage(forKey: key) {
             return cached
         }
         
-        // Поиск любого подходящего файла с совпадением UUID в имени
-        var targetURL: URL? = nil
-        var isVideoFile = false
-        
-        if let contents = try? FileManager.default.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: nil) {
-            for file in contents {
-                let name = file.lastPathComponent
-                if name.hasPrefix(photoId.uuidString) && !name.hasSuffix("_thumb.jpg") {
-                    targetURL = file
-                    let ext = file.pathExtension.lowercased()
-                    if ["mp4", "mov", "m4v", "avi", "mkv", "3gp"].contains(ext) {
-                        isVideoFile = true
-                    }
-                    break
-                }
-            }
-        }
-        
-        guard let fileURL = targetURL else {
-            return nil
-        }
+        let isVideoFile = ["mp4", "mov", "m4v", "avi", "mkv", "3gp"].contains(fileURL.pathExtension.lowercased())
         
         if isVideoFile {
             let image = await Task.detached(priority: .userInitiated) { () -> UIImage? in
@@ -89,7 +73,6 @@ final class ImageCacheHelper {
             return image
         }
         
-        // Переносим обработку фото в фоновый поток
         let image = await Task.detached(priority: .userInitiated) { () -> UIImage? in
             let imageSourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
             guard let imageSource = CGImageSourceCreateWithURL(fileURL as CFURL, imageSourceOptions) else {
@@ -123,31 +106,15 @@ final class ImageCacheHelper {
         return image
     }
     
-    /// Извлекает несколько кадров из видеофайла для анализа ИИ (например, 3 кадра)
+    /// Извлекает кадры для ИИ прямо по физическому URL файла без использования кэша папки
     func extractFrames(
-        photoId: UUID,
-        fromDir dirURL: URL,
+        fileURL: URL,
         count: Int = 3
     ) async -> [Data] {
-        var targetURL: URL? = nil
-        var isVideoFile = false
+        let isVideoFile = ["mp4", "mov", "m4v", "avi", "mkv", "3gp"].contains(fileURL.pathExtension.lowercased())
         
-        if let contents = try? FileManager.default.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: nil) {
-            for file in contents {
-                let name = file.lastPathComponent
-                if name.hasPrefix(photoId.uuidString) && !name.hasSuffix("_thumb.jpg") {
-                    targetURL = file
-                    let ext = file.pathExtension.lowercased()
-                    if ["mp4", "mov", "m4v", "avi", "mkv", "3gp"].contains(ext) {
-                        isVideoFile = true
-                    }
-                    break
-                }
-            }
-        }
-        
-        guard isVideoFile, let fileURL = targetURL else {
-            if let fileURL = targetURL, let data = try? Data(contentsOf: fileURL) {
+        guard isVideoFile else {
+            if let data = try? Data(contentsOf: fileURL) {
                 return [data]
             }
             return []
@@ -160,17 +127,11 @@ final class ImageCacheHelper {
             generator.requestedTimeToleranceBefore = .zero
             generator.requestedTimeToleranceAfter = .zero
             
-            // Получаем длительность видео
-            let durationSeconds: Double
-            if #available(iOS 16.0, *) {
-                durationSeconds = asset.duration.seconds
-            } else {
-                durationSeconds = asset.duration.seconds
-            }
+            let durationSeconds: Double = asset.duration.seconds
             
             guard durationSeconds > 0 else {
                 if let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil),
-                   let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9) {
+                   let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.85) {
                     return [jpegData]
                 }
                 return []
@@ -182,7 +143,6 @@ final class ImageCacheHelper {
             } else {
                 for i in 0..<count {
                     let percent = Double(i) / Double(count - 1)
-                    // Точки на 5%, 50%, 95%
                     let targetSec = durationSeconds * (0.05 + percent * 0.9)
                     times.append(CMTime(seconds: targetSec, preferredTimescale: 60))
                 }
@@ -191,14 +151,14 @@ final class ImageCacheHelper {
             var frames: [Data] = []
             for time in times {
                 if let cgImage = try? generator.copyCGImage(at: time, actualTime: nil),
-                   let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9) {
+                   let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.85) {
                     frames.append(jpegData)
                 }
             }
             
             if frames.isEmpty {
                 if let cgImageZero = try? generator.copyCGImage(at: .zero, actualTime: nil),
-                   let jpegDataZero = UIImage(cgImage: cgImageZero).jpegData(compressionQuality: 0.9) {
+                   let jpegDataZero = UIImage(cgImage: cgImageZero).jpegData(compressionQuality: 0.85) {
                     frames.append(jpegDataZero)
                 }
             }
