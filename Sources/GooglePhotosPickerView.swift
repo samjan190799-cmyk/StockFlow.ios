@@ -1,4 +1,21 @@
 import SwiftUI
+import AVKit
+
+enum MediaFilterType: String, CaseIterable, Identifiable {
+    case all = "Все файлы"
+    case photos = "Только фото"
+    case videos = "Только видео"
+    
+    var id: String { rawValue }
+    
+    var iconName: String {
+        switch self {
+        case .all: return "photo.stack"
+        case .photos: return "photo"
+        case .videos: return "video.fill"
+        }
+    }
+}
 
 /// Полноэкранный/Sheet пикер файлов из облака Google Фото
 struct GooglePhotosPickerView: View {
@@ -8,9 +25,10 @@ struct GooglePhotosPickerView: View {
     var onSelectItems: ([GoogleMediaItem]) -> Void
     
     @State private var selectedItems: Set<String> = []
-    @State private var filterOnlyVideos = false
+    @State private var selectedFilter: MediaFilterType = .all
     @State private var searchQuery = ""
     @State private var isDownloading = false
+    @State private var previewItem: GoogleMediaItem? = nil
     
     private let columns = [
         GridItem(.adaptive(minimum: 110, maximum: 160), spacing: 12)
@@ -18,7 +36,12 @@ struct GooglePhotosPickerView: View {
     
     var filteredItems: [GoogleMediaItem] {
         manager.mediaItems.filter { item in
-            let matchesFilter = filterOnlyVideos ? item.isVideo : true
+            let matchesFilter: Bool
+            switch selectedFilter {
+            case .all: matchesFilter = true
+            case .photos: matchesFilter = !item.isVideo
+            case .videos: matchesFilter = item.isVideo
+            }
             let matchesSearch = searchQuery.isEmpty || item.filename.localizedCaseInsensitiveContains(searchQuery)
             return matchesFilter && matchesSearch
         }
@@ -42,6 +65,9 @@ struct GooglePhotosPickerView: View {
             }
             .navigationTitle("Google Фото".localized)
             .navigationBarTitleDisplayMode(.inline)
+            .fullScreenCover(item: $previewItem) { item in
+                GoogleMediaPreviewModal(item: item, token: manager.accessToken)
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Отмена".localized) {
@@ -174,17 +200,35 @@ struct GooglePhotosPickerView: View {
                 .background(Color.white.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 
-                Toggle(isOn: $filterOnlyVideos) {
-                    Label("Видео", systemImage: "video.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .toggleStyle(.button)
-                .tint(.purple)
-                .onChange(of: filterOnlyVideos) { newValue in
-                    triggerHaptic()
-                    Task {
-                        await manager.loadMediaItems(filterVideoOnly: newValue)
+                Menu {
+                    ForEach(MediaFilterType.allCases) { option in
+                        Button(action: {
+                            triggerHaptic()
+                            selectedFilter = option
+                        }) {
+                            HStack {
+                                Label(option.rawValue.localized, systemImage: option.iconName)
+                                if selectedFilter == option {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
                     }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: selectedFilter.iconName)
+                            .foregroundStyle(Color.purple)
+                        Text(selectedFilter.rawValue.localized)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
             
@@ -228,60 +272,69 @@ struct GooglePhotosPickerView: View {
         let isSelected = selectedItems.contains(item.id)
         
         return ZStack(alignment: .topTrailing) {
-            AsyncImage(url: item.thumbnailURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                case .failure:
-                    Rectangle()
-                        .fill(Color.white.opacity(0.1))
-                        .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
-                case .empty:
-                    Rectangle()
-                        .fill(Color.white.opacity(0.05))
-                        .overlay(ProgressView())
-                @unknown default:
-                    EmptyView()
+            VStack(spacing: 0) {
+                ZStack {
+                    AuthenticatedGoogleImageView(url: item.thumbnailURL ?? URL(string: item.baseUrl), token: manager.accessToken)
+                        .frame(height: 110)
+                        .clipped()
                 }
+                
+                // Название файла
+                HStack(spacing: 4) {
+                    if item.isVideo {
+                        Image(systemName: "video.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(Color.purple)
+                    } else {
+                        Image(systemName: "photo.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(Color.blue)
+                    }
+                    
+                    Text(item.filename)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(Color.black.opacity(0.85))
             }
-            .frame(height: 120)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(isSelected ? Color.purple : Color.white.opacity(0.12), lineWidth: isSelected ? 3 : 1)
             )
             
-            // Видео значок внизу
-            if item.isVideo {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.white)
-                        Text("VIDEO")
-                            .font(.system(size: 9, weight: .black))
-                            .foregroundStyle(.white)
-                        Spacer()
-                    }
-                    .padding(6)
-                    .background(LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .top, endPoint: .bottom))
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-            }
-            
-            // Чекбокс выбора
-            ZStack {
-                Circle()
-                    .fill(isSelected ? Color.purple : Color.black.opacity(0.4))
-                    .frame(width: 24, height: 24)
-                
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
+            // Заголовок карточки: Глаз (Предпросмотр) слева и Чекбокс справа
+            HStack {
+                Button(action: {
+                    triggerHaptic()
+                    previewItem = item
+                }) {
+                    Image(systemName: "eye.fill")
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.white)
+                        .padding(6)
+                        .background(Color.black.opacity(0.65))
+                        .clipShape(Circle())
+                }
+                
+                Spacer()
+                
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? Color.purple : Color.black.opacity(0.5))
+                        .frame(width: 24, height: 24)
+                    
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
                 }
             }
             .padding(6)
@@ -311,5 +364,154 @@ struct GooglePhotosPickerView: View {
     private func triggerHaptic() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
+    }
+}
+
+// MARK: - Authenticated Image Loader
+struct AuthenticatedGoogleImageView: View {
+    let url: URL?
+    let token: String?
+    
+    @State private var image: UIImage? = nil
+    @State private var isLoading = false
+    @State private var isError = false
+    
+    var body: some View {
+        ZStack {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else if isLoading {
+                Rectangle()
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(ProgressView().tint(.purple))
+            } else {
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .overlay(
+                        Image(systemName: "photo")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.secondary)
+                    )
+            }
+        }
+        .task(id: url) {
+            await loadImage()
+        }
+    }
+    
+    private func loadImage() async {
+        guard let url = url else {
+            isError = true
+            return
+        }
+        
+        let cacheKey = NSString(string: url.absoluteString)
+        if let cached = GoogleImageCache.shared.object(forKey: cacheKey) {
+            self.image = cached
+            return
+        }
+        
+        isLoading = true
+        isError = false
+        
+        var request = URLRequest(url: url)
+        if let token = token, !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200, let loadedImage = UIImage(data: data) {
+                GoogleImageCache.shared.setObject(loadedImage, forKey: cacheKey)
+                self.image = loadedImage
+            } else {
+                self.isError = true
+            }
+        } catch {
+            self.isError = true
+        }
+        isLoading = false
+    }
+}
+
+private class GoogleImageCache {
+    static let shared = NSCache<NSString, UIImage>()
+}
+
+// MARK: - Fullscreen Media Preview Modal
+struct GoogleMediaPreviewModal: View {
+    @Environment(\.dismiss) private var dismiss
+    let item: GoogleMediaItem
+    let token: String?
+    
+    @State private var player: AVPlayer? = nil
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Хедер с информацией
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.filename)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        Text(item.isVideo ? "Видеозапись Google Фото".localized : "Фотография Google Фото".localized)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                }
+                .padding()
+                
+                Spacer()
+                
+                // Основной медиаконтент
+                if item.isVideo {
+                    if let player = player {
+                        VideoPlayer(player: player)
+                            .frame(maxHeight: 500)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .onDisappear {
+                                player.pause()
+                            }
+                    } else {
+                        VStack(spacing: 12) {
+                            ProgressView().tint(.purple).scaleEffect(1.2)
+                            Text("Подготовка воспроизведения видео...".localized)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    AuthenticatedGoogleImageView(url: item.downloadURL ?? URL(string: item.baseUrl), token: token)
+                        .aspectRatio(contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .padding(.horizontal, 12)
+                }
+                
+                Spacer()
+            }
+        }
+        .onAppear {
+            if item.isVideo, let downloadURL = item.downloadURL ?? URL(string: item.baseUrl) {
+                let headers = token != nil ? ["Authorization": "Bearer \(token!)"] : [:]
+                let asset = AVURLAsset(url: downloadURL, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+                let playerItem = AVPlayerItem(asset: asset)
+                let avPlayer = AVPlayer(playerItem: playerItem)
+                self.player = avPlayer
+                avPlayer.play()
+            }
+        }
     }
 }
