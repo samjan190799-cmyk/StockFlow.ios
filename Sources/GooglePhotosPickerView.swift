@@ -18,6 +18,7 @@ enum MediaFilterType: String, CaseIterable, Identifiable {
 }
 
 /// Полноэкранный/Sheet пикер файлов из облака Google Фото
+@MainActor
 struct GooglePhotosPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var manager = GooglePhotosManager.shared
@@ -368,6 +369,7 @@ struct GooglePhotosPickerView: View {
 }
 
 // MARK: - Authenticated Image Loader
+@MainActor
 struct AuthenticatedGoogleImageView: View {
     let url: URL?
     let token: String?
@@ -436,11 +438,13 @@ struct AuthenticatedGoogleImageView: View {
     }
 }
 
-private class GoogleImageCache {
+@MainActor
+private final class GoogleImageCache: @unchecked Sendable {
     static let shared = NSCache<NSString, UIImage>()
 }
 
 // MARK: - Fullscreen Media Preview Modal
+@MainActor
 struct GoogleMediaPreviewModal: View {
     @Environment(\.dismiss) private var dismiss
     let item: GoogleMediaItem
@@ -505,8 +509,12 @@ struct GoogleMediaPreviewModal: View {
         }
         .onAppear {
             if item.isVideo, let downloadURL = item.downloadURL ?? URL(string: item.baseUrl) {
-                let headers = token != nil ? ["Authorization": "Bearer \(token!)"] : [:]
-                let asset = AVURLAsset(url: downloadURL, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+                var headers: [String: String] = [:]
+                if let token = token, !token.isEmpty {
+                    headers["Authorization"] = "Bearer \(token)"
+                }
+                let options: [String: Any] = ["AVURLAssetHTTPHeaderFieldsKey": headers]
+                let asset = AVURLAsset(url: downloadURL, options: options)
                 let playerItem = AVPlayerItem(asset: asset)
                 let avPlayer = AVPlayer(playerItem: playerItem)
                 self.player = avPlayer
