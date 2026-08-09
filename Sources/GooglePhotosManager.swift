@@ -18,10 +18,8 @@ struct GoogleMediaItem: Identifiable, Codable, Sendable {
     
     var downloadURL: URL? {
         if isVideo {
-            // Для видео добавляем флаг прямого скачивания высокого качества
             return URL(string: "\(baseUrl)=dv")
         } else {
-            // Для фото скачиваем максимальное качество
             return URL(string: "\(baseUrl)=d")
         }
     }
@@ -43,7 +41,19 @@ struct GoogleVideoMetadata: Codable, Sendable {
     let status: String?
 }
 
-/// Сервис управления авторизацией и загрузкой медиа из Google Photos (Swift Concurrency, ObservableObject)
+// MARK: - OAuth Web Session Context Provider
+final class WebAuthContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    @MainActor
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first(where: { $0.isKeyWindow }) {
+            return window
+        }
+        return ASPresentationAnchor()
+    }
+}
+
+/// Сервис управления авторизацией и загрузкой медиа из Google Photos / Drive (Swift Concurrency, ObservableObject)
 @MainActor
 final class GooglePhotosManager: ObservableObject {
     static let shared = GooglePhotosManager()
@@ -56,6 +66,11 @@ final class GooglePhotosManager: ObservableObject {
     @Published var userEmail: String = ""
     
     private var accessToken: String?
+    private var webAuthContextProvider = WebAuthContextProvider()
+    
+    // Google OAuth 2.0 Configuration
+    private let clientID = "1084227092144-stockflow.apps.googleusercontent.com"
+    private let redirectScheme = "com.samvel.smartstock"
     
     init() {
         checkExistingToken()
@@ -68,32 +83,94 @@ final class GooglePhotosManager: ObservableObject {
            !token.isEmpty {
             self.accessToken = token
             self.isAuthenticated = true
-            self.userEmail = UserDefaults.standard.string(forKey: "google_photos_user_email") ?? "user.stockflow@gmail.com"
+            self.userEmail = UserDefaults.standard.string(forKey: "google_photos_user_email") ?? "Пользователь Google"
             self.statusMessage = "Подключено к Google Фото".localized
         }
     }
     
     func signInWithGoogle() async {
         self.isLoading = true
-        self.statusMessage = "Подключение к Google...".localized
+        self.statusMessage = "Открытие окна авторизации Google...".localized
         
-        // Симуляция безопасного входа OAuth 2.0 / ASWebAuthenticationSession
-        try? await Task.sleep(nanoseconds: 800_000_000)
+        let scopes = [
+            "https://www.googleapis.com/auth/photoslibrary.readonly",
+            "https://www.googleapis.com/auth/userinfo.email"
+        ].joined(separator: " ")
         
-        let demoToken = "google_photos_token_\(UUID().uuidString)"
-        let email = "user.stockflow@gmail.com"
+        let redirectURI = "\(redirectScheme):/oauth2redirect"
+        guard let encodedRedirect = redirectURI.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let encodedScope = scopes.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let authURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth?response_type=token&client_id=\(clientID)&redirect_uri=\(encodedRedirect)&scope=\(encodedScope)") else {
+            self.isLoading = false
+            self.statusMessage = "Ошибка формирования URL авторизации".localized
+            return
+        }
         
-        KeychainHelper.shared.save(password: demoToken, for: "com.stockflow.googlephotos")
-        UserDefaults.standard.set(email, forKey: "google_photos_user_email")
+        do {
+            let callbackURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+                let session = ASWebAuthenticationSession(url: authURL, callbackURLScheme: redirectScheme) { callbackURL, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else if let callbackURL = callbackURL {
+                        continuation.resume(returning: callbackURL)
+                    } else {
+                        continuation.resume(throwing: URLError(.badServerResponse))
+                    }
+                }
+                session.presentationContextProvider = self.webAuthContextProvider
+                session.prefersEphemeralWebBrowserSession = false
+                session.start()
+            }
+            
+            // Парсим access_token из фрагмента редиректа (#access_token=...)
+            if let fragment = callbackURL.fragment, let token = extractQueryParam("access_token", from: fragment) {
+                self.accessToken = token
+                KeychainHelper.shared.save(password: token, for: "com.stockflow.googlephotos")
+                self.isAuthenticated = true
+                self.statusMessage = "Успешная авторизация в Google".localized
+                
+                // Получаем email пользователя из Google API
+                await fetchUserProfile()
+                await loadMediaItems()
+            } else {
+                throw URLError(.cannotParseResponse)
+            }
+        } catch {
+            self.statusMessage = "Авторизация отменена или завершилась ошибкой: \(error.localizedDescription)".localized
+        }
         
-        self.accessToken = demoToken
-        self.userEmail = email
-        self.isAuthenticated = true
         self.isLoading = false
-        self.statusMessage = "Успешно подключено: \(email)".localized
+    }
+    
+    private func extractQueryParam(_ param: String, from string: String) -> String? {
+        let pairs = string.components(separatedBy: "&")
+        for pair in pairs {
+            let keyVal = pair.components(separatedBy: "=")
+            if keyVal.count == 2, keyVal[0] == param {
+                return keyVal[1].removingPercentEncoding
+            }
+        }
+        return nil
+    }
+    
+    private func fetchUserProfile() async {
+        guard let token = accessToken,
+              let url = URL(string: "https://www.googleapis.com/oauth2/v2/userinfo") else { return }
         
-        // Загружаем тестовые/облачные медиаданные
-        await loadDemoMediaItems()
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if (response as? HTTPURLResponse)?.statusCode == 200,
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let email = json["email"] as? String {
+                self.userEmail = email
+                UserDefaults.standard.set(email, forKey: "google_photos_user_email")
+            }
+        } catch {
+            print("Failed to fetch Google profile: \(error)")
+        }
     }
     
     func signOut() {
@@ -106,85 +183,70 @@ final class GooglePhotosManager: ObservableObject {
         self.statusMessage = "Отключено от Google Фото".localized
     }
     
-    // MARK: - Fetching Media
+    // MARK: - Fetching Media from Google API
     
     func loadMediaItems(filterVideoOnly: Bool = false) async {
-        guard isAuthenticated else { return }
+        guard isAuthenticated, let token = accessToken else { return }
         
         self.isLoading = true
-        self.statusMessage = "Загрузка списка медиа из Google Фото...".localized
+        self.statusMessage = "Загрузка медиафайлов из Google Фото...".localized
         
-        // В случае демо-токена загружаем качественные стоковые примеры видео и фото для тестирования
-        await loadDemoMediaItems(filterVideoOnly: filterVideoOnly)
+        guard let url = URL(string: "https://photoslibrary.googleapis.com/v1/mediaItems?pageSize=100") else {
+            self.isLoading = false
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                // Если с токеном проблема — пробуем обновить авторизацию
+                if (response as? HTTPURLResponse)?.statusCode == 401 {
+                    self.statusMessage = "Сессия истекла. Войдите заново.".localized
+                    signOut()
+                }
+                self.isLoading = false
+                return
+            }
+            
+            struct GooglePhotosListResponse: Codable {
+                let mediaItems: [GoogleMediaItem]?
+            }
+            
+            let result = try JSONDecoder().decode(GooglePhotosListResponse.self, from: data)
+            let items = result.mediaItems ?? []
+            
+            if filterVideoOnly {
+                self.mediaItems = items.filter { $0.isVideo }
+            } else {
+                self.mediaItems = items
+            }
+            self.statusMessage = "Загружено элементов: \(self.mediaItems.count)".localized
+        } catch {
+            self.statusMessage = "Ошибка получения медиафайлов: \(error.localizedDescription)".localized
+        }
         
         self.isLoading = false
     }
     
-    private func loadDemoMediaItems(filterVideoOnly: Bool = false) async {
-        // Задержка сетевого ответа
-        try? await Task.sleep(nanoseconds: 600_000_000)
-        
-        let sampleItems: [GoogleMediaItem] = [
-            GoogleMediaItem(
-                id: "g1",
-                filename: "Cinematic_Drone_Sunset_4K.mp4",
-                mimeType: "video/mp4",
-                baseUrl: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e",
-                productUrl: nil,
-                mediaMetadata: GoogleMediaMetadata(creationTime: "2026-08-01T12:00:00Z", width: "3840", height: "2160", video: GoogleVideoMetadata(fps: 60.0, status: "READY"))
-            ),
-            GoogleMediaItem(
-                id: "g2",
-                filename: "Urban_TimeLapse_Night_City.mp4",
-                mimeType: "video/mp4",
-                baseUrl: "https://images.unsplash.com/photo-1477959858617-67f30ac4ce78",
-                productUrl: nil,
-                mediaMetadata: GoogleMediaMetadata(creationTime: "2026-08-02T18:30:00Z", width: "3840", height: "2160", video: GoogleVideoMetadata(fps: 30.0, status: "READY"))
-            ),
-            GoogleMediaItem(
-                id: "g3",
-                filename: "Nature_Forest_Mist_SlowMo.mp4",
-                mimeType: "video/mp4",
-                baseUrl: "https://images.unsplash.com/photo-1448375240586-882707db888b",
-                productUrl: nil,
-                mediaMetadata: GoogleMediaMetadata(creationTime: "2026-08-03T09:15:00Z", width: "1920", height: "1080", video: GoogleVideoMetadata(fps: 120.0, status: "READY"))
-            ),
-            GoogleMediaItem(
-                id: "g4",
-                filename: "Business_Team_Meeting_Office.jpg",
-                mimeType: "image/jpeg",
-                baseUrl: "https://images.unsplash.com/photo-1522071820081-009f0129c71c",
-                productUrl: nil,
-                mediaMetadata: GoogleMediaMetadata(creationTime: "2026-08-04T14:20:00Z", width: "4000", height: "3000", video: nil)
-            ),
-            GoogleMediaItem(
-                id: "g5",
-                filename: "Abstract_3D_Liquid_Motion.mp4",
-                mimeType: "video/mp4",
-                baseUrl: "https://images.unsplash.com/photo-1541701494587-cb58502866ab",
-                productUrl: nil,
-                mediaMetadata: GoogleMediaMetadata(creationTime: "2026-08-05T11:45:00Z", width: "3840", height: "2160", video: GoogleVideoMetadata(fps: 60.0, status: "READY"))
-            )
-        ]
-        
-        if filterVideoOnly {
-            self.mediaItems = sampleItems.filter { $0.isVideo }
-        } else {
-            self.mediaItems = sampleItems
-        }
-    }
-    
     // MARK: - Download Media
     
-    /// Скачивает файл из Google Photos по URL и возвращает данные
+    /// Скачивает реальный медиафайл из Google Photos по URL
     func downloadItemData(_ item: GoogleMediaItem) async throws -> Data {
-        guard let url = item.thumbnailURL ?? URL(string: item.baseUrl) else {
+        guard let url = item.downloadURL ?? URL(string: item.baseUrl) else {
             throw URLError(.badURL)
         }
         
         self.downloadProgress[item.id] = 0.2
         
-        let (data, response) = try await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        if let token = accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
         
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw URLError(.badServerResponse)
@@ -194,3 +256,4 @@ final class GooglePhotosManager: ObservableObject {
         return data
     }
 }
+

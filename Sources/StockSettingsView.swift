@@ -38,6 +38,8 @@ struct StockSettingsView: View {
                                 )
                             }
                         }
+                        
+                        disclaimerSection
                     }
                     .padding()
                 }
@@ -94,8 +96,28 @@ struct StockSettingsView: View {
 
     
     // MARK: - Brand Colors Mock
+    private var disclaimerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(Color(hex: "007AFF"))
+                    .font(.system(size: 14))
+                Text("Правовая информация и товарные знаки".localized)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+            }
+            
+            Text("SmartStock является независимым инструментом и не связан, не авторизован и не спонсируется Shutterstock, Adobe Stock, Getty Images, Depositphotos, Freepik, Alamy, Dreamstime, 123RF, Pond5 или Google. Все товарные знаки и названия брендов принадлежат их правообладателям.".localized)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(2)
+        }
+        .glassCard(cornerRadius: 16, padding: 16)
+    }
+
     private func colorForPlatform(_ id: String) -> Color {
-        switch id {
         case "adobe": return Color(hex: "FF0000") // Adobe Red
         case "shutterstock": return Color(hex: "FF6600") // Shutterstock Orange
         case "istock": return Color(hex: "3B82F6") // Brand Blue

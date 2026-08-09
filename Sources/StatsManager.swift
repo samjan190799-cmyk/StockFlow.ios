@@ -167,26 +167,11 @@ final class StatsManager: ObservableObject {
         return statsByStock.values.first(where: { $0.name == stockName })?.failedUploads ?? 0
     }
 
-    /// Количество покупок для стока (детерминированная симуляция на основе успешных загрузок)
+    /// Реальное количество успешных элементов для стока
     func salesCount(for stockName: String) -> Int {
-        let history = StatsManager.loadHistorySync()
-        let successRecords = history.filter { $0.isSuccess }
-        
-        let filteredRecords: [UploadHistoryRecord]
-        if stockName == "Все стоки" {
-            filteredRecords = successRecords
-        } else {
-            filteredRecords = successRecords.filter { $0.platformName == stockName }
-        }
-        
-        return filteredRecords.reduce(0) { sum, record in
-            let hash = abs(record.filename.hashValue ^ record.platformId.hashValue)
-            // 35% файлов продаются от 1 до 4 раз
-            if hash % 100 < 35 {
-                return sum + (hash % 4) + 1
-            }
-            return sum
-        }
+        // Симуляция продаж удалена по требованию App Store Review Guidelines и стандартов качества.
+        // Здесь вычисляется только фактическое количество успешных загрузок.
+        return successUploads(for: stockName)
     }
 
     /// Время последней синхронизации для стока

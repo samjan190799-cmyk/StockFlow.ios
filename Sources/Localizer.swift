@@ -19,6 +19,8 @@ struct Localizer {
     private static let enTranslations: [String: String] = [
         // Экран параметров системы
         "Параметры системы": "System Settings",
+        "Правовая информация и товарные знаки": "Legal Information & Trademarks",
+        "SmartStock является независимым инструментом и не связан, не авторизован и не спонсируется Shutterstock, Adobe Stock, Getty Images, Depositphotos, Freepik, Alamy, Dreamstime, 123RF, Pond5 или Google. Все товарные знаки и названия брендов принадлежат их правообладателям.": "SmartStock is an independent software tool and is not affiliated with, authorized, maintained, sponsored, or endorsed by Shutterstock, Adobe Stock, Getty Images, Depositphotos, Freepik, Alamy, Dreamstime, 123RF, Pond5, or Google. All trademarks, service marks, and brand names belong to their respective owners.",
         "Интерфейс": "Interface",
         "Язык интерфейса": "App Language",
         "Тема оформления": "Theme",

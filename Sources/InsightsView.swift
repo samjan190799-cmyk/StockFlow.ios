@@ -130,35 +130,7 @@ struct InsightsView: View {
 
     // Данные графика
     private var currentChartData: [EarningPoint] {
-        if isDemoMode {
-            return demoChartData
-        }
         return stats.chartData(for: selectedStock, period: selectedPeriod, metric: selectedMetric)
-    }
-
-    private var demoChartData: [EarningPoint] {
-        let mult: Double
-        switch selectedMetric {
-        case .sales:  mult = 0.35 // Продаж меньше, чем успешных загрузок
-        case .failed: mult = 0.08
-        default:      mult = 1.0
-        }
-        
-        switch selectedPeriod {
-        case "7D":
-            return zip(
-                ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"],
-                [3.0, 5.0, 4.0, 8.0, 12.0, 7.0, 15.0]
-            ).map { EarningPoint(date: $0, value: $1 * mult) }
-        case "90D":
-            return zip(["АПР", "МАЙ", "ИЮН"], [42.0, 78.0, 120.0])
-                .map { EarningPoint(date: $0, value: $1 * mult) }
-        default:
-            return zip(
-                ["01 МАЙ", "08 МАЙ", "15 МАЙ", "22 МАЙ", "31 МАЙ"],
-                [8.0, 14.0, 22.0, 31.0, 45.0]
-            ).map { EarningPoint(date: $0, value: $1 * mult) }
-        }
     }
 
     // MARK: - Body
@@ -169,19 +141,17 @@ struct InsightsView: View {
 
                 VStack(spacing: 0) {
                     // Выпадающий пикер стоков
-                    if !isDemoMode {
-                        stockPickerSection
-                            .padding(.horizontal)
-                            .padding(.top, 8)
-                            .zIndex(10)
-                    }
+                    stockPickerSection
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                        .zIndex(10)
 
                     ScrollView {
                         VStack(spacing: 14) {
                             // Вкладки метрик
                             metricsTabs
                                 .padding(.horizontal)
-                                .padding(.top, isDemoMode ? 12 : 8)
+                                .padding(.top, 8)
 
                             if stats.isLoading {
                                 // Shimmer-скелетон
@@ -197,23 +167,19 @@ struct InsightsView: View {
                                     .padding(.horizontal)
 
                                 // Список стоков
-                                if !isDemoMode {
-                                    performanceSection
-                                        .padding(.horizontal)
+                                performanceSection
+                                    .padding(.horizontal)
 
-                                    // История загрузок
-                                    historySection
-                                        .padding(.horizontal)
-                                        .padding(.bottom, 24)
-                                }
+                                // История загрузок
+                                historySection
+                                    .padding(.horizontal)
+                                    .padding(.bottom, 24)
                             }
                         }
                     }
-                    .blur(radius: isDemoMode ? 3.0 : 0.0)
-                    .allowsHitTesting(!isDemoMode)
                 }
 
-                // Демо-оверлей
+                // Информационная подсказка при отсутствии подключенных стоков
                 if isDemoMode {
                     demoModeOverlay
                 }
@@ -233,22 +199,20 @@ struct InsightsView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if !isDemoMode {
-                        Button(action: {
-                            HapticHelper.selection()
-                            stats.refresh()
-                        }) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .rotationEffect(.degrees(stats.isLoading ? 360 : 0))
-                                .animation(
-                                    stats.isLoading
-                                        ? .linear(duration: 1).repeatForever(autoreverses: false)
-                                        : .default,
-                                    value: stats.isLoading
-                                )
-                        }
+                    Button(action: {
+                        HapticHelper.selection()
+                        stats.refresh()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(stats.isLoading ? 360 : 0))
+                            .animation(
+                                stats.isLoading
+                                    ? .linear(duration: 1).repeatForever(autoreverses: false)
+                                    : .default,
+                                value: stats.isLoading
+                            )
                     }
                 }
             }
