@@ -114,10 +114,10 @@ final class GooglePhotosManager: ObservableObject {
         if currentKey.contains(".apps.googleusercontent.com") {
             let keyPrefix = currentKey.replacingOccurrences(of: ".apps.googleusercontent.com", with: "")
             callbackScheme = "com.googleusercontent.apps.\(keyPrefix)"
-            redirectURI = "\(callbackScheme):/oauth2redirect"
+            redirectURI = "\(callbackScheme)://oauth2redirect"
         } else {
             callbackScheme = redirectScheme
-            redirectURI = "\(redirectScheme):/oauth2redirect"
+            redirectURI = "\(redirectScheme)://oauth2redirect"
         }
         
         guard let encodedRedirect = redirectURI.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),

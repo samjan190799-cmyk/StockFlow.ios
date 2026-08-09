@@ -41,5 +41,17 @@
     <true/>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>com.samvel.smartstock</string>
+                <string>com.samvel.smartstock.SmartStock</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
