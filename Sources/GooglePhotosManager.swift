@@ -355,66 +355,185 @@ final class GooglePhotosManager: ObservableObject {
         guard isAuthenticated, let token = accessToken else { return }
         
         self.isLoading = true
-        self.statusMessage = "Поиск медиафайлов в Google Фото и Google Диске...".localized
+        self.statusMessage = "Загрузка всех медиафайлов из Google Фото и Диска...".localized
         
         var fetchedItems: [GoogleMediaItem] = []
+        var pageCount = 0
+        let maxPages = 50 // До 5000+ объектов
         
-        // 1. Попытка загрузить из Google Photos API
-        if let photosURL = URL(string: "https://photoslibrary.googleapis.com/v1/mediaItems?pageSize=100") {
+        // 1. Циклическая загрузка из Google Photos API (по nextPageToken)
+        var photosPageToken: String? = nil
+        repeat {
+            pageCount += 1
+            var components = URLComponents(string: "https://photoslibrary.googleapis.com/v1/mediaItems")
+            var queryItems = [URLQueryItem(name: "pageSize", value: "100")]
+            if let pageToken = photosPageToken {
+                queryItems.append(URLQueryItem(name: "pageToken", value: pageToken))
+            }
+            components?.queryItems = queryItems
+            
+            guard let photosURL = components?.url else { break }
+            
             var request = URLRequest(url: photosURL)
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             
             if let (data, response) = try? await URLSession.shared.data(for: request),
-               (response as? HTTPURLResponse)?.statusCode == 200 {
-                struct GooglePhotosListResponse: Codable {
-                    let mediaItems: [GoogleMediaItem]?
+               let httpResp = response as? HTTPURLResponse {
+                if httpResp.statusCode == 401 {
+                    if await refreshAccessTokenIfNeeded(), let newToken = accessToken {
+                        var retryReq = URLRequest(url: photosURL)
+                        retryReq.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                        if let (retryData, retryResp) = try? await URLSession.shared.data(for: retryReq),
+                           (retryResp as? HTTPURLResponse)?.statusCode == 200 {
+                            struct GooglePhotosListResponse: Codable {
+                                let mediaItems: [GoogleMediaItem]?
+                                let nextPageToken: String?
+                            }
+                            if let result = try? JSONDecoder().decode(GooglePhotosListResponse.self, from: retryData) {
+                                if let items = result.mediaItems {
+                                    fetchedItems.append(contentsOf: items)
+                                }
+                                photosPageToken = result.nextPageToken
+                            } else {
+                                photosPageToken = nil
+                            }
+                        } else {
+                            photosPageToken = nil
+                        }
+                    } else {
+                        photosPageToken = nil
+                    }
+                } else if httpResp.statusCode == 200 {
+                    struct GooglePhotosListResponse: Codable {
+                        let mediaItems: [GoogleMediaItem]?
+                        let nextPageToken: String?
+                    }
+                    if let result = try? JSONDecoder().decode(GooglePhotosListResponse.self, from: data) {
+                        if let items = result.mediaItems {
+                            fetchedItems.append(contentsOf: items)
+                        }
+                        photosPageToken = result.nextPageToken
+                    } else {
+                        photosPageToken = nil
+                    }
+                } else {
+                    photosPageToken = nil
                 }
-                if let result = try? JSONDecoder().decode(GooglePhotosListResponse.self, from: data),
-                   let items = result.mediaItems {
-                    fetchedItems.append(contentsOf: items)
-                }
+            } else {
+                photosPageToken = nil
             }
-        }
+            
+            self.statusMessage = "Загрузка Google Фото... Найдено: \(fetchedItems.count)".localized
+        } while photosPageToken != nil && pageCount < maxPages
         
-        // 2. Попытка загрузить из Google Drive API (если в Google Фото пусто или API не включен)
-        let driveQuery = "mimeType contains 'image/' or mimeType contains 'video/'"
-        if let encodedQuery = driveQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-           let driveURL = URL(string: "https://www.googleapis.com/drive/v3/files?q=\(encodedQuery)&pageSize=100&fields=files(id,name,mimeType,thumbnailLink,webContentLink)") {
+        // 2. Циклическая загрузка из Google Drive API (по nextPageToken)
+        var drivePageToken: String? = nil
+        let driveQuery = "(mimeType contains 'image/' or mimeType contains 'video/') and trashed = false"
+        
+        repeat {
+            var components = URLComponents(string: "https://www.googleapis.com/drive/v3/files")
+            var queryItems = [
+                URLQueryItem(name: "q", value: driveQuery),
+                URLQueryItem(name: "pageSize", value: "1000"),
+                URLQueryItem(name: "fields", value: "nextPageToken,files(id,name,mimeType,thumbnailLink,webContentLink)")
+            ]
+            if let pageToken = drivePageToken {
+                queryItems.append(URLQueryItem(name: "pageToken", value: pageToken))
+            }
+            components?.queryItems = queryItems
+            
+            guard let driveURL = components?.url else { break }
+            
             var request = URLRequest(url: driveURL)
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             
             if let (data, response) = try? await URLSession.shared.data(for: request),
-               (response as? HTTPURLResponse)?.statusCode == 200 {
-                struct DriveFile: Codable {
-                    let id: String
-                    let name: String
-                    let mimeType: String
-                    let thumbnailLink: String?
-                    let webContentLink: String?
-                }
-                struct DriveListResponse: Codable {
-                    let files: [DriveFile]?
-                }
-                
-                if let driveResult = try? JSONDecoder().decode(DriveListResponse.self, from: data),
-                   let files = driveResult.files {
-                    for file in files {
-                        // Избегаем дубликатов по ID
-                        if !fetchedItems.contains(where: { $0.id == file.id }) {
-                            let item = GoogleMediaItem(
-                                id: file.id,
-                                filename: file.name,
-                                mimeType: file.mimeType,
-                                baseUrl: file.webContentLink ?? file.thumbnailLink ?? "",
-                                productUrl: file.thumbnailLink,
-                                mediaMetadata: nil
-                            )
-                            fetchedItems.append(item)
+               let httpResp = response as? HTTPURLResponse {
+                if httpResp.statusCode == 401 {
+                    if await refreshAccessTokenIfNeeded(), let newToken = accessToken {
+                        var retryReq = URLRequest(url: driveURL)
+                        retryReq.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                        if let (retryData, retryResp) = try? await URLSession.shared.data(for: retryReq),
+                           (retryResp as? HTTPURLResponse)?.statusCode == 200 {
+                            struct DriveFile: Codable {
+                                let id: String
+                                let name: String
+                                let mimeType: String
+                                let thumbnailLink: String?
+                                let webContentLink: String?
+                            }
+                            struct DriveListResponse: Codable {
+                                let files: [DriveFile]?
+                                let nextPageToken: String?
+                            }
+                            if let driveResult = try? JSONDecoder().decode(DriveListResponse.self, from: retryData) {
+                                if let files = driveResult.files {
+                                    for file in files {
+                                        if !fetchedItems.contains(where: { $0.id == file.id }) {
+                                            let item = GoogleMediaItem(
+                                                id: file.id,
+                                                filename: file.name,
+                                                mimeType: file.mimeType,
+                                                baseUrl: file.webContentLink ?? file.thumbnailLink ?? "",
+                                                productUrl: file.thumbnailLink,
+                                                mediaMetadata: nil
+                                            )
+                                            fetchedItems.append(item)
+                                        }
+                                    }
+                                }
+                                drivePageToken = driveResult.nextPageToken
+                            } else {
+                                drivePageToken = nil
+                            }
+                        } else {
+                            drivePageToken = nil
                         }
+                    } else {
+                        drivePageToken = nil
                     }
+                } else if httpResp.statusCode == 200 {
+                    struct DriveFile: Codable {
+                        let id: String
+                        let name: String
+                        let mimeType: String
+                        let thumbnailLink: String?
+                        let webContentLink: String?
+                    }
+                    struct DriveListResponse: Codable {
+                        let files: [DriveFile]?
+                        let nextPageToken: String?
+                    }
+                    
+                    if let driveResult = try? JSONDecoder().decode(DriveListResponse.self, from: data) {
+                        if let files = driveResult.files {
+                            for file in files {
+                                if !fetchedItems.contains(where: { $0.id == file.id }) {
+                                    let item = GoogleMediaItem(
+                                        id: file.id,
+                                        filename: file.name,
+                                        mimeType: file.mimeType,
+                                        baseUrl: file.webContentLink ?? file.thumbnailLink ?? "",
+                                        productUrl: file.thumbnailLink,
+                                        mediaMetadata: nil
+                                    )
+                                    fetchedItems.append(item)
+                                }
+                            }
+                        }
+                        drivePageToken = driveResult.nextPageToken
+                    } else {
+                        drivePageToken = nil
+                    }
+                } else {
+                    drivePageToken = nil
                 }
+            } else {
+                drivePageToken = nil
             }
-        }
+            
+            self.statusMessage = "Поиск медиафайлов... Загружено: \(fetchedItems.count)".localized
+        } while drivePageToken != nil
         
         if filterVideoOnly {
             self.mediaItems = fetchedItems.filter { $0.isVideo }
