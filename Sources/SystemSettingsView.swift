@@ -56,6 +56,7 @@ struct SystemSettingsView: View {
                         cacheSection
                         disclaimerSection
                         saveButtonSection
+                        versionFooterSection
                     }
                     .padding()
                 }
@@ -389,6 +390,18 @@ struct SystemSettingsView: View {
                 .ambientShadow(radius: 8)
         }
         .buttonStyle(PremiumButtonStyle())
+    }
+    
+    @ViewBuilder
+    private var versionFooterSection: some View {
+        HStack {
+            Spacer()
+            Text("SmartStock v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6") (Сборка \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0")) — OAuth PKCE")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.vertical, 4)
     }
     
     // MARK: - Row Helpers

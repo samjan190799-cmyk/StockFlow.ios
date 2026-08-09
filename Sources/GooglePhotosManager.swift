@@ -123,19 +123,28 @@ final class GooglePhotosManager: ObservableObject {
         if currentKey.contains(".apps.googleusercontent.com") {
             let keyPrefix = currentKey.replacingOccurrences(of: ".apps.googleusercontent.com", with: "")
             callbackScheme = "com.googleusercontent.apps.\(keyPrefix)"
-            redirectURI = "\(callbackScheme)://oauth2redirect"
+            redirectURI = "\(callbackScheme):/oauth2redirect"
         } else {
             callbackScheme = redirectScheme
-            redirectURI = "\(redirectScheme)://oauth2redirect"
+            redirectURI = "\(redirectScheme):/oauth2redirect"
         }
         
         let codeVerifier = generateCodeVerifier()
         let codeChallenge = generateCodeChallenge(from: codeVerifier)
         
-        guard let encodedRedirect = redirectURI.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let encodedScope = scopes.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let encodedChallenge = codeChallenge.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let authURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=\(currentKey)&redirect_uri=\(encodedRedirect)&scope=\(encodedScope)&code_challenge=\(encodedChallenge)&code_challenge_method=S256&access_type=offline&prompt=consent") else {
+        var urlComponents = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")
+        urlComponents?.queryItems = [
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "client_id", value: currentKey),
+            URLQueryItem(name: "redirect_uri", value: redirectURI),
+            URLQueryItem(name: "scope", value: scopes),
+            URLQueryItem(name: "code_challenge", value: codeChallenge),
+            URLQueryItem(name: "code_challenge_method", value: "S256"),
+            URLQueryItem(name: "access_type", value: "offline"),
+            URLQueryItem(name: "prompt", value: "consent")
+        ]
+        
+        guard let authURL = urlComponents?.url else {
             self.isLoading = false
             self.statusMessage = "Ошибка формирования URL авторизации".localized
             return
@@ -279,7 +288,7 @@ final class GooglePhotosManager: ObservableObject {
         return Data(hashed).base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "="))
     }
     
     private func extractQueryParam(_ param: String, from string: String) -> String? {
