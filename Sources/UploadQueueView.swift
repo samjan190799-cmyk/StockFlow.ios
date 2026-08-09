@@ -346,19 +346,18 @@ class QueueViewModel: ObservableObject {
             let imagesData = await getAIImagesData(for: photo)
             
             do {
-                let metadata = try await AIService.shared.analyzeImages(
+                let metadata = try await AIManager.shared.analyzePhoto(
                     imagesData: imagesData,
-                    filename: photo.filename,
+                    customPrompt: customPrompt,
                     provider: provider,
-                    apiKey: apiKey,
-                    customPrompt: customPrompt
+                    apiKey: apiKey
                 )
                 
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].title = metadata.title
                     self.photos[index].keywords = metadata.keywords
                     self.photos[index].description = metadata.description
-                    self.photos[index].categories = metadata.categories
+                    self.photos[index].categories = metadata.categories ?? []
                     self.photos[index].status = .ready
                     self.savePhotosToDisk()
                     self.triggerToast("ИИ успешно заполнил метаданные для".localized + " \(photo.filename)!")
