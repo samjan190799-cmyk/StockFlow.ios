@@ -418,22 +418,31 @@ struct AuthenticatedGoogleImageView: View {
         isLoading = true
         isError = false
         
-        var request = URLRequest(url: url)
-        if let token = token, !token.isEmpty {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // 1. Публичный запрос (для CDN Google Фото lh3.googleusercontent.com)
+        if let (data, response) = try? await URLSession.shared.data(from: url),
+           let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200,
+           let loadedImage = UIImage(data: data) {
+            GoogleImageCache.shared.setObject(loadedImage, forKey: cacheKey)
+            self.image = loadedImage
+            isLoading = false
+            return
         }
         
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            if let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200, let loadedImage = UIImage(data: data) {
+        // 2. Авторизованный запрос с Bearer токеном (для Google Drive API)
+        if let token = token, !token.isEmpty {
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if let (data, response) = try? await URLSession.shared.data(for: request),
+               let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200,
+               let loadedImage = UIImage(data: data) {
                 GoogleImageCache.shared.setObject(loadedImage, forKey: cacheKey)
                 self.image = loadedImage
-            } else {
-                self.isError = true
+                isLoading = false
+                return
             }
-        } catch {
-            self.isError = true
         }
+        
+        self.isError = true
         isLoading = false
     }
 }

@@ -39,18 +39,26 @@ final class ImageCacheHelper {
             return cached
         }
         
-        // Проверяем, есть ли видеофайл с таким именем на диске
-        var fileURL = dirURL.appendingPathComponent("\(photoId.uuidString).jpg")
+        // Поиск любого подходящего файла с совпадением UUID в имени
+        var targetURL: URL? = nil
         var isVideoFile = false
         
-        let extensions = ["mp4", "mov", "m4v", "MP4", "MOV"]
-        for ext in extensions {
-            let possibleURL = dirURL.appendingPathComponent("\(photoId.uuidString).\(ext)")
-            if FileManager.default.fileExists(atPath: possibleURL.path) {
-                fileURL = possibleURL
-                isVideoFile = true
-                break
+        if let contents = try? FileManager.default.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: nil) {
+            for file in contents {
+                let name = file.lastPathComponent
+                if name.hasPrefix(photoId.uuidString) && !name.hasSuffix("_thumb.jpg") {
+                    targetURL = file
+                    let ext = file.pathExtension.lowercased()
+                    if ["mp4", "mov", "m4v", "avi", "mkv", "3gp"].contains(ext) {
+                        isVideoFile = true
+                    }
+                    break
+                }
             }
+        }
+        
+        guard let fileURL = targetURL else {
+            return nil
         }
         
         if isVideoFile {
@@ -58,16 +66,21 @@ final class ImageCacheHelper {
                 let asset = AVAsset(url: fileURL)
                 let generator = AVAssetImageGenerator(asset: asset)
                 generator.appliesPreferredTrackTransform = true
-                generator.requestedTimeToleranceBefore = .zero
-                generator.requestedTimeToleranceAfter = .zero
-                let time = CMTime(seconds: 1.0, preferredTimescale: 60)
-                guard let cgImage = try? generator.copyCGImage(at: time, actualTime: nil) else {
-                    guard let cgImageZero = try? generator.copyCGImage(at: .zero, actualTime: nil) else {
-                        return nil
+                generator.requestedTimeToleranceBefore = .positiveInfinite
+                generator.requestedTimeToleranceAfter = .positiveInfinite
+                
+                let timesToTry = [
+                    CMTime(seconds: 0.5, preferredTimescale: 60),
+                    CMTime(seconds: 1.0, preferredTimescale: 60),
+                    .zero
+                ]
+                
+                for t in timesToTry {
+                    if let cgImage = try? generator.copyCGImage(at: t, actualTime: nil) {
+                        return UIImage(cgImage: cgImage)
                     }
-                    return UIImage(cgImage: cgImageZero)
                 }
-                return UIImage(cgImage: cgImage)
+                return nil
             }.value
             
             if let image = image {
@@ -76,15 +89,13 @@ final class ImageCacheHelper {
             return image
         }
         
-        // Переносим обработку в фоновый поток (Task.detached)
+        // Переносим обработку фото в фоновый поток
         let image = await Task.detached(priority: .userInitiated) { () -> UIImage? in
-            let path = fileURL.path
-            guard FileManager.default.fileExists(atPath: path) else {
-                return nil
-            }
-            
             let imageSourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
             guard let imageSource = CGImageSourceCreateWithURL(fileURL as CFURL, imageSourceOptions) else {
+                if let rawData = try? Data(contentsOf: fileURL), let uiImg = UIImage(data: rawData) {
+                    return uiImg
+                }
                 return nil
             }
             
@@ -95,11 +106,14 @@ final class ImageCacheHelper {
                 kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
             ] as CFDictionary
             
-            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions) else {
-                return nil
+            if let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions) {
+                return UIImage(cgImage: cgImage)
             }
             
-            return UIImage(cgImage: cgImage)
+            if let rawData = try? Data(contentsOf: fileURL), let uiImg = UIImage(data: rawData) {
+                return uiImg
+            }
+            return nil
         }.value
         
         if let image = image {
@@ -115,22 +129,25 @@ final class ImageCacheHelper {
         fromDir dirURL: URL,
         count: Int = 3
     ) async -> [Data] {
-        var fileURL = dirURL.appendingPathComponent("\(photoId.uuidString).jpg")
+        var targetURL: URL? = nil
         var isVideoFile = false
         
-        let extensions = ["mp4", "mov", "m4v", "MP4", "MOV"]
-        for ext in extensions {
-            let possibleURL = dirURL.appendingPathComponent("\(photoId.uuidString).\(ext)")
-            if FileManager.default.fileExists(atPath: possibleURL.path) {
-                fileURL = possibleURL
-                isVideoFile = true
-                break
+        if let contents = try? FileManager.default.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: nil) {
+            for file in contents {
+                let name = file.lastPathComponent
+                if name.hasPrefix(photoId.uuidString) && !name.hasSuffix("_thumb.jpg") {
+                    targetURL = file
+                    let ext = file.pathExtension.lowercased()
+                    if ["mp4", "mov", "m4v", "avi", "mkv", "3gp"].contains(ext) {
+                        isVideoFile = true
+                    }
+                    break
+                }
             }
         }
         
-        guard isVideoFile else {
-            // Если это не видео, возвращаем данные фото
-            if let data = try? Data(contentsOf: fileURL) {
+        guard isVideoFile, let fileURL = targetURL else {
+            if let fileURL = targetURL, let data = try? Data(contentsOf: fileURL) {
                 return [data]
             }
             return []
