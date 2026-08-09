@@ -115,6 +115,7 @@ final class GooglePhotosManager: ObservableObject {
         
         let scopes = [
             "https://www.googleapis.com/auth/photoslibrary.readonly",
+            "https://www.googleapis.com/auth/drive.readonly",
             "https://www.googleapis.com/auth/userinfo.email"
         ].joined(separator: " ")
         
@@ -338,43 +339,77 @@ final class GooglePhotosManager: ObservableObject {
         guard isAuthenticated, let token = accessToken else { return }
         
         self.isLoading = true
-        self.statusMessage = "Загрузка медиафайлов из Google Фото...".localized
+        self.statusMessage = "Поиск медиафайлов в Google Фото и Google Диске...".localized
         
-        guard let url = URL(string: "https://photoslibrary.googleapis.com/v1/mediaItems?pageSize=100") else {
-            self.isLoading = false
-            return
+        var fetchedItems: [GoogleMediaItem] = []
+        
+        // 1. Попытка загрузить из Google Photos API
+        if let photosURL = URL(string: "https://photoslibrary.googleapis.com/v1/mediaItems?pageSize=100") {
+            var request = URLRequest(url: photosURL)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            
+            if let (data, response) = try? await URLSession.shared.data(for: request),
+               (response as? HTTPURLResponse)?.statusCode == 200 {
+                struct GooglePhotosListResponse: Codable {
+                    let mediaItems: [GoogleMediaItem]?
+                }
+                if let result = try? JSONDecoder().decode(GooglePhotosListResponse.self, from: data),
+                   let items = result.mediaItems {
+                    fetchedItems.append(contentsOf: items)
+                }
+            }
         }
         
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                // Если с токеном проблема — пробуем обновить авторизацию
-                if (response as? HTTPURLResponse)?.statusCode == 401 {
-                    self.statusMessage = "Сессия истекла. Войдите заново.".localized
-                    signOut()
+        // 2. Попытка загрузить из Google Drive API (если в Google Фото пусто или API не включен)
+        let driveQuery = "mimeType contains 'image/' or mimeType contains 'video/'"
+        if let encodedQuery = driveQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let driveURL = URL(string: "https://www.googleapis.com/drive/v3/files?q=\(encodedQuery)&pageSize=100&fields=files(id,name,mimeType,thumbnailLink,webContentLink)") {
+            var request = URLRequest(url: driveURL)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            
+            if let (data, response) = try? await URLSession.shared.data(for: request),
+               (response as? HTTPURLResponse)?.statusCode == 200 {
+                struct DriveFile: Codable {
+                    let id: String
+                    let name: String
+                    let mimeType: String
+                    let thumbnailLink: String?
+                    let webContentLink: String?
                 }
-                self.isLoading = false
-                return
+                struct DriveListResponse: Codable {
+                    let files: [DriveFile]?
+                }
+                
+                if let driveResult = try? JSONDecoder().decode(DriveListResponse.self, from: data),
+                   let files = driveResult.files {
+                    for file in files {
+                        // Избегаем дубликатов по ID
+                        if !fetchedItems.contains(where: { $0.id == file.id }) {
+                            let item = GoogleMediaItem(
+                                id: file.id,
+                                filename: file.name,
+                                mimeType: file.mimeType,
+                                baseUrl: file.webContentLink ?? file.thumbnailLink ?? "",
+                                productUrl: file.thumbnailLink,
+                                mediaMetadata: nil
+                            )
+                            fetchedItems.append(item)
+                        }
+                    }
+                }
             }
-            
-            struct GooglePhotosListResponse: Codable {
-                let mediaItems: [GoogleMediaItem]?
-            }
-            
-            let result = try JSONDecoder().decode(GooglePhotosListResponse.self, from: data)
-            let items = result.mediaItems ?? []
-            
-            if filterVideoOnly {
-                self.mediaItems = items.filter { $0.isVideo }
-            } else {
-                self.mediaItems = items
-            }
-            self.statusMessage = "Загружено элементов: \(self.mediaItems.count)".localized
-        } catch {
-            self.statusMessage = "Ошибка получения медиафайлов: \(error.localizedDescription)".localized
+        }
+        
+        if filterVideoOnly {
+            self.mediaItems = fetchedItems.filter { $0.isVideo }
+        } else {
+            self.mediaItems = fetchedItems
+        }
+        
+        if self.mediaItems.isEmpty {
+            self.statusMessage = "Файлов не найдено. Проверьте, включен ли Photos/Drive API в Google Cloud.".localized
+        } else {
+            self.statusMessage = "Найдено медиафайлов: \(self.mediaItems.count)".localized
         }
         
         self.isLoading = false
