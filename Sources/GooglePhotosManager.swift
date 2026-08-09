@@ -91,6 +91,14 @@ final class GooglePhotosManager: ObservableObject {
             self.isAuthenticated = true
             self.userEmail = UserDefaults.standard.string(forKey: "google_photos_user_email") ?? "Пользователь Google"
             self.statusMessage = "Подключено к Google Фото".localized
+        } else {
+            Task {
+                if await refreshAccessTokenIfNeeded() {
+                    self.isAuthenticated = true
+                    self.userEmail = UserDefaults.standard.string(forKey: "google_photos_user_email") ?? "Пользователь Google"
+                    self.statusMessage = "Подключено к Google Фото".localized
+                }
+            }
         }
     }
     
@@ -127,7 +135,7 @@ final class GooglePhotosManager: ObservableObject {
         guard let encodedRedirect = redirectURI.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let encodedScope = scopes.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let encodedChallenge = codeChallenge.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let authURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=\(currentKey)&redirect_uri=\(encodedRedirect)&scope=\(encodedScope)&code_challenge=\(encodedChallenge)&code_challenge_method=S256") else {
+              let authURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=\(currentKey)&redirect_uri=\(encodedRedirect)&scope=\(encodedScope)&code_challenge=\(encodedChallenge)&code_challenge_method=S256&access_type=offline&prompt=consent") else {
             self.isLoading = false
             self.statusMessage = "Ошибка формирования URL авторизации".localized
             return
@@ -206,10 +214,53 @@ final class GooglePhotosManager: ObservableObject {
         
         struct TokenResponse: Codable {
             let access_token: String
+            let refresh_token: String?
         }
         
         let decoded = try JSONDecoder().decode(TokenResponse.self, from: data)
+        if let refreshToken = decoded.refresh_token, !refreshToken.isEmpty {
+            KeychainHelper.shared.save(password: refreshToken, for: "com.stockflow.googlephotos.refresh")
+        }
         return decoded.access_token
+    }
+    
+    func refreshAccessTokenIfNeeded() async -> Bool {
+        guard let refreshToken = KeychainHelper.shared.read(for: "com.stockflow.googlephotos.refresh"),
+              !refreshToken.isEmpty else {
+            return false
+        }
+        
+        guard let tokenURL = URL(string: "https://oauth2.googleapis.com/token") else {
+            return false
+        }
+        
+        var request = URLRequest(url: tokenURL)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        
+        let currentKey = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bodyComponents = [
+            "client_id=\(currentKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? currentKey)",
+            "refresh_token=\(refreshToken.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? refreshToken)",
+            "grant_type=refresh_token"
+        ]
+        request.httpBody = bodyComponents.joined(separator: "&").data(using: .utf8)
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return false }
+            
+            struct RefreshResponse: Codable {
+                let access_token: String
+            }
+            
+            let decoded = try JSONDecoder().decode(RefreshResponse.self, from: data)
+            self.accessToken = decoded.access_token
+            KeychainHelper.shared.save(password: decoded.access_token, for: "com.stockflow.googlephotos")
+            return true
+        } catch {
+            return false
+        }
     }
     
     // MARK: - PKCE Helpers
