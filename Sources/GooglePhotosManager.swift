@@ -43,11 +43,12 @@ struct GoogleVideoMetadata: Codable, Sendable {
 
 // MARK: - OAuth Web Session Context Provider
 final class WebAuthContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
-    @MainActor
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first(where: { $0.isKeyWindow }) {
-            return window
+        if Thread.isMainThread {
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first(where: { $0.isKeyWindow }) {
+                return window
+            }
         }
         return ASPresentationAnchor()
     }

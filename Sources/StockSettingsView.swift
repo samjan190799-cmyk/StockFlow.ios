@@ -118,6 +118,7 @@ struct StockSettingsView: View {
     }
 
     private func colorForPlatform(_ id: String) -> Color {
+        switch id {
         case "adobe": return Color(hex: "FF0000") // Adobe Red
         case "shutterstock": return Color(hex: "FF6600") // Shutterstock Orange
         case "istock": return Color(hex: "3B82F6") // Brand Blue
