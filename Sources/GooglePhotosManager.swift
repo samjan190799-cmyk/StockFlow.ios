@@ -97,15 +97,32 @@ final class GooglePhotosManager: ObservableObject {
         self.isLoading = true
         self.statusMessage = "Открытие окна авторизации Google...".localized
         
+        let currentKey = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !currentKey.isEmpty, !currentKey.contains("stockflow.apps.googleusercontent.com") else {
+            self.isLoading = false
+            self.statusMessage = "Пожалуйста, введите ваш Google Client ID в параметрах системы.".localized
+            return
+        }
+        
         let scopes = [
             "https://www.googleapis.com/auth/photoslibrary.readonly",
             "https://www.googleapis.com/auth/userinfo.email"
         ].joined(separator: " ")
         
-        let redirectURI = "\(redirectScheme):/oauth2redirect"
+        let callbackScheme: String
+        let redirectURI: String
+        if currentKey.contains(".apps.googleusercontent.com") {
+            let keyPrefix = currentKey.replacingOccurrences(of: ".apps.googleusercontent.com", with: "")
+            callbackScheme = "com.googleusercontent.apps.\(keyPrefix)"
+            redirectURI = "\(callbackScheme):/oauth2redirect"
+        } else {
+            callbackScheme = redirectScheme
+            redirectURI = "\(redirectScheme):/oauth2redirect"
+        }
+        
         guard let encodedRedirect = redirectURI.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let encodedScope = scopes.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let authURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth?response_type=token&client_id=\(clientID)&redirect_uri=\(encodedRedirect)&scope=\(encodedScope)") else {
+              let authURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth?response_type=token&client_id=\(currentKey)&redirect_uri=\(encodedRedirect)&scope=\(encodedScope)") else {
             self.isLoading = false
             self.statusMessage = "Ошибка формирования URL авторизации".localized
             return
@@ -113,7 +130,7 @@ final class GooglePhotosManager: ObservableObject {
         
         do {
             let callbackURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
-                let session = ASWebAuthenticationSession(url: authURL, callbackURLScheme: redirectScheme) { callbackURL, error in
+                let session = ASWebAuthenticationSession(url: authURL, callbackURLScheme: callbackScheme) { callbackURL, error in
                     if let error = error {
                         continuation.resume(throwing: error)
                     } else if let callbackURL = callbackURL {
