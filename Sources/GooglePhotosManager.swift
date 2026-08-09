@@ -2,6 +2,7 @@ import SwiftUI
 import AuthenticationServices
 import Combine
 import Security
+import CryptoKit
 
 /// Модель единицы медиа из Google Photos REST API / Google Drive API
 struct GoogleMediaItem: Identifiable, Codable, Sendable {
@@ -120,9 +121,13 @@ final class GooglePhotosManager: ObservableObject {
             redirectURI = "\(redirectScheme)://oauth2redirect"
         }
         
+        let codeVerifier = generateCodeVerifier()
+        let codeChallenge = generateCodeChallenge(from: codeVerifier)
+        
         guard let encodedRedirect = redirectURI.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let encodedScope = scopes.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let authURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=\(currentKey)&redirect_uri=\(encodedRedirect)&scope=\(encodedScope)") else {
+              let encodedChallenge = codeChallenge.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let authURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=\(currentKey)&redirect_uri=\(encodedRedirect)&scope=\(encodedScope)&code_challenge=\(encodedChallenge)&code_challenge_method=S256") else {
             self.isLoading = false
             self.statusMessage = "Ошибка формирования URL авторизации".localized
             return
@@ -146,12 +151,12 @@ final class GooglePhotosManager: ObservableObject {
             
             var obtainedToken: String? = nil
             
-            // 1. Проверяем наличие 'code' в query параметрах (Authorization Code Flow)
+            // 1. Проверяем наличие 'code' в query параметрах (Authorization Code Flow with PKCE)
             if let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
                let queryItems = components.queryItems,
                let code = queryItems.first(where: { $0.name == "code" })?.value {
                 self.statusMessage = "Обмен кода авторизации...".localized
-                obtainedToken = try await exchangeCodeForToken(code: code, clientID: currentKey, redirectURI: redirectURI)
+                obtainedToken = try await exchangeCodeForToken(code: code, clientID: currentKey, redirectURI: redirectURI, codeVerifier: codeVerifier)
             }
             // 2. Резервный вариант: парсим 'access_token' из фрагмента (#access_token=...)
             else if let fragment = callbackURL.fragment, let token = extractQueryParam("access_token", from: fragment) {
@@ -176,7 +181,7 @@ final class GooglePhotosManager: ObservableObject {
         self.isLoading = false
     }
     
-    private func exchangeCodeForToken(code: String, clientID: String, redirectURI: String) async throws -> String {
+    private func exchangeCodeForToken(code: String, clientID: String, redirectURI: String, codeVerifier: String) async throws -> String {
         guard let tokenURL = URL(string: "https://oauth2.googleapis.com/token") else {
             throw URLError(.badURL)
         }
@@ -189,7 +194,8 @@ final class GooglePhotosManager: ObservableObject {
             "code=\(code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? code)",
             "client_id=\(clientID.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? clientID)",
             "redirect_uri=\(redirectURI.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? redirectURI)",
-            "grant_type=authorization_code"
+            "grant_type=authorization_code",
+            "code_verifier=\(codeVerifier.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? codeVerifier)"
         ]
         request.httpBody = bodyComponents.joined(separator: "&").data(using: .utf8)
         
@@ -204,6 +210,25 @@ final class GooglePhotosManager: ObservableObject {
         
         let decoded = try JSONDecoder().decode(TokenResponse.self, from: data)
         return decoded.access_token
+    }
+    
+    // MARK: - PKCE Helpers
+    private func generateCodeVerifier() -> String {
+        var buffer = [UInt8](repeating: 0, count: 32)
+        _ = SecRandomCopyBytes(kSecRandomDefault, buffer.count, &buffer)
+        return Data(buffer).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+    
+    private func generateCodeChallenge(from verifier: String) -> String {
+        guard let data = verifier.data(using: .utf8) else { return "" }
+        let hashed = SHA256.hash(data: data)
+        return Data(hashed).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
     }
     
     private func extractQueryParam(_ param: String, from string: String) -> String? {
