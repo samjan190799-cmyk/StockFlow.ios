@@ -66,6 +66,8 @@ struct Localizer {
         "Сжатие JPEG перед загрузкой": "Compress JPEG before upload",
         "Системные уведомления": "System Notifications",
         "Локальный ПК-сервер": "Local PC Server",
+        "Google OAuth Client ID (необязательно)": "Google OAuth Client ID (optional)",
+        "Если в окне Google выводится 'invalid_client (401)', введите ваш свой Client ID из Google Cloud Console (APIs & Services -> Credentials).": "If Google shows 'invalid_client (401)', enter your own Client ID from Google Cloud Console (APIs & Services -> Credentials).",
         "Загрузка через ПК-сервер": "Upload via PC Server",
         "Адрес сервера (IP:Порт)": "Server Address (IP:Port)",
         "Позволяет отправлять фото через программу на вашем компьютере. Полезно, если на телефоне блокируется FTPS к Shutterstock.": "Allows sending photos via the app on your computer. Useful if FTPS to Shutterstock is blocked on the phone.",

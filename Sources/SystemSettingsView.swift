@@ -29,7 +29,8 @@ struct SystemSettingsView: View {
     @AppStorage("sys_pc_server_enabled") private var pcServerEnabled: Bool = false
     @AppStorage("sys_pc_server_address") private var pcServerAddress: String = "192.168.1.50:5000"
     
-
+    // Google OAuth Custom Client ID
+    @AppStorage("google_oauth_client_id") private var customGoogleClientId: String = ""
     
     @ObservedObject private var googlePhotosManager = GooglePhotosManager.shared
     
@@ -579,7 +580,9 @@ struct SystemSettingsView: View {
                         HapticHelper.trigger(.medium)
                         Task {
                             await googlePhotosManager.signInWithGoogle()
-                            showToast("Успешно подключено к Google Фото!".localized)
+                            if googlePhotosManager.isAuthenticated {
+                                showToast("Успешно подключено к Google Фото!".localized)
+                            }
                         }
                     }) {
                         HStack(spacing: 6) {
@@ -593,6 +596,30 @@ struct SystemSettingsView: View {
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                     }
+                }
+            }
+            
+            if !googlePhotosManager.isAuthenticated {
+                Divider().background(Color.primary.opacity(0.08))
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Google OAuth Client ID (необязательно)".localized)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.secondary)
+                    
+                    TextField("123456789-xxxx.apps.googleusercontent.com", text: $customGoogleClientId)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                        .padding(10)
+                        .background(Color.primary.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                    
+                    Text("Если в окне Google выводится 'invalid_client (401)', введите ваш свой Client ID из Google Cloud Console (APIs & Services -> Credentials).".localized)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
