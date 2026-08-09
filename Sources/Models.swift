@@ -44,6 +44,9 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
     /// Маловесный тумбнейл (JPEG ~20KB) строго для быстрого отображения UI списка без раздувания ОЗУ
     var thumbnailData: Data? = nil
     
+    /// Временные оперативные бинарные данные (освобождаются после записи на диск)
+    var imageData: Data? = nil
+    
     var isVideo: Bool = false
     var uploadProgress: Double = 0.0
     var errorMessage: String? = nil
@@ -65,6 +68,7 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         localURLPath: String? = nil,
         localBookmarkData: Data? = nil,
         thumbnailData: Data? = nil,
+        imageData: Data? = nil,
         isVideo: Bool = false
     ) {
         self.id = id
@@ -79,6 +83,7 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         self.localURLPath = localURLPath
         self.localBookmarkData = localBookmarkData
         self.thumbnailData = thumbnailData
+        self.imageData = imageData
         self.isVideo = isVideo
     }
     
