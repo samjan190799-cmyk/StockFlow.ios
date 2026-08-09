@@ -14,7 +14,9 @@ struct GoogleMediaItem: Identifiable, Codable, Sendable {
     let mediaMetadata: GoogleMediaMetadata?
     
     var isVideo: Bool {
-        mimeType.contains("video") || filename.lowercased().hasSuffix(".mp4") || filename.lowercased().hasSuffix(".mov")
+        let fn = filename.lowercased()
+        let mt = mimeType.lowercased()
+        return mt.contains("video") || fn.hasSuffix(".mp4") || fn.hasSuffix(".mov") || fn.hasSuffix(".m4v") || fn.hasSuffix(".avi")
     }
     
     var downloadURL: URL? {
@@ -44,18 +46,60 @@ struct GoogleMediaItem: Identifiable, Codable, Sendable {
         guard !cleanBase.isEmpty else { return nil }
         return URL(string: "\(cleanBase)=w400-h400-c")
     }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, filename, mimeType, baseUrl, productUrl, mediaMetadata
+    }
+    
+    init(id: String, filename: String, mimeType: String, baseUrl: String, productUrl: String?, mediaMetadata: GoogleMediaMetadata?) {
+        self.id = id
+        self.filename = filename
+        self.mimeType = mimeType
+        self.baseUrl = baseUrl
+        self.productUrl = productUrl
+        self.mediaMetadata = mediaMetadata
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? container.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        self.filename = (try? container.decode(String.self, forKey: .filename)) ?? "photo.jpg"
+        self.mimeType = (try? container.decode(String.self, forKey: .mimeType)) ?? "image/jpeg"
+        self.baseUrl = (try? container.decode(String.self, forKey: .baseUrl)) ?? ""
+        self.productUrl = try? container.decode(String.self, forKey: .productUrl)
+        self.mediaMetadata = try? container.decode(GoogleMediaMetadata.self, forKey: .mediaMetadata)
+    }
 }
 
 struct GoogleMediaMetadata: Codable, Sendable {
     let creationTime: String?
     let width: String?
     let height: String?
-    let video: GoogleVideoMetadata?
-}
-
-struct GoogleVideoMetadata: Codable, Sendable {
-    let fps: Double?
-    let status: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case creationTime, width, height
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.creationTime = try? container.decode(String.self, forKey: .creationTime)
+        
+        if let wStr = try? container.decode(String.self, forKey: .width) {
+            self.width = wStr
+        } else if let wInt = try? container.decode(Int.self, forKey: .width) {
+            self.width = String(wInt)
+        } else {
+            self.width = nil
+        }
+        
+        if let hStr = try? container.decode(String.self, forKey: .height) {
+            self.height = hStr
+        } else if let hInt = try? container.decode(Int.self, forKey: .height) {
+            self.height = String(hInt)
+        } else {
+            self.height = nil
+        }
+    }
 }
 
 // MARK: - OAuth Web Session Context Provider
@@ -428,7 +472,7 @@ final class GooglePhotosManager: ObservableObject {
         
         // 2. Циклическая загрузка из Google Drive API (по nextPageToken)
         var drivePageToken: String? = nil
-        let driveQuery = "(mimeType contains 'image/' or mimeType contains 'video/') and trashed = false"
+        let driveQuery = "(mimeType contains 'image/' or mimeType contains 'video/' or mimeType contains 'application/' or name contains '.jpg' or name contains '.jpeg' or name contains '.png' or name contains '.heic' or name contains '.heif' or name contains '.dng' or name contains '.webp' or name contains '.mov' or name contains '.mp4') and trashed = false"
         
         repeat {
             var components = URLComponents(string: "https://www.googleapis.com/drive/v3/files")
@@ -449,82 +493,52 @@ final class GooglePhotosManager: ObservableObject {
             
             if let (data, response) = try? await URLSession.shared.data(for: request),
                let httpResp = response as? HTTPURLResponse {
+                let targetData: Data?
                 if httpResp.statusCode == 401 {
                     if await refreshAccessTokenIfNeeded(), let newToken = accessToken {
                         var retryReq = URLRequest(url: driveURL)
                         retryReq.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
                         if let (retryData, retryResp) = try? await URLSession.shared.data(for: retryReq),
                            (retryResp as? HTTPURLResponse)?.statusCode == 200 {
-                            struct DriveFile: Codable {
-                                let id: String
-                                let name: String
-                                let mimeType: String
-                                let thumbnailLink: String?
-                                let webContentLink: String?
-                            }
-                            struct DriveListResponse: Codable {
-                                let files: [DriveFile]?
-                                let nextPageToken: String?
-                            }
-                            if let driveResult = try? JSONDecoder().decode(DriveListResponse.self, from: retryData) {
-                                if let files = driveResult.files {
-                                    for file in files {
-                                        if !fetchedItems.contains(where: { $0.id == file.id }) {
-                                            let item = GoogleMediaItem(
-                                                id: file.id,
-                                                filename: file.name,
-                                                mimeType: file.mimeType,
-                                                baseUrl: file.webContentLink ?? file.thumbnailLink ?? "",
-                                                productUrl: file.thumbnailLink,
-                                                mediaMetadata: nil
-                                            )
-                                            fetchedItems.append(item)
-                                        }
-                                    }
-                                }
-                                drivePageToken = driveResult.nextPageToken
-                            } else {
-                                drivePageToken = nil
-                            }
+                            targetData = retryData
                         } else {
-                            drivePageToken = nil
+                            targetData = nil
                         }
                     } else {
-                        drivePageToken = nil
+                        targetData = nil
                     }
                 } else if httpResp.statusCode == 200 {
-                    struct DriveFile: Codable {
-                        let id: String
-                        let name: String
-                        let mimeType: String
-                        let thumbnailLink: String?
-                        let webContentLink: String?
-                    }
-                    struct DriveListResponse: Codable {
-                        let files: [DriveFile]?
-                        let nextPageToken: String?
-                    }
-                    
-                    if let driveResult = try? JSONDecoder().decode(DriveListResponse.self, from: data) {
-                        if let files = driveResult.files {
-                            for file in files {
-                                if !fetchedItems.contains(where: { $0.id == file.id }) {
-                                    let item = GoogleMediaItem(
-                                        id: file.id,
-                                        filename: file.name,
-                                        mimeType: file.mimeType,
-                                        baseUrl: file.webContentLink ?? file.thumbnailLink ?? "",
-                                        productUrl: file.thumbnailLink,
-                                        mediaMetadata: nil
-                                    )
-                                    fetchedItems.append(item)
-                                }
+                    targetData = data
+                } else {
+                    targetData = nil
+                }
+                
+                if let responseData = targetData,
+                   let jsonDict = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] {
+                    if let rawFiles = jsonDict["files"] as? [[String: Any]] {
+                        for fileDict in rawFiles {
+                            let id = (fileDict["id"] as? String) ?? ""
+                            let name = (fileDict["name"] as? String) ?? "file.jpg"
+                            let mimeType = (fileDict["mimeType"] as? String) ?? "image/jpeg"
+                            let thumbnailLink = fileDict["thumbnailLink"] as? String
+                            let webContentLink = fileDict["webContentLink"] as? String
+                            
+                            guard !id.isEmpty else { continue }
+                            
+                            if !fetchedItems.contains(where: { $0.id == id }) {
+                                let item = GoogleMediaItem(
+                                    id: id,
+                                    filename: name,
+                                    mimeType: mimeType,
+                                    baseUrl: webContentLink ?? thumbnailLink ?? "",
+                                    productUrl: thumbnailLink,
+                                    mediaMetadata: nil
+                                )
+                                fetchedItems.append(item)
                             }
                         }
-                        drivePageToken = driveResult.nextPageToken
-                    } else {
-                        drivePageToken = nil
                     }
+                    drivePageToken = jsonDict["nextPageToken"] as? String
                 } else {
                     drivePageToken = nil
                 }
