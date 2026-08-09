@@ -7,6 +7,7 @@ enum PhotoStatus: String, Codable, CaseIterable, Sendable {
     case new = "Новый"
     case aiAnalyzing = "ИИ Анализ"
     case ready = "Готов к отправке"
+    case inQueue = "В очереди"
     case uploading = "Идет загрузка"
     case success = "Загружен"
     case error = "Ошибка"
@@ -16,6 +17,7 @@ enum PhotoStatus: String, Codable, CaseIterable, Sendable {
         case .new: return .gray
         case .aiAnalyzing: return .orange
         case .ready: return .indigo
+        case .inQueue: return Color(hex: "007AFF")
         case .uploading: return .purple
         case .success: return .green
         case .error: return .red

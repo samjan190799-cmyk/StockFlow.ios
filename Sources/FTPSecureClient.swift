@@ -762,9 +762,12 @@ class FTPSecureClient {
             throw ftpError("SSLSetPeerID ошибка: \(peerIdStatus)")
         }
 
-        // SNI (Server Name Indication) — имя хоста для TLS
-        peerName.withCString { cstr in
-            _ = SSLSetPeerDomainName(context, cstr, peerName.count)
+        // SNI (Server Name Indication) — очищенное имя хоста без портов и слэшей
+        let domainName = cleanedHost(peerName).components(separatedBy: ":")[0]
+        if !domainName.isEmpty {
+            domainName.withCString { cstr in
+                let _ = SSLSetPeerDomainName(context, cstr, strlen(cstr))
+            }
         }
 
         // Пропускаем верификацию сертификата только если это не требуется явно

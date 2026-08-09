@@ -481,7 +481,7 @@ class QueueViewModel: ObservableObject {
         for photo in readyPhotos {
             let pId = photo.id
             if let idx = self.photos.firstIndex(where: { $0.id == pId }) {
-                self.photos[idx].status = .uploading
+                self.photos[idx].status = .inQueue
                 self.photos[idx].uploadProgress = 0.0
                 self.photos[idx].errorMessage = nil
             }
@@ -516,6 +516,10 @@ class QueueViewModel: ObservableObject {
                         }
                         
                         await activeSemaphore.wait()
+                        
+                        if let idx = self.photos.firstIndex(where: { $0.id == pId }) {
+                            self.photos[idx].status = .uploading
+                        }
                         
                         do {
                             let tracker = UploadSpeedTracker()
@@ -1907,7 +1911,7 @@ struct PhotoRowView: View, Equatable {
             photoProgressBar(photo)
             photoButtons(photo, index: index)
             if photo.status == .uploading {
-                // Показываем скорость KB/с если известна, иначе статус UPLOADING
+                // Показываем скорость KB/с если известна, иначе статус Загрузка...
                 let speedText: String = {
                     if let kbps = speedKBps, kbps > 0 {
                         if kbps >= 1024 {
@@ -1916,7 +1920,7 @@ struct PhotoRowView: View, Equatable {
                             return String(format: "%.0f KB/s", kbps)
                         }
                     }
-                    return "UPLOADING..."
+                    return "Загрузка...".localized
                 }()
                 HStack(spacing: 5) {
                     Image(systemName: "arrow.up.circle.fill")
@@ -1947,14 +1951,23 @@ struct PhotoRowView: View, Equatable {
                 .background(Color.black.opacity(0.25))
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             
-            // Статус READY (слева сверху)
+            // Статус (слева сверху)
             if photo.status == .ready {
-                Text("READY")
+                Text("ГОТОВ".localized)
                     .font(.system(size: 9, weight: .black))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .background(Color(hex: "223E4A").opacity(0.85))
                     .foregroundStyle(Color(hex: "81E6D9"))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(12)
+            } else if photo.status == .inQueue {
+                Text("В ОЧЕРЕДИ".localized)
+                    .font(.system(size: 9, weight: .black))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color(hex: "007AFF").opacity(0.85))
+                    .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .padding(12)
             }
@@ -2014,14 +2027,14 @@ struct PhotoRowView: View, Equatable {
     
     private func photoButtons(_ photo: PhotoMetadata, index: Int) -> some View {
         HStack(spacing: 12) {
-            // Кнопка DELETE
+            // Кнопка УДАЛИТЬ
             Button(action: {
                 HapticHelper.trigger(.medium)
                 viewModel.removePhoto(photo.id)
             }) {
                 HStack(spacing: 6) {
                     Image(systemName: "trash")
-                    Text("DELETE")
+                    Text("Удалить".localized)
                 }
                 .font(.system(size: 10, weight: .bold))
                 .padding(.horizontal, 12)
@@ -2059,7 +2072,7 @@ struct PhotoRowView: View, Equatable {
             }
             .disabled(photo.status == .aiAnalyzing)
             
-            // Кнопка SEND / SENT
+            // Кнопка ОТПРАВИТЬ / ОТПРАВЛЕНО
             Button(action: {
                 if photo.status != .success {
                     HapticHelper.trigger(.medium)
@@ -2068,7 +2081,7 @@ struct PhotoRowView: View, Equatable {
             }) {
                 HStack(spacing: 6) {
                     Image(systemName: photo.status == .success ? "checkmark" : "paperplane")
-                    Text(photo.status == .success ? "SENT" : "SEND")
+                    Text(photo.status == .success ? "Отправлено".localized : "Отправить".localized)
                 }
                 .font(.system(size: 10, weight: .bold))
                 .padding(.horizontal, 12)
