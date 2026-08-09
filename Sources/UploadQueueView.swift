@@ -426,6 +426,7 @@ class QueueViewModel: ObservableObject {
         photos[idx].errorMessage = nil
         let targetPhoto = photos[idx]
         
+        let currentBgTask = bgTask
         Task {
             let maxStreams = UserDefaults.standard.integer(forKey: "sys_parallel_streams")
             let streamLimit = maxStreams > 0 ? maxStreams : 1
@@ -446,9 +447,8 @@ class QueueViewModel: ObservableObject {
                         seqVideo: seqVideo,
                         seqPhoto: seqPhoto
                     )
-                    if bgTask != .invalid {
-                        UIApplication.shared.endBackgroundTask(bgTask)
-                        bgTask = .invalid
+                    if currentBgTask != .invalid {
+                        UIApplication.shared.endBackgroundTask(currentBgTask)
                     }
                 }
             }
@@ -1827,8 +1827,8 @@ struct UploadQueueView: View {
 }
 
 
-// MARK: - Photo Row View (Equatable)
-struct PhotoRowView: View, Equatable {
+// MARK: - Photo Row View
+struct PhotoRowView: View {
     @Environment(\.colorScheme) var colorScheme
     let photo: PhotoMetadata
     let index: Int
@@ -1837,19 +1837,6 @@ struct PhotoRowView: View, Equatable {
     // Текущая скорость загрузки для этого файла
     private var speedKBps: Double? {
         viewModel.uploadSpeedKBps[photo.id]
-    }
-    
-    nonisolated static func == (lhs: PhotoRowView, rhs: PhotoRowView) -> Bool {
-        let lhsSpeed = lhs.viewModel.uploadSpeedKBps[lhs.photo.id]
-        let rhsSpeed = rhs.viewModel.uploadSpeedKBps[rhs.photo.id]
-        return lhs.photo.id == rhs.photo.id &&
-               lhs.photo.status == rhs.photo.status &&
-               lhs.photo.uploadProgress == rhs.photo.uploadProgress &&
-               lhsSpeed == rhsSpeed &&
-               lhs.photo.title == rhs.photo.title &&
-               lhs.photo.filename == rhs.photo.filename &&
-               lhs.photo.fileSize == rhs.photo.fileSize &&
-               lhs.photo.selectedStocks == rhs.photo.selectedStocks
     }
     
     var body: some View {
