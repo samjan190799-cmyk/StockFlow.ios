@@ -381,17 +381,28 @@ struct AIMetadataView: View {
         let photo = photos[curIdx]
         let isVideo = photo.isVideo
         
+        let resolved = QueueViewModel.shared?.resolveSourceURL(for: photo)
+        let fileURL: URL = resolved?.url ?? {
+            let ext = isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
+            let actualExt = ext.isEmpty ? (isVideo ? "mp4" : "jpg") : ext
+            return dirURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
+        }()
+        let needStopAccess = resolved?.needAccessStop ?? false
+        
         Task {
+            defer {
+                if needStopAccess {
+                    fileURL.stopAccessingSecurityScopedResource()
+                }
+            }
             do {
                 let imagesData: [Data]
                 if isVideo {
                     imagesData = await ImageCacheHelper.shared.extractFrames(
-                        photoId: photo.id,
-                        fromDir: dirURL,
+                        fileURL: fileURL,
                         count: 3
                     )
                 } else {
-                    let fileURL = dirURL.appendingPathComponent("\(photo.id.uuidString).jpg")
                     if let data = try? Data(contentsOf: fileURL) {
                         imagesData = [data]
                     } else {
