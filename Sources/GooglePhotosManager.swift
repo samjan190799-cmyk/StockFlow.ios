@@ -122,7 +122,7 @@ final class GooglePhotosManager: ObservableObject {
         
         guard let encodedRedirect = redirectURI.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let encodedScope = scopes.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let authURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth?response_type=token&client_id=\(currentKey)&redirect_uri=\(encodedRedirect)&scope=\(encodedScope)") else {
+              let authURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=\(currentKey)&redirect_uri=\(encodedRedirect)&scope=\(encodedScope)") else {
             self.isLoading = false
             self.statusMessage = "Ошибка формирования URL авторизации".localized
             return
@@ -144,14 +144,26 @@ final class GooglePhotosManager: ObservableObject {
                 session.start()
             }
             
-            // Парсим access_token из фрагмента редиректа (#access_token=...)
-            if let fragment = callbackURL.fragment, let token = extractQueryParam("access_token", from: fragment) {
+            var obtainedToken: String? = nil
+            
+            // 1. Проверяем наличие 'code' в query параметрах (Authorization Code Flow)
+            if let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
+               let queryItems = components.queryItems,
+               let code = queryItems.first(where: { $0.name == "code" })?.value {
+                self.statusMessage = "Обмен кода авторизации...".localized
+                obtainedToken = try await exchangeCodeForToken(code: code, clientID: currentKey, redirectURI: redirectURI)
+            }
+            // 2. Резервный вариант: парсим 'access_token' из фрагмента (#access_token=...)
+            else if let fragment = callbackURL.fragment, let token = extractQueryParam("access_token", from: fragment) {
+                obtainedToken = token
+            }
+            
+            if let token = obtainedToken, !token.isEmpty {
                 self.accessToken = token
                 KeychainHelper.shared.save(password: token, for: "com.stockflow.googlephotos")
                 self.isAuthenticated = true
                 self.statusMessage = "Успешная авторизация в Google".localized
                 
-                // Получаем email пользователя из Google API
                 await fetchUserProfile()
                 await loadMediaItems()
             } else {
@@ -162,6 +174,36 @@ final class GooglePhotosManager: ObservableObject {
         }
         
         self.isLoading = false
+    }
+    
+    private func exchangeCodeForToken(code: String, clientID: String, redirectURI: String) async throws -> String {
+        guard let tokenURL = URL(string: "https://oauth2.googleapis.com/token") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: tokenURL)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        
+        let bodyComponents = [
+            "code=\(code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? code)",
+            "client_id=\(clientID.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? clientID)",
+            "redirect_uri=\(redirectURI.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? redirectURI)",
+            "grant_type=authorization_code"
+        ]
+        request.httpBody = bodyComponents.joined(separator: "&").data(using: .utf8)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        
+        struct TokenResponse: Codable {
+            let access_token: String
+        }
+        
+        let decoded = try JSONDecoder().decode(TokenResponse.self, from: data)
+        return decoded.access_token
     }
     
     private func extractQueryParam(_ param: String, from string: String) -> String? {
