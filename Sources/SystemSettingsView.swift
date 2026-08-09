@@ -19,6 +19,8 @@ struct SystemSettingsView: View {
     @AppStorage("sys_upscale_factor") private var upscaleFactor: String = "Увеличение 2x (Бикубическое)"
     
     @AppStorage("sys_parallel_streams") private var parallelStreams: Int = 3
+    @AppStorage("sys_seq_video") private var seqVideo: Bool = false
+    @AppStorage("sys_seq_photo") private var seqPhoto: Bool = false
     @AppStorage("sys_retry_on_fail") private var retryOnFail: Bool = true
     @AppStorage("sys_compress_jpeg") private var compressJpeg: Bool = false
     @AppStorage("sys_notifications") private var sysNotifications: Bool = true
@@ -111,6 +113,14 @@ struct SystemSettingsView: View {
             .onChange(of: parallelStreams) { newVal in
                 HapticHelper.trigger(.light)
                 showToast("Параллельные потоки: ".localized + "\(newVal)" + " — применится при следующей загрузке".localized)
+            }
+            .onChange(of: seqVideo) { newVal in
+                HapticHelper.trigger(.light)
+                showToast(newVal ? "Загрузка видео по очереди включена".localized : "Загрузка видео по очереди отключена".localized)
+            }
+            .onChange(of: seqPhoto) { newVal in
+                HapticHelper.trigger(.light)
+                showToast(newVal ? "Загрузка фото по очереди включена".localized : "Загрузка фото по очереди отключена".localized)
             }
             .onChange(of: upscaleThreshold) { _ in HapticHelper.trigger(.light) }
             .onChange(of: upscaleFactor) { _ in HapticHelper.trigger(.light) }
@@ -287,6 +297,22 @@ struct SystemSettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Параметры выгрузки".localized, icon: "arrow.up.forward.app.fill")
             pickerIntRow("Потоки параллельной загрузки".localized, selection: $parallelStreams, options: [1, 3, 5])
+            Divider().background(Color.primary.opacity(0.08))
+            
+            Toggle("Загрузка видео по очереди".localized, isOn: $seqVideo)
+                .tint(Color(hex: "007AFF"))
+            Text("Видеофайлы будут отправляться строго по одному друг за другом для стабильности FTP.".localized)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            
+            Divider().background(Color.primary.opacity(0.08))
+            
+            Toggle("Загрузка фото по очереди".localized, isOn: $seqPhoto)
+                .tint(Color(hex: "007AFF"))
+            Text("Фотографии будут отправляться строго по одной по очереди.".localized)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            
             Divider().background(Color.primary.opacity(0.08))
             Toggle("Автоповтор при сбоях".localized, isOn: $retryOnFail)
                 .tint(Color(hex: "007AFF"))

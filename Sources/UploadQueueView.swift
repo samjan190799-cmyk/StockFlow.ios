@@ -491,21 +491,33 @@ class QueueViewModel: ObservableObject {
             defer {
                 UIApplication.shared.endBackgroundTask(bgTask)
             }
-            // Простой семафор на основе actor для ограничения параллелизма
-            let semaphore = UploadSemaphore(limit: streamLimit)
+            let seqVideo = UserDefaults.standard.bool(forKey: "sys_seq_video")
+            let seqPhoto = UserDefaults.standard.bool(forKey: "sys_seq_photo")
+            
+            let mainSemaphore = UploadSemaphore(limit: streamLimit)
+            let videoSemaphore = UploadSemaphore(limit: 1)
+            let photoSemaphore = UploadSemaphore(limit: 1)
             
             await withTaskGroup(of: Void.self) { group in
                 for photo in readyPhotos {
                     let pId = photo.id
                     group.addTask { @MainActor in
-                        await semaphore.wait()
+                        guard let currentPhoto = self.photos.first(where: { $0.id == pId }) else { return }
+                        
+                        let isVideoFile = currentPhoto.isVideo || currentPhoto.filename.lowercased().hasSuffix(".mp4") || currentPhoto.filename.lowercased().hasSuffix(".mov") || currentPhoto.filename.lowercased().hasSuffix(".avi")
+                        
+                        let activeSemaphore: UploadSemaphore
+                        if isVideoFile && seqVideo {
+                            activeSemaphore = videoSemaphore
+                        } else if !isVideoFile && seqPhoto {
+                            activeSemaphore = photoSemaphore
+                        } else {
+                            activeSemaphore = mainSemaphore
+                        }
+                        
+                        await activeSemaphore.wait()
                         
                         do {
-                            guard let currentPhoto = self.photos.first(where: { $0.id == pId }) else {
-                                await semaphore.signal()
-                                return
-                            }
-                            
                             let tracker = UploadSpeedTracker()
                             let totalBytes = max(self.parseFileSizeToBytes(currentPhoto.fileSize), 1.0)
                             
@@ -514,7 +526,7 @@ class QueueViewModel: ObservableObject {
                                 box.continuation = cont
                             }
                             guard let progressContinuation = box.continuation else {
-                                await semaphore.signal()
+                                await activeSemaphore.signal()
                                 return
                             }
                             
@@ -568,7 +580,7 @@ class QueueViewModel: ObservableObject {
                             }
                         }
                         
-                        await semaphore.signal()
+                        await activeSemaphore.signal()
                     }
                 }
             }
