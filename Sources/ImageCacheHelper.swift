@@ -66,8 +66,8 @@ final class ImageCacheHelper {
                 let asset = AVAsset(url: fileURL)
                 let generator = AVAssetImageGenerator(asset: asset)
                 generator.appliesPreferredTrackTransform = true
-                generator.requestedTimeToleranceBefore = .positiveInfinite
-                generator.requestedTimeToleranceAfter = .positiveInfinite
+                generator.requestedTimeToleranceBefore = .positiveInfinity
+                generator.requestedTimeToleranceAfter = .positiveInfinity
                 
                 let timesToTry = [
                     CMTime(seconds: 0.5, preferredTimescale: 60),
