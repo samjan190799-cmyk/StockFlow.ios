@@ -47,8 +47,7 @@ class FTPSecureClient {
         }.value
     }
 
-    /// Загрузка файла по FTPS (Explicit TLS) по его URL с поддержкой Session Resumption.
-    /// Предотвращает OOM при работе с большими файлами.
+    /// Загрузка файла по FTPS (Explicit TLS) по его URL с поддержкой Session Resumption и устойчивостью к сотовым звонкам.
     static func upload(
         fileURL: URL,
         filename: String,
@@ -59,15 +58,34 @@ class FTPSecureClient {
         progress: (@Sendable (Double) -> Void)? = nil
     ) async throws {
         try await Task.detached(priority: .userInitiated) {
-            try Self.performUpload(
-                fileURL: fileURL,
-                filename: filename,
-                host: host,
-                port: port,
-                username: username,
-                password: password,
-                progress: progress
-            )
+            var attempts = 0
+            let maxAttempts = 3
+            var lastError: Error? = nil
+            
+            while attempts < maxAttempts {
+                attempts += 1
+                do {
+                    try Self.performUpload(
+                        fileURL: fileURL,
+                        filename: filename,
+                        host: host,
+                        port: port,
+                        username: username,
+                        password: password,
+                        progress: progress
+                    )
+                    return
+                } catch {
+                    lastError = error
+                    if attempts < maxAttempts {
+                        logMsg("[SecureTransport] ⚠️ Ошибка соединения (\(error.localizedDescription)). Повтор через 1.5 сек...")
+                        Thread.sleep(forTimeInterval: 1.5)
+                    }
+                }
+            }
+            if let err = lastError {
+                throw err
+            }
         }.value
     }
 

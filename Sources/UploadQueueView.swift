@@ -413,7 +413,13 @@ class QueueViewModel: ObservableObject {
             return
         }
         
-        let bgTask = UIApplication.shared.beginBackgroundTask(withName: "UploadPhoto-\(id.uuidString)") {}
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "SmartStock.Upload.\(id.uuidString)") {
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+        }
         
         photos[idx].status = .inQueue
         photos[idx].uploadProgress = 0.0
@@ -440,7 +446,10 @@ class QueueViewModel: ObservableObject {
                         seqVideo: seqVideo,
                         seqPhoto: seqPhoto
                     )
-                    UIApplication.shared.endBackgroundTask(bgTask)
+                    if bgTask != .invalid {
+                        UIApplication.shared.endBackgroundTask(bgTask)
+                        bgTask = .invalid
+                    }
                 }
             }
             
@@ -1831,15 +1840,16 @@ struct PhotoRowView: View, Equatable {
     }
     
     nonisolated static func == (lhs: PhotoRowView, rhs: PhotoRowView) -> Bool {
+        let lhsSpeed = lhs.viewModel.uploadSpeedKBps[lhs.photo.id]
+        let rhsSpeed = rhs.viewModel.uploadSpeedKBps[rhs.photo.id]
         return lhs.photo.id == rhs.photo.id &&
                lhs.photo.status == rhs.photo.status &&
                lhs.photo.uploadProgress == rhs.photo.uploadProgress &&
+               lhsSpeed == rhsSpeed &&
                lhs.photo.title == rhs.photo.title &&
                lhs.photo.filename == rhs.photo.filename &&
                lhs.photo.fileSize == rhs.photo.fileSize &&
                lhs.photo.selectedStocks == rhs.photo.selectedStocks
-        // Примечание: скорость всегда разная (не Equatable),
-        // поэтому не сравниваем: вид обновится через uploadProgress.
     }
     
     var body: some View {

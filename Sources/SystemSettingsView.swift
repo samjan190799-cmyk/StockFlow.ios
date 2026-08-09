@@ -473,7 +473,7 @@ struct SystemSettingsView: View {
     private var versionFooterSection: some View {
         HStack {
             Spacer()
-            Text("StockFlow v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6") (Сборка \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"))")
+            Text("SmartStock v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6") (Сборка \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"))")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
             Spacer()
@@ -493,7 +493,7 @@ struct SystemSettingsView: View {
                     .textCase(.uppercase)
             }
             
-            Text("StockFlow является независимым инструментом и не связан с Shutterstock, Adobe Stock, Getty Images, Depositphotos, Freepik, Alamy, Dreamstime, 123RF, Pond5 или Google.".localized)
+            Text("SmartStock является независимым инструментом и не связан с Shutterstock, Adobe Stock, Getty Images, Depositphotos, Freepik, Alamy, Dreamstime, 123RF, Pond5 или Google.".localized)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
