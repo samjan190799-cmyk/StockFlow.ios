@@ -67,7 +67,7 @@ final class GooglePhotosManager: ObservableObject {
     @Published var downloadProgress: [String: Double] = [:]
     @Published var userEmail: String = ""
     
-    private var accessToken: String?
+    private(set) var accessToken: String?
     private var webAuthContextProvider = WebAuthContextProvider()
     
     // Google OAuth 2.0 Configuration
