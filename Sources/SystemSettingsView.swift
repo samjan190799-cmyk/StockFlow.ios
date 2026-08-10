@@ -45,113 +45,91 @@ struct SystemSettingsView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                LiquidBackgroundView()
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        interfaceSection
-                        googlePhotosSection
-                        schedulerSection
-                        upscaleSection
-                        uploadSection
-                        pcServerSection
-                        cacheSection
-                        disclaimerSection
-                        saveButtonSection
-                        versionFooterSection
-                    }
-                    .padding()
-                }
-            }
-            .navigationTitle("Параметры системы".localized)
-            .navigationBarTitleDisplayMode(.inline)
-            .overlay(alignment: .bottom) {
-                if showingSavedToast {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.green)
-                        Text(savedToastMessage.localized)
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(colorScheme == .dark ? Color(hex: "2C2C2E") : Color(hex: "E5E5EA"))
-                    .foregroundStyle(.primary)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
-                    .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
-                    .padding(.bottom, 20)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
-            .onChange(of: sysLanguage) { _, newLang in
-                HapticHelper.trigger(.light)
-                let toastMsg: String
-                if newLang == "English" {
-                    toastMsg = "Language changed to English"
-                } else if newLang == "Հայերեն" {
-                    toastMsg = "Լեզուն փոխվեց Հայերենի"
-                } else {
-                    toastMsg = "Язык изменён на Русский"
-                }
-                showToast(toastMsg)
-            }
-            .onChange(of: bgScheduler) { _, newVal in
-                HapticHelper.trigger(.light)
-                SchedulerManager.shared.setSchedulerEnabled(newVal)
-            }
-            .onChange(of: schedulerIntervalHours) { _, _ in
-                HapticHelper.trigger(.light)
-                if bgScheduler {
-                    SchedulerManager.shared.scheduleNextBackgroundTask()
-                }
-            }
-            .onChange(of: autoUpscale) { _, newVal in
-                HapticHelper.trigger(.light)
-                showToast(newVal ? "Авто-апскейл включён — работает при добавлении фото".localized : "Авто-апскейл отключён".localized)
-            }
-            .onChange(of: retryOnFail) { _, _ in HapticHelper.trigger(.light) }
-            .onChange(of: compressJpeg) { _, _ in HapticHelper.trigger(.light) }
-            .onChange(of: sysNotifications) { _, _ in HapticHelper.trigger(.light) }
-            .onChange(of: noCacheMode) { _, newVal in
-                HapticHelper.trigger(.light)
-                showToast(newVal ? "Режим проводника активен: 0 МБ кэша".localized : "Кэширование включено".localized)
-            }
-            .onChange(of: parallelStreams) { _, newVal in
-                HapticHelper.trigger(.light)
-                showToast("Параллельные потоки: ".localized + "\(newVal)")
-            }
-            .onChange(of: seqVideo) { _, newVal in
-                HapticHelper.trigger(.light)
-                showToast(newVal ? "Загрузка видео по очереди включена".localized : "Загрузка видео по очереди отключена".localized)
-            }
-            .onChange(of: seqPhoto) { _, newVal in
-                HapticHelper.trigger(.light)
-                showToast(newVal ? "Загрузка фото по очереди включена".localized : "Загрузка фото по очереди отключена".localized)
-            }
-            .sheet(isPresented: $showFolderPicker) {
-                FolderPicker { url in
-                    do {
-                        guard url.startAccessingSecurityScopedResource() else {
-                            showToast("Не удалось получить доступ к папке".localized)
-                            return
+            mainContent
+                .navigationTitle("Параметры системы".localized)
+                .navigationBarTitleDisplayMode(.inline)
+                .overlay(alignment: .bottom) { toastOverlay }
+                .applySettingsObservers(
+                    sysLanguage: $sysLanguage,
+                    bgScheduler: $bgScheduler,
+                    schedulerIntervalHours: $schedulerIntervalHours,
+                    autoUpscale: $autoUpscale,
+                    retryOnFail: $retryOnFail,
+                    compressJpeg: $compressJpeg,
+                    sysNotifications: $sysNotifications,
+                    noCacheMode: $noCacheMode,
+                    parallelStreams: $parallelStreams,
+                    seqVideo: $seqVideo,
+                    seqPhoto: $seqPhoto,
+                    bgSchedulerValue: bgScheduler,
+                    showToast: showToast
+                )
+                .sheet(isPresented: $showFolderPicker) {
+                    FolderPicker { url in
+                        do {
+                            guard url.startAccessingSecurityScopedResource() else {
+                                showToast("Не удалось получить доступ к папке".localized)
+                                return
+                            }
+                            defer { url.stopAccessingSecurityScopedResource() }
+                            let bookmarkData = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
+                            UserDefaults.standard.set(bookmarkData, forKey: "sys_scheduler_folder_bookmark")
+                            self.folderName = url.lastPathComponent
+                            showToast("Папка успешно выбрана: ".localized + url.lastPathComponent)
+                        } catch {
+                            showToast("Ошибка сохранения папки: ".localized + error.localizedDescription)
                         }
-                        defer { url.stopAccessingSecurityScopedResource() }
-                        
-                        let bookmarkData = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
-                        UserDefaults.standard.set(bookmarkData, forKey: "sys_scheduler_folder_bookmark")
-                        
-                        self.folderName = url.lastPathComponent
-                        showToast("Папка успешно выбрана: ".localized + url.lastPathComponent)
-                    } catch {
-                        showToast("Ошибка сохранения папки: ".localized + error.localizedDescription)
-                    }
-                } onCancel: {}
+                    } onCancel: {}
+                }
+        }
+    }
+
+    // MARK: - Выделенный контент (избегаем перегрузки компилятора в body)
+
+    @ViewBuilder
+    private var mainContent: some View {
+        ZStack {
+            LiquidBackgroundView()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    interfaceSection
+                    googlePhotosSection
+                    schedulerSection
+                    upscaleSection
+                    uploadSection
+                    pcServerSection
+                    cacheSection
+                    disclaimerSection
+                    saveButtonSection
+                    versionFooterSection
+                }
+                .padding()
             }
         }
     }
+
+    @ViewBuilder
+    private var toastOverlay: some View {
+        if showingSavedToast {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.green)
+                Text(savedToastMessage.localized)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(colorScheme == .dark ? Color(hex: "2C2C2E") : Color(hex: "E5E5EA"))
+            .foregroundStyle(.primary)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
+            .padding(.bottom, 20)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
     
     // MARK: - Sections
     
@@ -653,7 +631,7 @@ struct SystemSettingsView: View {
     private func saveSettings() {
         showToast("Настройки успешно сохранены!".localized)
     }
-    
+
     private func showToast(_ message: String) {
         savedToastMessage = message
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
@@ -667,3 +645,70 @@ struct SystemSettingsView: View {
         }
     }
 }
+
+// MARK: - View Extension: все onChange вынесены отдельно (ускоряет type-check компилятора)
+extension View {
+    func applySettingsObservers(
+        sysLanguage: Binding<String>,
+        bgScheduler: Binding<Bool>,
+        schedulerIntervalHours: Binding<Int>,
+        autoUpscale: Binding<Bool>,
+        retryOnFail: Binding<Bool>,
+        compressJpeg: Binding<Bool>,
+        sysNotifications: Binding<Bool>,
+        noCacheMode: Binding<Bool>,
+        parallelStreams: Binding<Int>,
+        seqVideo: Binding<Bool>,
+        seqPhoto: Binding<Bool>,
+        bgSchedulerValue: Bool,
+        showToast: @escaping (String) -> Void
+    ) -> some View {
+        self
+            .onChange(of: sysLanguage.wrappedValue) { _, newLang in
+                HapticHelper.trigger(.light)
+                let msg: String
+                if newLang == "English" {
+                    msg = "Language changed to English"
+                } else if newLang == "Հայերեն" {
+                    msg = "Լեզուն փոխվեց Հայերենի"
+                } else {
+                    msg = "Язык изменён на Русский"
+                }
+                showToast(msg)
+            }
+            .onChange(of: bgScheduler.wrappedValue) { _, newVal in
+                HapticHelper.trigger(.light)
+                SchedulerManager.shared.setSchedulerEnabled(newVal)
+            }
+            .onChange(of: schedulerIntervalHours.wrappedValue) { _, _ in
+                HapticHelper.trigger(.light)
+                if bgSchedulerValue {
+                    SchedulerManager.shared.scheduleNextBackgroundTask()
+                }
+            }
+            .onChange(of: autoUpscale.wrappedValue) { _, newVal in
+                HapticHelper.trigger(.light)
+                showToast(newVal ? "Авто-апскейл включён — работает при добавлении фото".localized : "Авто-апскейл отключён".localized)
+            }
+            .onChange(of: retryOnFail.wrappedValue) { _, _ in HapticHelper.trigger(.light) }
+            .onChange(of: compressJpeg.wrappedValue) { _, _ in HapticHelper.trigger(.light) }
+            .onChange(of: sysNotifications.wrappedValue) { _, _ in HapticHelper.trigger(.light) }
+            .onChange(of: noCacheMode.wrappedValue) { _, newVal in
+                HapticHelper.trigger(.light)
+                showToast(newVal ? "Режим проводника активен: 0 МБ кэша".localized : "Кэширование включено".localized)
+            }
+            .onChange(of: parallelStreams.wrappedValue) { _, newVal in
+                HapticHelper.trigger(.light)
+                showToast("Параллельные потоки: ".localized + "\(newVal)")
+            }
+            .onChange(of: seqVideo.wrappedValue) { _, newVal in
+                HapticHelper.trigger(.light)
+                showToast(newVal ? "Загрузка видео по очереди включена".localized : "Загрузка видео по очереди отключена".localized)
+            }
+            .onChange(of: seqPhoto.wrappedValue) { _, newVal in
+                HapticHelper.trigger(.light)
+                showToast(newVal ? "Загрузка фото по очереди включена".localized : "Загрузка фото по очереди отключена".localized)
+            }
+    }
+}
+

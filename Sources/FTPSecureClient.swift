@@ -79,7 +79,7 @@ class FTPSecureClient {
                     lastError = error
                     if attempts < maxAttempts {
                         logMsg("[SecureTransport] ⚠️ Ошибка соединения (\(error.localizedDescription)). Повтор через 1.5 сек...")
-                        Thread.sleep(forTimeInterval: 1.5)
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
                     }
                 }
             }
