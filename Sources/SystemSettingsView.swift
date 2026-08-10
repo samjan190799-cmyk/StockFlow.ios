@@ -646,7 +646,8 @@ struct SystemSettingsView: View {
     }
 }
 
-// MARK: - View Extension: все onChange вынесены отдельно (ускоряет type-check компилятора)
+// MARK: - View Extensions: onChange разбиты на 3 блока (Swift 6 type-check limit)
+
 extension View {
     func applySettingsObservers(
         sysLanguage: Binding<String>,
@@ -660,6 +661,37 @@ extension View {
         parallelStreams: Binding<Int>,
         seqVideo: Binding<Bool>,
         seqPhoto: Binding<Bool>,
+        bgSchedulerValue: Bool,
+        showToast: @escaping (String) -> Void
+    ) -> some View {
+        self
+            .applyObserversGroup1(
+                sysLanguage: sysLanguage,
+                bgScheduler: bgScheduler,
+                schedulerIntervalHours: schedulerIntervalHours,
+                autoUpscale: autoUpscale,
+                bgSchedulerValue: bgSchedulerValue,
+                showToast: showToast
+            )
+            .applyObserversGroup2(
+                retryOnFail: retryOnFail,
+                compressJpeg: compressJpeg,
+                sysNotifications: sysNotifications,
+                noCacheMode: noCacheMode,
+                parallelStreams: parallelStreams,
+                seqVideo: seqVideo,
+                seqPhoto: seqPhoto,
+                showToast: showToast
+            )
+    }
+}
+
+extension View {
+    func applyObserversGroup1(
+        sysLanguage: Binding<String>,
+        bgScheduler: Binding<Bool>,
+        schedulerIntervalHours: Binding<Int>,
+        autoUpscale: Binding<Bool>,
         bgSchedulerValue: Bool,
         showToast: @escaping (String) -> Void
     ) -> some View {
@@ -688,26 +720,54 @@ extension View {
             }
             .onChange(of: autoUpscale.wrappedValue) { _, newVal in
                 HapticHelper.trigger(.light)
-                showToast(newVal ? "Авто-апскейл включён — работает при добавлении фото".localized : "Авто-апскейл отключён".localized)
+                let msg = newVal
+                    ? "Авто-апскейл включён — работает при добавлении фото".localized
+                    : "Авто-апскейл отключён".localized
+                showToast(msg)
             }
+    }
+}
+
+extension View {
+    func applyObserversGroup2(
+        retryOnFail: Binding<Bool>,
+        compressJpeg: Binding<Bool>,
+        sysNotifications: Binding<Bool>,
+        noCacheMode: Binding<Bool>,
+        parallelStreams: Binding<Int>,
+        seqVideo: Binding<Bool>,
+        seqPhoto: Binding<Bool>,
+        showToast: @escaping (String) -> Void
+    ) -> some View {
+        self
             .onChange(of: retryOnFail.wrappedValue) { _, _ in HapticHelper.trigger(.light) }
             .onChange(of: compressJpeg.wrappedValue) { _, _ in HapticHelper.trigger(.light) }
             .onChange(of: sysNotifications.wrappedValue) { _, _ in HapticHelper.trigger(.light) }
             .onChange(of: noCacheMode.wrappedValue) { _, newVal in
                 HapticHelper.trigger(.light)
-                showToast(newVal ? "Режим проводника активен: 0 МБ кэша".localized : "Кэширование включено".localized)
+                let msg = newVal
+                    ? "Режим проводника активен: 0 МБ кэша".localized
+                    : "Кэширование включено".localized
+                showToast(msg)
             }
             .onChange(of: parallelStreams.wrappedValue) { _, newVal in
                 HapticHelper.trigger(.light)
-                showToast("Параллельные потоки: ".localized + "\(newVal)")
+                let msg = "Параллельные потоки: ".localized + "\(newVal)"
+                showToast(msg)
             }
             .onChange(of: seqVideo.wrappedValue) { _, newVal in
                 HapticHelper.trigger(.light)
-                showToast(newVal ? "Загрузка видео по очереди включена".localized : "Загрузка видео по очереди отключена".localized)
+                let msg = newVal
+                    ? "Загрузка видео по очереди включена".localized
+                    : "Загрузка видео по очереди отключена".localized
+                showToast(msg)
             }
             .onChange(of: seqPhoto.wrappedValue) { _, newVal in
                 HapticHelper.trigger(.light)
-                showToast(newVal ? "Загрузка фото по очереди включена".localized : "Загрузка фото по очереди отключена".localized)
+                let msg = newVal
+                    ? "Загрузка фото по очереди включена".localized
+                    : "Загрузка фото по очереди отключена".localized
+                showToast(msg)
             }
     }
 }
