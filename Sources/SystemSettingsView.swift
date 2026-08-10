@@ -49,11 +49,14 @@ struct SystemSettingsView: View {
                 .navigationTitle("Параметры системы".localized)
                 .navigationBarTitleDisplayMode(.inline)
                 .overlay(alignment: .bottom) { toastOverlay }
-                .applySettingsObservers(
+                .modifier(SettingsObservers1(
                     sysLanguage: $sysLanguage,
                     bgScheduler: $bgScheduler,
                     schedulerIntervalHours: $schedulerIntervalHours,
                     autoUpscale: $autoUpscale,
+                    showToast: { [self] msg in showToast(msg) }
+                ))
+                .modifier(SettingsObservers2(
                     retryOnFail: $retryOnFail,
                     compressJpeg: $compressJpeg,
                     sysNotifications: $sysNotifications,
@@ -61,9 +64,8 @@ struct SystemSettingsView: View {
                     parallelStreams: $parallelStreams,
                     seqVideo: $seqVideo,
                     seqPhoto: $seqPhoto,
-                    bgSchedulerValue: bgScheduler,
-                    showToast: showToast
-                )
+                    showToast: { [self] msg in showToast(msg) }
+                ))
                 .sheet(isPresented: $showFolderPicker) {
                     FolderPicker { url in
                         do {
@@ -646,57 +648,19 @@ struct SystemSettingsView: View {
     }
 }
 
-// MARK: - View Extensions: onChange разбиты на 3 блока (Swift 6 type-check limit)
+// MARK: - ViewModifiers для onChange (Swift 6: разбиваем type-check на независимые блоки)
 
-extension View {
-    func applySettingsObservers(
-        sysLanguage: Binding<String>,
-        bgScheduler: Binding<Bool>,
-        schedulerIntervalHours: Binding<Int>,
-        autoUpscale: Binding<Bool>,
-        retryOnFail: Binding<Bool>,
-        compressJpeg: Binding<Bool>,
-        sysNotifications: Binding<Bool>,
-        noCacheMode: Binding<Bool>,
-        parallelStreams: Binding<Int>,
-        seqVideo: Binding<Bool>,
-        seqPhoto: Binding<Bool>,
-        bgSchedulerValue: Bool,
-        showToast: @escaping (String) -> Void
-    ) -> some View {
-        self
-            .applyObserversGroup1(
-                sysLanguage: sysLanguage,
-                bgScheduler: bgScheduler,
-                schedulerIntervalHours: schedulerIntervalHours,
-                autoUpscale: autoUpscale,
-                bgSchedulerValue: bgSchedulerValue,
-                showToast: showToast
-            )
-            .applyObserversGroup2(
-                retryOnFail: retryOnFail,
-                compressJpeg: compressJpeg,
-                sysNotifications: sysNotifications,
-                noCacheMode: noCacheMode,
-                parallelStreams: parallelStreams,
-                seqVideo: seqVideo,
-                seqPhoto: seqPhoto,
-                showToast: showToast
-            )
-    }
-}
+@MainActor
+struct SettingsObservers1: ViewModifier {
+    @Binding var sysLanguage: String
+    @Binding var bgScheduler: Bool
+    @Binding var schedulerIntervalHours: Int
+    @Binding var autoUpscale: Bool
+    let showToast: (String) -> Void
 
-extension View {
-    func applyObserversGroup1(
-        sysLanguage: Binding<String>,
-        bgScheduler: Binding<Bool>,
-        schedulerIntervalHours: Binding<Int>,
-        autoUpscale: Binding<Bool>,
-        bgSchedulerValue: Bool,
-        showToast: @escaping (String) -> Void
-    ) -> some View {
-        self
-            .onChange(of: sysLanguage.wrappedValue) { _, newLang in
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: sysLanguage) { _, newLang in
                 HapticHelper.trigger(.light)
                 let msg: String
                 if newLang == "English" {
@@ -708,17 +672,17 @@ extension View {
                 }
                 showToast(msg)
             }
-            .onChange(of: bgScheduler.wrappedValue) { _, newVal in
+            .onChange(of: bgScheduler) { _, newVal in
                 HapticHelper.trigger(.light)
                 SchedulerManager.shared.setSchedulerEnabled(newVal)
             }
-            .onChange(of: schedulerIntervalHours.wrappedValue) { _, _ in
+            .onChange(of: schedulerIntervalHours) { _, _ in
                 HapticHelper.trigger(.light)
-                if bgSchedulerValue {
+                if bgScheduler {
                     SchedulerManager.shared.scheduleNextBackgroundTask()
                 }
             }
-            .onChange(of: autoUpscale.wrappedValue) { _, newVal in
+            .onChange(of: autoUpscale) { _, newVal in
                 HapticHelper.trigger(.light)
                 let msg = newVal
                     ? "Авто-апскейл включён — работает при добавлении фото".localized
@@ -728,41 +692,42 @@ extension View {
     }
 }
 
-extension View {
-    func applyObserversGroup2(
-        retryOnFail: Binding<Bool>,
-        compressJpeg: Binding<Bool>,
-        sysNotifications: Binding<Bool>,
-        noCacheMode: Binding<Bool>,
-        parallelStreams: Binding<Int>,
-        seqVideo: Binding<Bool>,
-        seqPhoto: Binding<Bool>,
-        showToast: @escaping (String) -> Void
-    ) -> some View {
-        self
-            .onChange(of: retryOnFail.wrappedValue) { _, _ in HapticHelper.trigger(.light) }
-            .onChange(of: compressJpeg.wrappedValue) { _, _ in HapticHelper.trigger(.light) }
-            .onChange(of: sysNotifications.wrappedValue) { _, _ in HapticHelper.trigger(.light) }
-            .onChange(of: noCacheMode.wrappedValue) { _, newVal in
+@MainActor
+struct SettingsObservers2: ViewModifier {
+    @Binding var retryOnFail: Bool
+    @Binding var compressJpeg: Bool
+    @Binding var sysNotifications: Bool
+    @Binding var noCacheMode: Bool
+    @Binding var parallelStreams: Int
+    @Binding var seqVideo: Bool
+    @Binding var seqPhoto: Bool
+    let showToast: (String) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: retryOnFail) { _, _ in HapticHelper.trigger(.light) }
+            .onChange(of: compressJpeg) { _, _ in HapticHelper.trigger(.light) }
+            .onChange(of: sysNotifications) { _, _ in HapticHelper.trigger(.light) }
+            .onChange(of: noCacheMode) { _, newVal in
                 HapticHelper.trigger(.light)
                 let msg = newVal
                     ? "Режим проводника активен: 0 МБ кэша".localized
                     : "Кэширование включено".localized
                 showToast(msg)
             }
-            .onChange(of: parallelStreams.wrappedValue) { _, newVal in
+            .onChange(of: parallelStreams) { _, newVal in
                 HapticHelper.trigger(.light)
                 let msg = "Параллельные потоки: ".localized + "\(newVal)"
                 showToast(msg)
             }
-            .onChange(of: seqVideo.wrappedValue) { _, newVal in
+            .onChange(of: seqVideo) { _, newVal in
                 HapticHelper.trigger(.light)
                 let msg = newVal
                     ? "Загрузка видео по очереди включена".localized
                     : "Загрузка видео по очереди отключена".localized
                 showToast(msg)
             }
-            .onChange(of: seqPhoto.wrappedValue) { _, newVal in
+            .onChange(of: seqPhoto) { _, newVal in
                 HapticHelper.trigger(.light)
                 let msg = newVal
                     ? "Загрузка фото по очереди включена".localized
@@ -771,4 +736,5 @@ extension View {
             }
     }
 }
+
 
