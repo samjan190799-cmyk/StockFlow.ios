@@ -54,7 +54,7 @@ struct SystemSettingsView: View {
                     bgScheduler: $bgScheduler,
                     schedulerIntervalHours: $schedulerIntervalHours,
                     autoUpscale: $autoUpscale,
-                    showToast: { [self] msg in showToast(msg) }
+                    showToast: showToast
                 ))
                 .modifier(SettingsObservers2(
                     retryOnFail: $retryOnFail,
@@ -64,7 +64,7 @@ struct SystemSettingsView: View {
                     parallelStreams: $parallelStreams,
                     seqVideo: $seqVideo,
                     seqPhoto: $seqPhoto,
-                    showToast: { [self] msg in showToast(msg) }
+                    showToast: showToast
                 ))
                 .sheet(isPresented: $showFolderPicker) {
                     FolderPicker { url in
@@ -656,7 +656,7 @@ struct SettingsObservers1: ViewModifier {
     @Binding var bgScheduler: Bool
     @Binding var schedulerIntervalHours: Int
     @Binding var autoUpscale: Bool
-    let showToast: (String) -> Void
+    let showToast: @MainActor (String) -> Void
 
     func body(content: Content) -> some View {
         content
@@ -701,7 +701,7 @@ struct SettingsObservers2: ViewModifier {
     @Binding var parallelStreams: Int
     @Binding var seqVideo: Bool
     @Binding var seqPhoto: Bool
-    let showToast: (String) -> Void
+    let showToast: @MainActor (String) -> Void
 
     func body(content: Content) -> some View {
         content
