@@ -202,7 +202,8 @@ class QueueViewModel: ObservableObject {
             for item in items {
                 do {
                     let data = try await GooglePhotosManager.shared.downloadItemData(item)
-                    let ext = item.isVideo ? "mp4" : "jpg"
+                    // Берём реальное расширение из имени файла (mp4, mov, jpg, heic и т.д.)
+                    let ext = item.fileExtension
                     let newId = UUID()
                     let fileURL = self.photosDirectoryURL.appendingPathComponent("\(newId.uuidString).\(ext)")
                     try data.write(to: fileURL, options: .atomic)
@@ -1119,12 +1120,6 @@ struct UploadQueueView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Text("Галерея".localized)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.primary)
-                }
-                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {
                         if !viewModel.photos.isEmpty {

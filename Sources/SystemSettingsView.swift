@@ -86,7 +86,7 @@ struct SystemSettingsView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .onChange(of: sysLanguage) { newLang in
+            .onChange(of: sysLanguage) { _, newLang in
                 HapticHelper.trigger(.light)
                 let toastMsg: String
                 if newLang == "English" {
@@ -98,36 +98,36 @@ struct SystemSettingsView: View {
                 }
                 showToast(toastMsg)
             }
-            .onChange(of: bgScheduler) { newVal in
+            .onChange(of: bgScheduler) { _, newVal in
                 HapticHelper.trigger(.light)
                 SchedulerManager.shared.setSchedulerEnabled(newVal)
             }
-            .onChange(of: schedulerIntervalHours) { _ in
+            .onChange(of: schedulerIntervalHours) { _, _ in
                 HapticHelper.trigger(.light)
                 if bgScheduler {
                     SchedulerManager.shared.scheduleNextBackgroundTask()
                 }
             }
-            .onChange(of: autoUpscale) { newVal in
+            .onChange(of: autoUpscale) { _, newVal in
                 HapticHelper.trigger(.light)
                 showToast(newVal ? "Авто-апскейл включён — работает при добавлении фото".localized : "Авто-апскейл отключён".localized)
             }
-            .onChange(of: retryOnFail) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: compressJpeg) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: sysNotifications) { _ in HapticHelper.trigger(.light) }
-            .onChange(of: noCacheMode) { newVal in
+            .onChange(of: retryOnFail) { _, _ in HapticHelper.trigger(.light) }
+            .onChange(of: compressJpeg) { _, _ in HapticHelper.trigger(.light) }
+            .onChange(of: sysNotifications) { _, _ in HapticHelper.trigger(.light) }
+            .onChange(of: noCacheMode) { _, newVal in
                 HapticHelper.trigger(.light)
                 showToast(newVal ? "Режим проводника активен: 0 МБ кэша".localized : "Кэширование включено".localized)
             }
-            .onChange(of: parallelStreams) { newVal in
+            .onChange(of: parallelStreams) { _, newVal in
                 HapticHelper.trigger(.light)
                 showToast("Параллельные потоки: ".localized + "\(newVal)")
             }
-            .onChange(of: seqVideo) { newVal in
+            .onChange(of: seqVideo) { _, newVal in
                 HapticHelper.trigger(.light)
                 showToast(newVal ? "Загрузка видео по очереди включена".localized : "Загрузка видео по очереди отключена".localized)
             }
-            .onChange(of: seqPhoto) { newVal in
+            .onChange(of: seqPhoto) { _, newVal in
                 HapticHelper.trigger(.light)
                 showToast(newVal ? "Загрузка фото по очереди включена".localized : "Загрузка фото по очереди отключена".localized)
             }

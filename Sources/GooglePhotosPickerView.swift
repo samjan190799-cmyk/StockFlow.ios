@@ -5,9 +5,9 @@ enum MediaFilterType: String, CaseIterable, Identifiable {
     case all = "Все файлы"
     case photos = "Только фото"
     case videos = "Только видео"
-    
+
     var id: String { rawValue }
-    
+
     var iconName: String {
         switch self {
         case .all: return "photo.stack"
@@ -17,24 +17,70 @@ enum MediaFilterType: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - NSCache для миниатюр Google Photos (с жёстким лимитом памяти)
+final class GoogleImageCache: @unchecked Sendable {
+    static let shared: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 500          // не более 500 миниатюр
+        cache.totalCostLimit = 100 * 1024 * 1024  // 100 МБ
+        return cache
+    }()
+
+    static func clearAll() {
+        shared.removeAllObjects()
+    }
+}
+
+// MARK: - Семафор для ограничения параллельных загрузок миниатюр
+actor ThumbnailLoadSemaphore {
+    static let shared = ThumbnailLoadSemaphore(maxConcurrent: 8)
+
+    private let maxConcurrent: Int
+    private var current = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(maxConcurrent: Int) {
+        self.maxConcurrent = maxConcurrent
+    }
+
+    func acquire() async {
+        if current < maxConcurrent {
+            current += 1
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func release() {
+        if let next = waiters.first {
+            waiters.removeFirst()
+            next.resume()
+        } else {
+            current = max(0, current - 1)
+        }
+    }
+}
+
 /// Полноэкранный/Sheet пикер файлов из облака Google Фото
 @MainActor
 struct GooglePhotosPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var manager = GooglePhotosManager.shared
-    
+
     var onSelectItems: ([GoogleMediaItem]) -> Void
-    
+
     @State private var selectedItems: Set<String> = []
     @State private var selectedFilter: MediaFilterType = .all
     @State private var searchQuery = ""
     @State private var isDownloading = false
     @State private var previewItem: GoogleMediaItem? = nil
-    
+
     private let columns = [
         GridItem(.adaptive(minimum: 110, maximum: 160), spacing: 12)
     ]
-    
+
     var filteredItems: [GoogleMediaItem] {
         manager.mediaItems.filter { item in
             let matchesFilter: Bool
@@ -47,12 +93,12 @@ struct GooglePhotosPickerView: View {
             return matchesFilter && matchesSearch
         }
     }
-    
+
     var body: some View {
         NavigationStack {
             ZStack {
                 LiquidBackgroundView()
-                
+
                 VStack(spacing: 14) {
                     // Статус / Авторизация
                     if !manager.isAuthenticated {
@@ -76,43 +122,57 @@ struct GooglePhotosPickerView: View {
                     }
                     .foregroundStyle(.secondary)
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if manager.isAuthenticated && !selectedItems.isEmpty {
-                        Button(action: importSelectedItems) {
-                            HStack(spacing: 6) {
-                                if isDownloading {
-                                    ProgressView()
-                                        .tint(.white)
-                                } else {
-                                    Text("Импорт (\(selectedItems.count))".localized)
-                                        .font(.system(size: 14, weight: .bold))
-                                }
+                    HStack(spacing: 10) {
+                        // Кнопка принудительного обновления списка
+                        if manager.isAuthenticated && !manager.isLoading {
+                            Button(action: {
+                                Task { await manager.loadMediaItems(forceReload: true) }
+                            }) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(.secondary)
                             }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.purple)
-                            .clipShape(Capsule())
                         }
-                        .disabled(isDownloading)
+
+                        if manager.isAuthenticated && !selectedItems.isEmpty {
+                            Button(action: importSelectedItems) {
+                                HStack(spacing: 6) {
+                                    if isDownloading {
+                                        ProgressView()
+                                            .tint(.white)
+                                    } else {
+                                        Text("Импорт (\(selectedItems.count))".localized)
+                                            .font(.system(size: 14, weight: .bold))
+                                    }
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.purple)
+                                .clipShape(Capsule())
+                            }
+                            .disabled(isDownloading)
+                        }
                     }
                 }
             }
             .task {
-                if manager.isAuthenticated {
+                // Загружаем только если список пуст — иначе показываем кешированный
+                if manager.isAuthenticated && manager.mediaItems.isEmpty {
                     await manager.loadMediaItems()
                 }
             }
         }
     }
-    
+
     // MARK: - Subviews
-    
+
     private var unauthenticatedView: some View {
         VStack(spacing: 20) {
             Spacer().frame(height: 20)
-            
+
             Circle()
                 .fill(Color.white)
                 .frame(width: 84, height: 84)
@@ -122,19 +182,19 @@ struct GooglePhotosPickerView: View {
                         .foregroundStyle(LinearGradient(colors: [.red, .yellow, .green, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
                 )
                 .shadow(color: Color.black.opacity(0.15), radius: 12)
-            
+
             VStack(spacing: 8) {
                 Text("Подключение Google Фото".localized)
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.primary)
-                
+
                 Text("Выбирайте исходные видео и фото прямо из вашего облачного архива для публикации на стоках.".localized)
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
             }
-            
+
             Button(action: {
                 triggerHaptic()
                 Task {
@@ -156,13 +216,13 @@ struct GooglePhotosPickerView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
-            
+
             Spacer()
         }
         .glassCard(cornerRadius: 20, padding: 24)
         .padding(.vertical, 20)
     }
-    
+
     private var authenticatedContent: some View {
         VStack(spacing: 12) {
             // Информация об аккаунте
@@ -174,6 +234,12 @@ struct GooglePhotosPickerView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Spacer()
+                // Счётчик файлов
+                if !manager.mediaItems.isEmpty {
+                    Text("\(manager.mediaItems.count) файлов".localized)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
                 Button(action: {
                     triggerHaptic()
                     manager.signOut()
@@ -187,7 +253,7 @@ struct GooglePhotosPickerView: View {
             .padding(.vertical, 8)
             .background(Color.white.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 10))
-            
+
             // Поиск и Фильтры
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
@@ -200,7 +266,7 @@ struct GooglePhotosPickerView: View {
                 .padding(10)
                 .background(Color.white.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                
+
                 Menu {
                     ForEach(MediaFilterType.allCases) { option in
                         Button(action: {
@@ -232,7 +298,7 @@ struct GooglePhotosPickerView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
-            
+
             // Сетка медиа
             if manager.isLoading {
                 VStack(spacing: 12) {
@@ -240,9 +306,10 @@ struct GooglePhotosPickerView: View {
                     ProgressView()
                         .tint(.purple)
                         .scaleEffect(1.3)
-                    Text("Загрузка медиафайлов...".localized)
+                    Text(manager.statusMessage.isEmpty ? "Загрузка медиафайлов...".localized : manager.statusMessage)
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                     Spacer()
                 }
             } else if filteredItems.isEmpty {
@@ -268,10 +335,10 @@ struct GooglePhotosPickerView: View {
             }
         }
     }
-    
+
     private func mediaTile(_ item: GoogleMediaItem) -> some View {
         let isSelected = selectedItems.contains(item.id)
-        
+
         return ZStack(alignment: .topTrailing) {
             VStack(spacing: 0) {
                 ZStack {
@@ -279,7 +346,7 @@ struct GooglePhotosPickerView: View {
                         .frame(height: 110)
                         .clipped()
                 }
-                
+
                 // Название файла
                 HStack(spacing: 4) {
                     if item.isVideo {
@@ -291,13 +358,13 @@ struct GooglePhotosPickerView: View {
                             .font(.system(size: 9))
                             .foregroundStyle(Color.blue)
                     }
-                    
+
                     Text(item.filename)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    
+
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 6)
@@ -309,7 +376,7 @@ struct GooglePhotosPickerView: View {
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(isSelected ? Color.purple : Color.white.opacity(0.12), lineWidth: isSelected ? 3 : 1)
             )
-            
+
             // Заголовок карточки: Глаз (Предпросмотр) слева и Чекбокс справа
             HStack {
                 Button(action: {
@@ -323,14 +390,14 @@ struct GooglePhotosPickerView: View {
                         .background(Color.black.opacity(0.65))
                         .clipShape(Circle())
                 }
-                
+
                 Spacer()
-                
+
                 ZStack {
                     Circle()
                         .fill(isSelected ? Color.purple : Color.black.opacity(0.5))
                         .frame(width: 24, height: 24)
-                    
+
                     if isSelected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 12, weight: .bold))
@@ -352,32 +419,32 @@ struct GooglePhotosPickerView: View {
             }
         }
     }
-    
+
     private func importSelectedItems() {
         triggerHaptic()
         isDownloading = true
-        
+
         let chosen = manager.mediaItems.filter { selectedItems.contains($0.id) }
         onSelectItems(chosen)
         dismiss()
     }
-    
+
     private func triggerHaptic() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
     }
 }
 
-// MARK: - Authenticated Image Loader
+// MARK: - Authenticated Image Loader (с семафором параллельности)
 @MainActor
 struct AuthenticatedGoogleImageView: View {
     let url: URL?
     let token: String?
-    
+
     @State private var image: UIImage? = nil
     @State private var isLoading = false
     @State private var isError = false
-    
+
     var body: some View {
         ZStack {
             if let image = image {
@@ -402,33 +469,47 @@ struct AuthenticatedGoogleImageView: View {
             await loadImage()
         }
     }
-    
+
     private func loadImage() async {
         guard let url = url else {
             isError = true
             return
         }
-        
+
         let cacheKey = NSString(string: url.absoluteString)
         if let cached = GoogleImageCache.shared.object(forKey: cacheKey) {
             self.image = cached
             return
         }
-        
+
+        // Ограничиваем параллельность через семафор (не более 8 одновременных загрузок)
+        await ThumbnailLoadSemaphore.shared.acquire()
+        defer {
+            Task { await ThumbnailLoadSemaphore.shared.release() }
+        }
+
+        // Двойная проверка кеша после ожидания семафора
+        if let cached = GoogleImageCache.shared.object(forKey: cacheKey) {
+            self.image = cached
+            return
+        }
+
         isLoading = true
         isError = false
-        
+
         let currentToken = token ?? GooglePhotosManager.shared.accessToken
-        
+
         // 1. Авторизованный запрос с Bearer токеном (Google Photos / Drive API)
         if let authToken = currentToken, !authToken.isEmpty {
             var request = URLRequest(url: url)
             request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
-            
+            request.timeoutInterval = 20
+
             if let (data, response) = try? await URLSession.shared.data(for: request),
                let httpResp = response as? HTTPURLResponse {
                 if httpResp.statusCode == 200, let loadedImage = UIImage(data: data) {
-                    GoogleImageCache.shared.setObject(loadedImage, forKey: cacheKey)
+                    let cost = data.count
+                    GoogleImageCache.shared.setObject(loadedImage, forKey: cacheKey, cost: cost)
                     self.image = loadedImage
                     isLoading = false
                     return
@@ -438,10 +519,12 @@ struct AuthenticatedGoogleImageView: View {
                        let newToken = GooglePhotosManager.shared.accessToken {
                         var retryReq = URLRequest(url: url)
                         retryReq.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                        retryReq.timeoutInterval = 20
                         if let (retryData, retryResp) = try? await URLSession.shared.data(for: retryReq),
                            (retryResp as? HTTPURLResponse)?.statusCode == 200,
                            let loadedImage = UIImage(data: retryData) {
-                            GoogleImageCache.shared.setObject(loadedImage, forKey: cacheKey)
+                            let cost = retryData.count
+                            GoogleImageCache.shared.setObject(loadedImage, forKey: cacheKey, cost: cost)
                             self.image = loadedImage
                             isLoading = false
                             return
@@ -450,25 +533,21 @@ struct AuthenticatedGoogleImageView: View {
                 }
             }
         }
-        
+
         // 2. Публичный запрос (для прямых открытых CDN ссылок)
         if let (data, response) = try? await URLSession.shared.data(from: url),
            let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200,
            let loadedImage = UIImage(data: data) {
-            GoogleImageCache.shared.setObject(loadedImage, forKey: cacheKey)
+            let cost = data.count
+            GoogleImageCache.shared.setObject(loadedImage, forKey: cacheKey, cost: cost)
             self.image = loadedImage
             isLoading = false
             return
         }
-        
+
         self.isError = true
         isLoading = false
     }
-}
-
-@MainActor
-private final class GoogleImageCache: @unchecked Sendable {
-    static let shared = NSCache<NSString, UIImage>()
 }
 
 // MARK: - Fullscreen Media Preview Modal
@@ -477,13 +556,13 @@ struct GoogleMediaPreviewModal: View {
     @Environment(\.dismiss) private var dismiss
     let item: GoogleMediaItem
     let token: String?
-    
+
     @State private var player: AVPlayer? = nil
-    
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
+
             VStack(spacing: 0) {
                 // Хедер с информацией
                 HStack {
@@ -497,7 +576,7 @@ struct GoogleMediaPreviewModal: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    
+
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 26))
@@ -505,9 +584,9 @@ struct GoogleMediaPreviewModal: View {
                     }
                 }
                 .padding()
-                
+
                 Spacer()
-                
+
                 // Основной медиаконтент
                 if item.isVideo {
                     if let player = player {
@@ -531,7 +610,7 @@ struct GoogleMediaPreviewModal: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .padding(.horizontal, 12)
                 }
-                
+
                 Spacer()
             }
         }

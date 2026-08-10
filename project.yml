@@ -14,8 +14,8 @@ targets:
         CFBundleName: SmartStock
         CFBundleDisplayName: SmartStock
         CFBundleIdentifier: com.samvel.smartstock.SmartStock
-        CFBundleVersion: "7"
-        CFBundleShortVersionString: "1.6"
+        CFBundleVersion: "8"
+        CFBundleShortVersionString: "1.7"
         CFBundlePackageType: APPL
         CFBundleExecutable: SmartStock
         UILaunchScreen: {}

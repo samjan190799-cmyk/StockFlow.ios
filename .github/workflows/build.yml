@@ -172,10 +172,22 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: "SmartStock v1.6 (Build ${{ github.run_number }})"
+          name: "SmartStock v1.7 (Build ${{ github.run_number }})"
           body: |
-            ## SmartStock iOS IPA
-            SmartStock v1.6 Release
+            ## 🚀 SmartStock v1.7
+
+            ### 🔴 Исправления
+            - **Краш при смене языка интерфейса** — исправлен deprecated `onChange` синтаксис (Swift 6 / iOS 17+)
+            - **Google Photos: пропуски файлов** — добавлено обновление протухших `baseUrl` (Google ограничивает 60 мин)
+            - **Расход памяти** — установлен лимит кеша миниатюр Google Photos (500 шт / 100 МБ)
+
+            ### ✨ Улучшения
+            - Google Photos список больше не перезагружается при каждом открытии пикера
+            - Добавлена кнопка «↻ Обновить» список Google Photos
+            - Параллельная загрузка миниатюр ограничена до 8 потоков (плавный скролл)
+            - Поддержка до 20 000 файлов в Google Photos (было 5 000)
+            - Правильные расширения видео из Google Photos (.mov, .heic, .dng и др.)
+            - Убрана кнопка «Галерея» в верхнем левом углу главного экрана
           files: build/SmartStock.ipa
           draft: false
           prerelease: false
