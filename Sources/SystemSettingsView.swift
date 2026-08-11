@@ -54,7 +54,7 @@ struct SystemSettingsView: View {
                     bgScheduler: $bgScheduler,
                     schedulerIntervalHours: $schedulerIntervalHours,
                     autoUpscale: $autoUpscale,
-                    showToast: showToast
+                    showToast: { msg in showToast(msg) }
                 ))
                 .modifier(SettingsObservers2(
                     retryOnFail: $retryOnFail,
@@ -64,7 +64,7 @@ struct SystemSettingsView: View {
                     parallelStreams: $parallelStreams,
                     seqVideo: $seqVideo,
                     seqPhoto: $seqPhoto,
-                    showToast: showToast
+                    showToast: { msg in showToast(msg) }
                 ))
                 .sheet(isPresented: $showFolderPicker) {
                     FolderPicker { url in
@@ -650,13 +650,12 @@ struct SystemSettingsView: View {
 
 // MARK: - ViewModifiers для onChange (Swift 6: разбиваем type-check на независимые блоки)
 
-@MainActor
 struct SettingsObservers1: ViewModifier {
     @Binding var sysLanguage: String
     @Binding var bgScheduler: Bool
     @Binding var schedulerIntervalHours: Int
     @Binding var autoUpscale: Bool
-    let showToast: @MainActor (String) -> Void
+    let showToast: (String) -> Void
 
     func body(content: Content) -> some View {
         content
@@ -678,7 +677,7 @@ struct SettingsObservers1: ViewModifier {
             }
             .onChange(of: schedulerIntervalHours) { _, _ in
                 HapticHelper.trigger(.light)
-                if bgScheduler {
+                if bgScheduler.wrappedValue {
                     SchedulerManager.shared.scheduleNextBackgroundTask()
                 }
             }
@@ -692,7 +691,6 @@ struct SettingsObservers1: ViewModifier {
     }
 }
 
-@MainActor
 struct SettingsObservers2: ViewModifier {
     @Binding var retryOnFail: Bool
     @Binding var compressJpeg: Bool
@@ -701,7 +699,7 @@ struct SettingsObservers2: ViewModifier {
     @Binding var parallelStreams: Int
     @Binding var seqVideo: Bool
     @Binding var seqPhoto: Bool
-    let showToast: @MainActor (String) -> Void
+    let showToast: (String) -> Void
 
     func body(content: Content) -> some View {
         content
