@@ -18,7 +18,7 @@ struct LogViewer: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding()
                             .id("Bottom")
-                            .onChange(of: logger.logs.count) { _, _ in
+                            .onChange(of: logger.logs.count) { _ in
                                 withAnimation {
                                     proxy.scrollTo("Bottom", anchor: .bottom)
                                 }
