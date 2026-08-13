@@ -650,12 +650,13 @@ struct SystemSettingsView: View {
 
 // MARK: - ViewModifiers для onChange (Swift 6: разбиваем type-check на независимые блоки)
 
+@MainActor
 struct SettingsObservers1: ViewModifier {
     @Binding var sysLanguage: String
     @Binding var bgScheduler: Bool
     @Binding var schedulerIntervalHours: Int
     @Binding var autoUpscale: Bool
-    let showToast: (String) -> Void
+    let showToast: @MainActor (String) -> Void
 
     func body(content: Content) -> some View {
         content
@@ -677,7 +678,7 @@ struct SettingsObservers1: ViewModifier {
             }
             .onChange(of: schedulerIntervalHours) { _, _ in
                 HapticHelper.trigger(.light)
-                if bgScheduler.wrappedValue {
+                if bgScheduler {
                     SchedulerManager.shared.scheduleNextBackgroundTask()
                 }
             }
@@ -691,6 +692,7 @@ struct SettingsObservers1: ViewModifier {
     }
 }
 
+@MainActor
 struct SettingsObservers2: ViewModifier {
     @Binding var retryOnFail: Bool
     @Binding var compressJpeg: Bool
@@ -699,7 +701,7 @@ struct SettingsObservers2: ViewModifier {
     @Binding var parallelStreams: Int
     @Binding var seqVideo: Bool
     @Binding var seqPhoto: Bool
-    let showToast: (String) -> Void
+    let showToast: @MainActor (String) -> Void
 
     func body(content: Content) -> some View {
         content
