@@ -37,6 +37,7 @@ enum MetricType: String, CaseIterable, Identifiable, Sendable {
 }
 
 // MARK: - Shimmer модификатор
+@MainActor
 struct ShimmerModifier: ViewModifier {
     @State private var phase: CGFloat = -1
 

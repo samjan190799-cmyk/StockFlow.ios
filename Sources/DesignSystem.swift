@@ -110,6 +110,7 @@ struct StaticDotGridView: View {
 }
 
 // MARK: - Clean Flat & Glass Card Modifiers
+@MainActor
 struct GlassModifier: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
     var cornerRadius: CGFloat
@@ -135,6 +136,7 @@ struct GlassModifier: ViewModifier {
     }
 }
 
+@MainActor
 struct GlassAccentModifier: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
     var accentColor: Color
@@ -236,6 +238,7 @@ struct SendableBinding<Value>: @unchecked Sendable {
 }
 
 // MARK: - Tactile Haptic Helper
+@MainActor
 public struct HapticHelper {
     public static func trigger(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
         let generator = UIImpactFeedbackGenerator(style: style)
@@ -296,6 +299,7 @@ extension View {
 }
 
 // MARK: - iOS 2026 Spatial & Liquid Glass Modifiers
+@MainActor
 struct Spatial3DTiltModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 17.0, *) {
@@ -315,6 +319,7 @@ struct Spatial3DTiltModifier: ViewModifier {
     }
 }
 
+@MainActor
 struct LiquidGlassBorderModifier: ViewModifier {
     var cornerRadius: CGFloat
     @Environment(\.colorScheme) var colorScheme

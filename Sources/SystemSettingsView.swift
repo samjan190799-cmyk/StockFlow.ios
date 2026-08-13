@@ -54,7 +54,7 @@ struct SystemSettingsView: View {
                     bgScheduler: $bgScheduler,
                     schedulerIntervalHours: $schedulerIntervalHours,
                     autoUpscale: $autoUpscale,
-                    showToast: { msg in showToast(msg) }
+                    showToast: { msg in self.showToast(msg) }
                 ))
                 .modifier(SettingsObservers2(
                     retryOnFail: $retryOnFail,
@@ -64,22 +64,22 @@ struct SystemSettingsView: View {
                     parallelStreams: $parallelStreams,
                     seqVideo: $seqVideo,
                     seqPhoto: $seqPhoto,
-                    showToast: { msg in showToast(msg) }
+                    showToast: { msg in self.showToast(msg) }
                 ))
                 .sheet(isPresented: $showFolderPicker) {
                     FolderPicker { url in
                         do {
                             guard url.startAccessingSecurityScopedResource() else {
-                                showToast("Не удалось получить доступ к папке".localized)
+                                self.showToast("Не удалось получить доступ к папке".localized)
                                 return
                             }
                             defer { url.stopAccessingSecurityScopedResource() }
                             let bookmarkData = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
                             UserDefaults.standard.set(bookmarkData, forKey: "sys_scheduler_folder_bookmark")
                             self.folderName = url.lastPathComponent
-                            showToast("Папка успешно выбрана: ".localized + url.lastPathComponent)
+                            self.showToast("Папка успешно выбрана: ".localized + url.lastPathComponent)
                         } catch {
-                            showToast("Ошибка сохранения папки: ".localized + error.localizedDescription)
+                            self.showToast("Ошибка сохранения папки: ".localized + error.localizedDescription)
                         }
                     } onCancel: {}
                 }

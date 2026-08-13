@@ -1482,7 +1482,7 @@ struct UploadQueueView: View {
                                 .foregroundStyle(.white)
                         }
                     }
-                    .onChange(of: selectedItems) { newItems in
+                    .onChange(of: selectedItems) { _, newItems in
                         if !newItems.isEmpty {
                             HapticHelper.trigger(.medium)
                         }
