@@ -117,7 +117,7 @@ struct StockSignInHelperView: View {
                 Button(action: parseFromClipboard) {
                     HStack(spacing: 4) {
                         Image(systemName: "doc.on.clipboard")
-                        Text("Из буфера")
+                        Text("Из буфера".localized)
                     }
                     .font(.system(size: 11, weight: .bold))
                     .frame(height: 44)
@@ -132,7 +132,7 @@ struct StockSignInHelperView: View {
                 Button(action: triggerManualScan) {
                     HStack(spacing: 6) {
                         Image(systemName: "sparkles")
-                        Text("Сканировать")
+                        Text("Сканировать".localized)
                     }
                     .font(.system(size: 13, weight: .bold))
                     .padding(.horizontal, 14)

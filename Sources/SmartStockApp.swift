@@ -78,27 +78,27 @@ struct SmartStockApp: App {
                 TabView {
                     UploadQueueView(viewModel: viewModel)
                         .tabItem {
-                            Label(Localizer.translate("Галерея", to: sysLanguage), systemImage: "photo.on.rectangle")
+                            Label("Галерея".localized, systemImage: "photo.on.rectangle")
                         }
                     
                     AIAssistantView()
                          .tabItem {
-                             Label(Localizer.translate("ИИ", to: sysLanguage), systemImage: "brain")
+                             Label("ИИ".localized, systemImage: "brain")
                          }
                     
                     InsightsView()
                          .tabItem {
-                             Label(Localizer.translate("Статистика", to: sysLanguage), systemImage: "chart.line.uptrend.xyaxis")
+                             Label("Статистика".localized, systemImage: "chart.line.uptrend.xyaxis")
                          }
                     
                     StockSettingsView()
                         .tabItem {
-                            Label(Localizer.translate("Агентства", to: sysLanguage), systemImage: "arrow.left.and.right")
+                            Label("Агентства".localized, systemImage: "arrow.left.and.right")
                         }
                     
                         SystemSettingsView()
                             .tabItem {
-                                Label(Localizer.translate("Настройки", to: sysLanguage), systemImage: "gearshape")
+                                Label("Настройки".localized, systemImage: "gearshape")
                             }
                 }
             }

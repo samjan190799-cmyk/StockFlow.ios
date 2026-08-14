@@ -29,11 +29,11 @@ struct LogViewer: View {
                     }
                 }
             }
-            .navigationTitle("FTP Логи")
+            .navigationTitle("FTP Логи".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Закрыть") {
+                    Button("Закрыть".localized) {
                         presentationMode.wrappedValue.dismiss()
                     }
                 }
@@ -45,7 +45,7 @@ struct LogViewer: View {
                             isCopied = false
                         }
                     }) {
-                        Text(isCopied ? "Скопировано!" : "Копировать")
+                        Text(isCopied ? "Скопировано!".localized : "Копировать".localized)
                             .bold()
                             .foregroundColor(isCopied ? .green : Color(hex: "7C3AED"))
                     }

@@ -517,7 +517,7 @@ struct InsightsView: View {
                         .frame(width: 8, height: 8)
                         .neonShadow(color: hasData ? Color(hex: "10B981") : .clear, radius: 6)
 
-                    Text(isDemoMode ? "Демо" : (hasData ? "Активно" : "Нет данных"))
+                    Text(isDemoMode ? "Демо".localized : (hasData ? "Активно".localized : "Нет данных".localized))
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(hasData && !isDemoMode ? Color(hex: "10B981") : .secondary)
                 }
@@ -593,7 +593,7 @@ struct InsightsView: View {
                         .foregroundStyle(.primary)
 
                     if !isDemoMode {
-                        Text(selectedStock == "Все стоки" ? "Все стоки" : selectedStock)
+                        Text(selectedStock == "Все стоки" ? "Все стоки".localized : selectedStock)
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
@@ -816,7 +816,7 @@ struct InsightsView: View {
                                     HStack(spacing: 3) {
                                         Image(systemName: record.isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
                                             .font(.system(size: 8))
-                                        Text(record.isSuccess ? "Ок" : "Ошибка")
+                                        Text(record.isSuccess ? "Ок".localized : "Ошибка".localized)
                                             .font(.system(size: 9, weight: .bold))
                                     }
                                     .padding(.horizontal, 6)
@@ -949,7 +949,7 @@ struct InsightsView: View {
                                     }
                                 }
 
-                                Text(uploads > 0 ? "Активно" : "Нет загрузок")
+                                Text(uploads > 0 ? "Активно".localized : "Нет загрузок".localized)
                                     .font(.system(size: 8, weight: .bold))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)

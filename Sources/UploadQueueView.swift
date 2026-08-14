@@ -1202,7 +1202,7 @@ struct UploadQueueView: View {
                     }
                     .toolbar {
                         ToolbarItem(placement: .navigationBarLeading) {
-                            Button("Закрыть") {
+                            Button("Закрыть".localized) {
                                 editingPhoto = nil
                             }
                             .font(.system(size: 14, weight: .semibold))
@@ -1213,14 +1213,14 @@ struct UploadQueueView: View {
             .sheet(item: $selectedDetailPhoto) { photo in
                 PhotoDetailSheet(photo: photo, viewModel: viewModel, editingPhoto: $editingPhoto)
             }
-            .alert("Ошибка загрузки", isPresented: $showingErrorAlert) {
-                Button("Скопировать") {
+            .alert("Ошибка загрузки".localized, isPresented: $showingErrorAlert) {
+                Button("Скопировать".localized) {
                     if let msg = selectedErrorMsg {
                         UIPasteboard.general.string = msg
                         HapticHelper.notification(.success)
                     }
                 }
-                Button("ОК", role: .cancel) {}
+                Button("ОК".localized, role: .cancel) {}
             } message: {
                 if let msg = selectedErrorMsg {
                     Text(msg)
@@ -1296,8 +1296,8 @@ struct UploadQueueView: View {
                 
                 // MARK: - Вкладки Фото / Видео
                 HStack(spacing: 0) {
-                    mediaTabButton(index: 0, title: "Фото", icon: "photo.on.rectangle")
-                    mediaTabButton(index: 1, title: "Видео", icon: "video.fill")
+                    mediaTabButton(index: 0, title: "Фото".localized, icon: "photo.on.rectangle")
+                    mediaTabButton(index: 1, title: "Видео".localized, icon: "video.fill")
                 }
                 .padding(4)
                 .background(
@@ -1339,7 +1339,7 @@ struct UploadQueueView: View {
                     
                     if !isSelectionMode {
                         // Кнопка режима перетаскивания
-                        Button(isReorderMode ? "Готово" : "Порядок") {
+                        Button(isReorderMode ? "Готово".localized : "Порядок".localized) {
                             HapticHelper.trigger(.light)
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 isReorderMode.toggle()
@@ -1417,19 +1417,19 @@ struct UploadQueueView: View {
                                 Button {
                                     viewModel.runAIForPhoto(photo.id)
                                 } label: {
-                                    Label("Запустить ИИ-анализ", systemImage: "sparkles")
+                                    Label("Запустить ИИ-анализ".localized, systemImage: "sparkles")
                                 }
                                 
                                 Button {
                                     viewModel.uploadPhoto(photo.id)
                                 } label: {
-                                    Label("Выгрузить на стоки", systemImage: "paperplane")
+                                    Label("Выгрузить на стоки".localized, systemImage: "paperplane")
                                 }
                                 
                                 Button(role: .destructive) {
                                     viewModel.removePhoto(photo.id)
                                 } label: {
-                                    Label("Удалить", systemImage: "trash")
+                                    Label("Удалить".localized, systemImage: "trash")
                                 }
                             }
                             .applyScrollTransitionIfAvailable()
@@ -2075,7 +2075,7 @@ struct DashboardProgressRing: View {
                 Text(total > 0 ? "\(Int((percentCompleted + percentReady) * 100))%" : "0%")
                     .font(.system(size: 13, weight: .black))
                     .foregroundStyle(.primary)
-                Text("готовность")
+                Text("готовность".localized)
                     .font(.system(size: 8))
                     .foregroundStyle(.secondary)
             }
@@ -2277,7 +2277,7 @@ struct PhotoDetailSheet: View {
                         Button(action: {
                             dismiss()
                         }) {
-                            Text("Закрыть")
+                            Text("Закрыть".localized)
                                 .font(.system(size: 14, weight: .bold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
@@ -2294,11 +2294,11 @@ struct PhotoDetailSheet: View {
                     }
                 }
             }
-            .navigationTitle("Детали фотографии")
+            .navigationTitle("Детали фотографии".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Готово") {
+                    Button("Готово".localized) {
                         dismiss()
                     }
                     .font(.system(size: 14, weight: .semibold))
@@ -2494,14 +2494,14 @@ struct DetailCardView: View {
                             HapticHelper.trigger(.light)
                             viewModel.uploadPhoto(photo.id)
                         }) {
-                            Label("Отправить на стоки", systemImage: "paperplane.fill")
+                            Label("Отправить на стоки".localized, systemImage: "paperplane.fill")
                         }
                         
                         Button(action: {
                             HapticHelper.trigger(.light)
                             viewModel.runAIForPhoto(photo.id)
                         }) {
-                            Label("Заполнить ИИ", systemImage: "sparkles")
+                            Label("Заполнить ИИ".localized, systemImage: "sparkles")
                         }
                     }
                     
@@ -2521,7 +2521,7 @@ struct DetailCardView: View {
                             }
                         }
                     } label: {
-                        Label("Выбрать стоки...", systemImage: "checklist")
+                        Label("Выбрать стоки...".localized, systemImage: "checklist")
                     }
                     
                     Divider()
@@ -2530,7 +2530,7 @@ struct DetailCardView: View {
                         HapticHelper.trigger(.medium)
                         viewModel.removePhoto(photo.id)
                     }) {
-                        Label("Удалить из очереди", systemImage: "trash")
+                        Label("Удалить из очереди".localized, systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle.fill")
@@ -2556,7 +2556,7 @@ struct DetailCardView: View {
                         selectedErrorMsg = errorMsg
                         showingErrorAlert = true
                     }) {
-                        Text("Подробнее")
+                        Text("Подробнее".localized)
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Color(hex: "7C3AED"))
                             .padding(.horizontal, 6)
@@ -2568,14 +2568,14 @@ struct DetailCardView: View {
                 }
             }
         }
-        .alert("Ошибка загрузки", isPresented: $showingErrorAlert) {
-            Button("Скопировать") {
+        .alert("Ошибка загрузки".localized, isPresented: $showingErrorAlert) {
+            Button("Скопировать".localized) {
                 if let msg = selectedErrorMsg {
                     UIPasteboard.general.string = msg
                     HapticHelper.notification(.success)
                 }
             }
-            Button("ОК", role: .cancel) {}
+            Button("ОК".localized, role: .cancel) {}
         } message: {
             if let msg = selectedErrorMsg {
                 Text(msg)
