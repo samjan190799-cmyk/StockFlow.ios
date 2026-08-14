@@ -635,14 +635,16 @@ struct SystemSettingsView: View {
     }
 
     private func showToast(_ message: String) {
-        savedToastMessage = message
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-            showingSavedToast = true
-        }
-        Task {
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
-            withAnimation(.easeOut(duration: 0.3)) {
-                showingSavedToast = false
+        DispatchQueue.main.async {
+            self.savedToastMessage = message
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                self.showingSavedToast = true
+            }
+            Task {
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                withAnimation(.easeOut(duration: 0.3)) {
+                    self.showingSavedToast = false
+                }
             }
         }
     }
@@ -670,7 +672,9 @@ struct SettingsObservers1: ViewModifier {
                 } else {
                     msg = "Язык изменён на Русский"
                 }
-                showToast(msg)
+                DispatchQueue.main.async {
+                    showToast(msg)
+                }
             }
             .onChange(of: bgScheduler) { newVal in
                 HapticHelper.trigger(.light)
@@ -687,7 +691,9 @@ struct SettingsObservers1: ViewModifier {
                 let msg = newVal
                     ? "Авто-апскейл включён — работает при добавлении фото".localized
                     : "Авто-апскейл отключён".localized
-                showToast(msg)
+                DispatchQueue.main.async {
+                    showToast(msg)
+                }
             }
     }
 }
@@ -713,26 +719,34 @@ struct SettingsObservers2: ViewModifier {
                 let msg = newVal
                     ? "Режим проводника активен: 0 МБ кэша".localized
                     : "Кэширование включено".localized
-                showToast(msg)
+                DispatchQueue.main.async {
+                    showToast(msg)
+                }
             }
             .onChange(of: parallelStreams) { newVal in
                 HapticHelper.trigger(.light)
                 let msg = "Параллельные потоки: ".localized + "\(newVal)"
-                showToast(msg)
+                DispatchQueue.main.async {
+                    showToast(msg)
+                }
             }
             .onChange(of: seqVideo) { newVal in
                 HapticHelper.trigger(.light)
                 let msg = newVal
                     ? "Загрузка видео по очереди включена".localized
                     : "Загрузка видео по очереди отключена".localized
-                showToast(msg)
+                DispatchQueue.main.async {
+                    showToast(msg)
+                }
             }
             .onChange(of: seqPhoto) { newVal in
                 HapticHelper.trigger(.light)
                 let msg = newVal
                     ? "Загрузка фото по очереди включена".localized
                     : "Загрузка фото по очереди отключена".localized
-                showToast(msg)
+                DispatchQueue.main.async {
+                    showToast(msg)
+                }
             }
     }
 }
