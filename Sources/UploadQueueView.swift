@@ -169,6 +169,24 @@ class QueueViewModel: ObservableObject {
     
     /// Разрешает реальный URL медиафайла для чтения без копирования его в папку приложения
     func resolveSourceURL(for photo: PhotoMetadata) -> (url: URL, needAccessStop: Bool)? {
+        let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
+        let actualExt = ext.isEmpty ? (photo.isVideo ? "mp4" : "jpg") : ext
+        let localAppURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
+        
+        // 1. Приоритет #1: Постоянный локальный файл приложения (гарантированно уникален по photo.id)
+        if FileManager.default.fileExists(atPath: localAppURL.path) {
+            return (localAppURL, false)
+        }
+        
+        // 2. Приоритет #2: Ранее сохраненный путь localURLPath
+        if let path = photo.localURLPath {
+            let url = URL(fileURLWithPath: path)
+            if FileManager.default.fileExists(atPath: url.path) {
+                return (url, false)
+            }
+        }
+        
+        // 3. Приоритет #3: Security-scoped Bookmark (для внешних ресурсов)
         if let bookmarkData = photo.localBookmarkData {
             var isStale = false
             if let resolved = try? URL(resolvingBookmarkData: bookmarkData, options: .withoutUI, relativeTo: nil, bookmarkDataIsStale: &isStale) {
@@ -178,20 +196,6 @@ class QueueViewModel: ObservableObject {
                 }
                 if accessed { resolved.stopAccessingSecurityScopedResource() }
             }
-        }
-        
-        if let path = photo.localURLPath {
-            let url = URL(fileURLWithPath: path)
-            if FileManager.default.fileExists(atPath: url.path) {
-                return (url, false)
-            }
-        }
-        
-        let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
-        let actualExt = ext.isEmpty ? "mp4" : ext
-        let fallbackURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
-        if FileManager.default.fileExists(atPath: fallbackURL.path) {
-            return (fallbackURL, false)
         }
         
         return nil
@@ -245,13 +249,17 @@ class QueueViewModel: ObservableObject {
                 
                 let ext = url.pathExtension.lowercased()
                 let isVideo = ["mp4", "mov", "m4v", "avi", "mkv"].contains(ext)
+                let actualExt = ext.isEmpty ? (isVideo ? "mp4" : "jpg") : ext
                 let newId = UUID()
-                let bookmarkData = try? url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
+                let targetURL = self.photosDirectoryURL.appendingPathComponent("\(newId.uuidString).\(actualExt)")
                 
-                let thumbImage = await ImageCacheHelper.shared.loadAndDownsample(fileURL: url, maxPixelSize: 300)
+                // Копируем файл из временной папки системного пикера в изоляционное хранилище приложения
+                try? FileManager.default.copyItem(at: url, to: targetURL)
+                
+                let thumbImage = await ImageCacheHelper.shared.loadAndDownsample(fileURL: targetURL, maxPixelSize: 300)
                 let thumbData = thumbImage?.jpegData(compressionQuality: 0.75)
                 
-                let fileAttrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+                let fileAttrs = try? FileManager.default.attributesOfItem(atPath: targetURL.path)
                 let fileSizeByte = (fileAttrs?[.size] as? Int64) ?? 0
                 let sizeStr = ByteCountFormatter.string(fromByteCount: fileSizeByte, countStyle: .file)
                 
@@ -264,12 +272,11 @@ class QueueViewModel: ObservableObject {
                     description: "",
                     status: .new,
                     selectedStocks: Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]),
-                    localURLPath: url.path,
-                    localBookmarkData: bookmarkData,
+                    localURLPath: targetURL.path,
                     thumbnailData: thumbData,
                     isVideo: isVideo
                 )
-                self.photos.append(newPhoto)
+                self.addPhoto(newPhoto)
                 self.triggerToast("Добавлен файл: \(url.lastPathComponent)".localized)
             }
         }
@@ -328,12 +335,12 @@ class QueueViewModel: ObservableObject {
             
             Task {
                 try? await Task.sleep(nanoseconds: 1_200_000_000)
-                if self.photos.count > idx {
-                    self.photos[idx].title = "Драматичный закат в горах (Демо)".localized
-                    self.photos[idx].keywords = ["закат", "облака", "небо", "горы", "пейзаж", "демо"]
-                    self.photos[idx].description = "Демо-описание: Живописный закат солнца над горным хребтом.".localized
-                    self.photos[idx].categories = ["Природа", "Пейзаж"]
-                    self.photos[idx].status = .ready
+                if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                    self.photos[index].title = "Драматичный закат в горах (Демо)".localized
+                    self.photos[index].keywords = ["закат", "облака", "небо", "горы", "пейзаж", "демо"]
+                    self.photos[index].description = "Демо-описание: Живописный закат солнца над горным хребтом.".localized
+                    self.photos[index].categories = ["Природа", "Пейзаж"]
+                    self.photos[index].status = .ready
                     self.savePhotosToDisk()
                 }
             }
@@ -941,14 +948,20 @@ class QueueViewModel: ObservableObject {
         var photoCopy = photo
         if let data = photo.imageData {
             let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
-            let actualExt = ext.isEmpty ? "mp4" : ext
+            let actualExt = ext.isEmpty ? (photo.isVideo ? "mp4" : "jpg") : ext
             let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
-            Task.detached(priority: .background) {
-                try? data.write(to: fileURL, options: .atomic)
-            }
+            
+            // Синхронная запись в локальный диск приложения для предотвращения гонки при отправке
+            try? data.write(to: fileURL, options: .atomic)
+            photoCopy.localURLPath = fileURL.path
             photoCopy.imageData = nil // Освобождаем ОЗУ
         }
-        photos.insert(photoCopy, at: 0)
+        
+        if let idx = photos.firstIndex(where: { $0.id == photoCopy.id }) {
+            photos[idx] = photoCopy
+        } else {
+            photos.insert(photoCopy, at: 0)
+        }
         savePhotosToDisk()
     }
     
@@ -1976,6 +1989,7 @@ struct PhotoRowView: View {
                         .stroke(Color.red.opacity(0.3), lineWidth: 1)
                 )
             }
+            .buttonStyle(PlainButtonStyle())
             
             // Кнопка ИИ АНАЛИЗ
             Button(action: {
@@ -1999,6 +2013,7 @@ struct PhotoRowView: View {
                         .stroke(photo.status == .aiAnalyzing ? Color.white.opacity(0.04) : Color.white.opacity(0.12), lineWidth: 1)
                 )
             }
+            .buttonStyle(PlainButtonStyle())
             .disabled(photo.status == .aiAnalyzing)
             
             // Кнопка ОТПРАВИТЬ / ОТПРАВЛЕНО
@@ -2023,6 +2038,7 @@ struct PhotoRowView: View {
                         .stroke(Color.white.opacity(0.12), lineWidth: 1)
                 )
             }
+            .buttonStyle(PlainButtonStyle())
             .disabled(photo.status == .success)
             
             Spacer()
