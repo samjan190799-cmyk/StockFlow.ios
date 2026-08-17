@@ -18,6 +18,7 @@ struct AIAssistantView: View {
     @State private var showingKeyVerificationAlert = false
     @State private var verificationMessage = ""
     @State private var isVerifying = false
+    @State private var showHelpSheet = false
     
     // Quick Templates
     private let templates: [PromptTemplate] = [
@@ -102,6 +103,21 @@ struct AIAssistantView: View {
             }
             .navigationTitle("ИИ-Ассистент".localized)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        HapticHelper.trigger(.light)
+                        showHelpSheet = true
+                    }) {
+                        Image(systemName: "questionmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Color.purple)
+                    }
+                }
+            }
+            .sheet(isPresented: $showHelpSheet) {
+                AIKeyHelpSheet()
+            }
             .alert("Проверка ключа".localized, isPresented: $showingKeyVerificationAlert) {
                 Button("OK", role: .cancel) { }
             } message: {

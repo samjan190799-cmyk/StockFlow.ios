@@ -42,6 +42,7 @@ struct SystemSettingsView: View {
     
     @State private var showingSavedToast = false
     @State private var savedToastMessage = ""
+    @State private var showGoogleHelpSheet = false
     
     var body: some View {
         NavigationStack {
@@ -82,6 +83,9 @@ struct SystemSettingsView: View {
                             self.showToast("Ошибка сохранения папки: ".localized + error.localizedDescription)
                         }
                     } onCancel: {}
+                }
+                .sheet(isPresented: $showGoogleHelpSheet) {
+                    GoogleOAuthHelpSheet()
                 }
         }
     }
@@ -149,11 +153,21 @@ struct SystemSettingsView: View {
     @ViewBuilder
     private var googlePhotosSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
+            HStack(spacing: 8) {
                 Text("ОБЛАКО GOOGLE ФОТО".localized)
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
+                
+                Button(action: {
+                    HapticHelper.trigger(.light)
+                    showGoogleHelpSheet = true
+                }) {
+                    Image(systemName: "questionmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color(hex: "4285F4"))
+                }
+                
                 Spacer()
                 Image(systemName: "photo.stack.fill")
                     .font(.system(size: 13))

@@ -18,7 +18,37 @@ struct GoogleMediaItem: Identifiable, Codable, Sendable {
     var isVideo: Bool {
         let fn = filename.lowercased()
         let mt = mimeType.lowercased()
-        return mt.contains("video") || fn.hasSuffix(".mp4") || fn.hasSuffix(".mov") || fn.hasSuffix(".m4v") || fn.hasSuffix(".avi")
+        return mt.contains("video") || fn.hasSuffix(".mp4") || fn.hasSuffix(".mov") || fn.hasSuffix(".m4v") || fn.hasSuffix(".avi") || fn.hasSuffix(".mkv") || fn.hasSuffix(".webm") || fn.hasSuffix(".3gp")
+    }
+
+    /// Проверка, является ли файл реальным медиа (фото или видео), исключая системные/исполняемые файлы
+    static func isSupportedMedia(filename: String, mimeType: String) -> Bool {
+        let fn = filename.lowercased()
+        let mt = mimeType.lowercased()
+
+        // Черный список расширений (системные файлы, исполняемые, архивы, документы)
+        let ignoredExtensions = [
+            ".ini", ".exe", ".dll", ".bat", ".cmd", ".sh", ".zip", ".rar", ".7z", ".tar", ".gz",
+            ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".json", ".xml",
+            ".plist", ".dmg", ".pkg", ".apk", ".ipa", ".iso", ".html", ".htm", ".css", ".js",
+            ".py", ".swift", ".kt", ".java", ".c", ".cpp", ".h", ".log", ".db", ".sqlite", ".dat"
+        ]
+        if ignoredExtensions.contains(where: { fn.hasSuffix($0) }) {
+            return false
+        }
+
+        // Допустимые MIME-типы
+        if mt.starts(with: "image/") || mt.starts(with: "video/") {
+            return true
+        }
+
+        // Белый список расширений
+        let mediaExtensions = [
+            ".jpg", ".jpeg", ".png", ".heic", ".heif", ".dng", ".webp", ".tiff", ".tif",
+            ".raw", ".cr2", ".cr3", ".nef", ".arw", ".bmp", ".gif", ".svg",
+            ".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm", ".3gp"
+        ]
+        return mediaExtensions.contains(where: { fn.hasSuffix($0) })
     }
 
     /// Реальное расширение файла (из filename), для видео — mp4/mov/m4v/avi
@@ -50,22 +80,44 @@ struct GoogleMediaItem: Identifiable, Codable, Sendable {
     }
 
     var thumbnailURL: URL? {
-        // Drive: thumbnailLink уже является миниатюрой, доступной с авторизацией
-        if let productUrl = productUrl, productUrl.contains("http") {
+        // 1. Google Drive thumbnailLink
+        if let productUrl = productUrl, !productUrl.isEmpty, productUrl.hasPrefix("http") {
+            if productUrl.contains("=s") {
+                let upgraded = productUrl.replacingOccurrences(of: "=s220", with: "=s400")
+                return URL(string: upgraded) ?? URL(string: productUrl)
+            }
             return URL(string: productUrl)
         }
-        guard !baseUrl.isEmpty else { return nil }
 
+        // 2. Drive прямая ссылка на миниатюру по id
         if baseUrl.contains("drive.google.com") || baseUrl.contains("googleusercontent.com/drive") {
-            if baseUrl.contains("?") || baseUrl.contains("=") {
-                return URL(string: baseUrl)
-            }
-            return URL(string: "\(baseUrl)?sz=w400")
+            return URL(string: "https://drive.google.com/thumbnail?id=\(id)&sz=w400")
         }
 
+        guard !baseUrl.isEmpty else { return nil }
+
+        // 3. Google Photos API baseUrl
         let cleanBase = baseUrl.components(separatedBy: "=")[0]
         guard !cleanBase.isEmpty else { return nil }
         return URL(string: "\(cleanBase)=w400-h400-c")
+    }
+
+    var previewURL: URL? {
+        if let productUrl = productUrl, !productUrl.isEmpty, productUrl.hasPrefix("http") {
+            if productUrl.contains("=s") {
+                let upgraded = productUrl.replacingOccurrences(of: "=s220", with: "=s1200")
+                return URL(string: upgraded) ?? URL(string: productUrl)
+            }
+        }
+
+        if baseUrl.contains("drive.google.com") || baseUrl.contains("googleusercontent.com/drive") {
+            return URL(string: "https://drive.google.com/thumbnail?id=\(id)&sz=w1200")
+        }
+
+        guard !baseUrl.isEmpty else { return nil }
+        let cleanBase = baseUrl.components(separatedBy: "=")[0]
+        guard !cleanBase.isEmpty else { return nil }
+        return URL(string: "\(cleanBase)=w1200-h1200")
     }
 
     enum CodingKeys: String, CodingKey {
@@ -546,6 +598,7 @@ final class GooglePhotosManager: ObservableObject {
                             let webContentLink = fileDict["webContentLink"] as? String
 
                             guard !id.isEmpty else { continue }
+                            guard GoogleMediaItem.isSupportedMedia(filename: name, mimeType: mimeType) else { continue }
 
                             if !fetchedItems.contains(where: { $0.id == id }) {
                                 let item = GoogleMediaItem(
@@ -579,7 +632,7 @@ final class GooglePhotosManager: ObservableObject {
         }
 
         if self.mediaItems.isEmpty {
-            self.statusMessage = "Файлов не найдено. Проверьте, включен ли Photos/Drive API в Google Cloud.".localized
+            self.statusMessage = "Медиафайлов не найдено. Проверьте, включен ли Photos/Drive API в Google Cloud.".localized
         } else {
             self.statusMessage = "Найдено медиафайлов: \(self.mediaItems.count)".localized
         }
@@ -606,11 +659,14 @@ final class GooglePhotosManager: ObservableObject {
             if let rawItems = result.mediaItems {
                 for raw in rawItems {
                     guard let id = raw.id, !id.isEmpty else { continue }
+                    let filename = raw.filename ?? "photo.jpg"
+                    let mimeType = raw.mimeType ?? "image/jpeg"
+                    guard GoogleMediaItem.isSupportedMedia(filename: filename, mimeType: mimeType) else { continue }
                     guard !items.contains(where: { $0.id == id }) else { continue }
                     let item = GoogleMediaItem(
                         id: id,
-                        filename: raw.filename ?? "photo.jpg",
-                        mimeType: raw.mimeType ?? "image/jpeg",
+                        filename: filename,
+                        mimeType: mimeType,
                         baseUrl: raw.baseUrl ?? "",
                         productUrl: raw.productUrl,
                         mediaMetadata: raw.mediaMetadata,

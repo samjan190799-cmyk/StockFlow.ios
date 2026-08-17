@@ -94,6 +94,9 @@ struct GooglePhotosPickerView: View {
         }
     }
 
+    @State private var showHelpSheet = false
+    @AppStorage("google_oauth_client_id") private var customGoogleClientId: String = ""
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -113,7 +116,14 @@ struct GooglePhotosPickerView: View {
             .navigationTitle("Google Фото".localized)
             .navigationBarTitleDisplayMode(.inline)
             .fullScreenCover(item: $previewItem) { item in
-                GoogleMediaPreviewModal(item: item, token: manager.accessToken)
+                GoogleMediaPreviewModal(item: item, token: manager.accessToken, onImport: {
+                    triggerHaptic()
+                    onSelectItems([item])
+                    dismiss()
+                })
+            }
+            .sheet(isPresented: $showHelpSheet) {
+                GoogleOAuthHelpSheet()
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -124,7 +134,16 @@ struct GooglePhotosPickerView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            triggerHaptic()
+                            showHelpSheet = true
+                        }) {
+                            Image(systemName: "questionmark.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundStyle(Color(hex: "4285F4"))
+                        }
+
                         // Кнопка принудительного обновления списка
                         if manager.isAuthenticated && !manager.isLoading {
                             Button(action: {
@@ -166,8 +185,6 @@ struct GooglePhotosPickerView: View {
             }
         }
     }
-
-    @AppStorage("google_oauth_client_id") private var customGoogleClientId: String = ""
 
     // MARK: - Subviews
 
@@ -428,15 +445,26 @@ struct GooglePhotosPickerView: View {
 
                 Spacer()
 
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? Color.purple : Color.black.opacity(0.5))
-                        .frame(width: 24, height: 24)
+                Button(action: {
+                    triggerHaptic()
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                        if selectedItems.contains(item.id) {
+                            selectedItems.remove(item.id)
+                        } else {
+                            selectedItems.insert(item.id)
+                        }
+                    }
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(isSelected ? Color.purple : Color.black.opacity(0.5))
+                            .frame(width: 24, height: 24)
 
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white)
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
                     }
                 }
             }
@@ -445,13 +473,7 @@ struct GooglePhotosPickerView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             triggerHaptic()
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                if selectedItems.contains(item.id) {
-                    selectedItems.remove(item.id)
-                } else {
-                    selectedItems.insert(item.id)
-                }
-            }
+            previewItem = item
         }
     }
 
@@ -533,8 +555,22 @@ struct AuthenticatedGoogleImageView: View {
         isError = false
 
         let currentToken = token ?? GooglePhotosManager.shared.accessToken
+        let urlString = url.absoluteString.lowercased()
+        let isPhotosCDN = urlString.contains("googleusercontent.com") && !urlString.contains("drive")
 
-        // 1. Авторизованный запрос с Bearer токеном (Google Photos / Drive API)
+        // 1. Для CDN Google Photos сперва пробуем прямой публичный запрос (так как подписанный baseUrl работает без Bearer)
+        if isPhotosCDN {
+            if let (data, response) = try? await URLSession.shared.data(from: url),
+               let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200,
+               let loadedImage = UIImage(data: data) {
+                GoogleImageCache.shared.setObject(loadedImage, forKey: cacheKey, cost: data.count)
+                self.image = loadedImage
+                isLoading = false
+                return
+            }
+        }
+
+        // 2. Авторизованный запрос с Bearer токеном (Google Photos / Drive API)
         if let authToken = currentToken, !authToken.isEmpty {
             var request = URLRequest(url: url)
             request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
@@ -569,7 +605,7 @@ struct AuthenticatedGoogleImageView: View {
             }
         }
 
-        // 2. Публичный запрос (для прямых открытых CDN ссылок)
+        // 3. Резервный публичный запрос
         if let (data, response) = try? await URLSession.shared.data(from: url),
            let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200,
            let loadedImage = UIImage(data: data) {
@@ -591,8 +627,10 @@ struct GoogleMediaPreviewModal: View {
     @Environment(\.dismiss) private var dismiss
     let item: GoogleMediaItem
     let token: String?
+    var onImport: (() -> Void)? = nil
 
     @State private var player: AVPlayer? = nil
+    @State private var zoomScale: CGFloat = 1.0
 
     var body: some View {
         ZStack {
@@ -640,13 +678,55 @@ struct GoogleMediaPreviewModal: View {
                         }
                     }
                 } else {
-                    AuthenticatedGoogleImageView(url: item.downloadURL ?? URL(string: item.baseUrl), token: token)
+                    AuthenticatedGoogleImageView(url: item.previewURL ?? item.thumbnailURL ?? item.downloadURL ?? URL(string: item.baseUrl), token: token)
                         .aspectRatio(contentMode: .fit)
+                        .scaleEffect(zoomScale)
+                        .gesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    zoomScale = max(1.0, min(value, 4.0))
+                                }
+                                .onEnded { _ in
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        if zoomScale < 1.0 { zoomScale = 1.0 }
+                                    }
+                                }
+                        )
+                        .onTapGesture(count: 2) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                zoomScale = zoomScale > 1.0 ? 1.0 : 2.5
+                            }
+                        }
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .padding(.horizontal, 12)
                 }
 
                 Spacer()
+
+                // Нижняя панель действий
+                if let onImport = onImport {
+                    HStack(spacing: 14) {
+                        Button(action: {
+                            onImport()
+                            dismiss()
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .font(.system(size: 16, weight: .bold))
+                                Text("Импортировать в очередь".localized)
+                                    .font(.system(size: 14, weight: .bold))
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(LinearGradient(colors: [Color.purple, Color.blue], startPoint: .leading, endPoint: .trailing))
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .shadow(color: Color.purple.opacity(0.3), radius: 8)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                }
             }
         }
         .onAppear {
