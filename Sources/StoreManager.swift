@@ -76,7 +76,7 @@ public final class StoreManager: ObservableObject {
                 await transaction.finish()
                 await updateCustomerProductStatus()
                 self.isLoading = false
-                HapticHelper.trigger(.success)
+                HapticHelper.notification(.success)
                 return true
                 
             case .userCancelled:
@@ -96,7 +96,7 @@ public final class StoreManager: ObservableObject {
             print("StoreKit: Ошибка покупки: \(error.localizedDescription)")
             self.errorMessage = error.localizedDescription
             self.isLoading = false
-            HapticHelper.trigger(.error)
+            HapticHelper.notification(.error)
             return false
         }
     }
@@ -112,13 +112,13 @@ public final class StoreManager: ObservableObject {
             try await AppStore.sync()
             await updateCustomerProductStatus()
             self.isLoading = false
-            HapticHelper.trigger(.success)
+            HapticHelper.notification(.success)
             return isProUser
         } catch {
             print("StoreKit: Ошибка восстановления: \(error.localizedDescription)")
             self.errorMessage = "Ошибка восстановления: \(error.localizedDescription)"
             self.isLoading = false
-            HapticHelper.trigger(.error)
+            HapticHelper.notification(.error)
             return false
         }
     }
@@ -171,7 +171,7 @@ public final class StoreManager: ObservableObject {
     
     // MARK: - Криптографическая проверка подписи Apple
     
-    private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
+    nonisolated private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
         case .unverified:
             throw NSError(domain: "StoreKit", code: 403, userInfo: [NSLocalizedDescriptionKey: "Транзакция не прошла проверку подписи Apple."])
