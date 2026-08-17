@@ -396,6 +396,7 @@ struct AIMetadataView: View {
                 }
             }
             do {
+                let imagesData: [Data]
                 if isVideo {
                     imagesData = await ImageCacheHelper.shared.extractFrames(
                         fileURL: fileURL,
