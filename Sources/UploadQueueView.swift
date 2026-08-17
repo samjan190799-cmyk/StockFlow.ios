@@ -1085,7 +1085,6 @@ struct UploadQueueView: View {
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var searchText = ""
     @State private var selectedFilter: PhotoStatus? = nil
-    @State private var editingPhoto: ActiveSheetPhoto? = nil
     @State private var showLogViewer = false
     @State private var selectedErrorMsg: String? = nil
     @State private var showingErrorAlert = false
@@ -1205,28 +1204,8 @@ struct UploadQueueView: View {
             .sheet(isPresented: $showLogViewer) {
                 LogViewer()
             }
-            .sheet(item: $editingPhoto) { wrapper in
-                NavigationStack {
-                    AIMetadataView(photos: wrapper.photos, currentIndex: wrapper.index) { updatedPhotos in
-                        for updated in updatedPhotos {
-                            if let idx = viewModel.photos.firstIndex(where: { $0.id == updated.id }) {
-                                viewModel.photos[idx] = updated
-                            }
-                        }
-                        editingPhoto = nil
-                    }
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button("Закрыть".localized) {
-                                editingPhoto = nil
-                            }
-                            .font(.system(size: 14, weight: .semibold))
-                        }
-                    }
-                }
-            }
             .sheet(item: $selectedDetailPhoto) { photo in
-                PhotoDetailSheet(photo: photo, viewModel: viewModel, editingPhoto: $editingPhoto)
+                PhotoDetailSheet(photo: photo, viewModel: viewModel)
             }
             .alert("Ошибка загрузки".localized, isPresented: $showingErrorAlert) {
                 Button("Скопировать".localized) {
@@ -1272,7 +1251,7 @@ struct UploadQueueView: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(.secondary)
                         
-                        LazyImageView(photoId: photo.id, maxPixelSize: 60, contentMode: .fill, isVideo: photo.isVideo)
+                        LazyImageView(photoId: photo.id, maxPixelSize: 60, contentMode: .fill, isVideo: photo.isVideo, photo: photo)
                             .frame(width: 44, height: 44)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         
@@ -1395,7 +1374,7 @@ struct UploadQueueView: View {
                     .padding(.top, 20)
                 } else {
                     LazyVStack(spacing: 16) {
-                        ForEach(Array(filteredPhotos.enumerated()), id: \.element.id) { index, photo in
+                        ForEach(filteredPhotos) { photo in
                             HStack(spacing: 12) {
                                 if isSelectionMode {
                                     Button(action: {
@@ -1413,8 +1392,10 @@ struct UploadQueueView: View {
                                     .transition(.move(edge: .leading).combined(with: .opacity))
                                 }
                                 
-                                PhotoRowView(photo: photo, index: index, viewModel: viewModel)
-                                    .onTapGesture {
+                                PhotoRowView(
+                                    photo: photo,
+                                    viewModel: viewModel,
+                                    onSelect: {
                                         if isSelectionMode {
                                             HapticHelper.trigger(.light)
                                             if selectedPhotoIds.contains(photo.id) {
@@ -1427,6 +1408,7 @@ struct UploadQueueView: View {
                                             selectedDetailPhoto = photo
                                         }
                                     }
+                                )
                             }
                             .contextMenu {
                                 Button {
@@ -1837,8 +1819,8 @@ struct UploadQueueView: View {
 struct PhotoRowView: View {
     @Environment(\.colorScheme) var colorScheme
     let photo: PhotoMetadata
-    let index: Int
     @ObservedObject var viewModel: QueueViewModel
+    var onSelect: () -> Void
     
     // Текущая скорость загрузки для этого файла
     private var speedKBps: Double? {
@@ -1848,8 +1830,13 @@ struct PhotoRowView: View {
     var body: some View {
         VStack(spacing: 0) {
             photoImage(photo)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onSelect()
+                }
+                
             photoProgressBar(photo)
-            photoButtons(photo, index: index)
+            photoButtons(photo)
             if photo.status == .uploading {
                 // Показываем скорость KB/с если известна, иначе статус Загрузка...
                 let speedText: String = {
@@ -1885,7 +1872,7 @@ struct PhotoRowView: View {
     
     private func photoImage(_ photo: PhotoMetadata) -> some View {
         ZStack(alignment: .topLeading) {
-            LazyImageView(photoId: photo.id, maxPixelSize: 400, contentMode: .fill, isVideo: photo.isVideo)
+            LazyImageView(photoId: photo.id, maxPixelSize: 400, contentMode: .fill, isVideo: photo.isVideo, photo: photo)
                 .frame(height: 200)
                 .frame(maxWidth: .infinity)
                 .background(Color.black.opacity(0.25))
@@ -1965,7 +1952,7 @@ struct PhotoRowView: View {
         }
     }
     
-    private func photoButtons(_ photo: PhotoMetadata, index: Int) -> some View {
+    private func photoButtons(_ photo: PhotoMetadata) -> some View {
         HStack(spacing: 12) {
             // Кнопка УДАЛИТЬ
             Button(action: {
@@ -2270,7 +2257,7 @@ struct PhotoDetailSheet: View {
     @Environment(\.colorScheme) var colorScheme
     let photo: PhotoMetadata
     @ObservedObject var viewModel: QueueViewModel
-    @Binding var editingPhoto: ActiveSheetPhoto?
+    @State private var showMetadataEditor = false
     
     var currentPhoto: PhotoMetadata {
         viewModel.photos.first(where: { $0.id == photo.id }) ?? photo
@@ -2283,10 +2270,12 @@ struct PhotoDetailSheet: View {
                 
                 ScrollView {
                     VStack(spacing: 16) {
-                        DetailCardView(photo: currentPhoto, viewModel: viewModel, editingPhoto: $editingPhoto)
-                            .glassCard(cornerRadius: 20, padding: 16)
-                            .padding(.horizontal)
-                            .padding(.top, 12)
+                        DetailCardView(photo: currentPhoto, viewModel: viewModel, onEditMetadata: {
+                            showMetadataEditor = true
+                        })
+                        .glassCard(cornerRadius: 20, padding: 16)
+                        .padding(.horizontal)
+                        .padding(.top, 12)
                         
                         Button(action: {
                             dismiss()
@@ -2318,6 +2307,29 @@ struct PhotoDetailSheet: View {
                     .font(.system(size: 14, weight: .semibold))
                 }
             }
+            .sheet(isPresented: $showMetadataEditor) {
+                NavigationStack {
+                    AIMetadataView(
+                        photos: viewModel.photos,
+                        currentIndex: viewModel.photos.firstIndex(where: { $0.id == photo.id }) ?? 0
+                    ) { updatedPhotos in
+                        for updated in updatedPhotos {
+                            if let idx = viewModel.photos.firstIndex(where: { $0.id == updated.id }) {
+                                viewModel.photos[idx] = updated
+                            }
+                        }
+                        showMetadataEditor = false
+                    }
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("Закрыть".localized) {
+                                showMetadataEditor = false
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -2326,7 +2338,7 @@ struct PhotoDetailSheet: View {
 struct DetailCardView: View {
     let photo: PhotoMetadata
     @ObservedObject var viewModel: QueueViewModel
-    @Binding var editingPhoto: ActiveSheetPhoto?
+    var onEditMetadata: () -> Void
     
     @State private var selectedErrorMsg: String? = nil
     @State private var showingErrorAlert = false
@@ -2336,7 +2348,7 @@ struct DetailCardView: View {
             // Раздел 1: Превью и Ключевые слова
             HStack(alignment: .top, spacing: 14) {
                 // Превью
-                LazyImageView(photoId: photo.id, maxPixelSize: 300, contentMode: .fill, isVideo: photo.isVideo)
+                LazyImageView(photoId: photo.id, maxPixelSize: 300, contentMode: .fill, isVideo: photo.isVideo, photo: photo)
                 .frame(width: 100, height: 135)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
@@ -2384,11 +2396,7 @@ struct DetailCardView: View {
                     Spacer()
                     Button(action: {
                         HapticHelper.selection()
-                        editingPhoto = ActiveSheetPhoto(
-                            id: photo.id,
-                            photos: viewModel.photos,
-                            index: viewModel.photos.firstIndex(where: { $0.id == photo.id }) ?? 0
-                        )
+                        onEditMetadata()
                     }) {
                         Image(systemName: "square.and.pencil")
                             .font(.system(size: 14, weight: .bold))

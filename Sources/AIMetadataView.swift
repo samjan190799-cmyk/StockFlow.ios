@@ -72,13 +72,13 @@ struct AIMetadataView: View {
     private var imagePreviewHeader: some View {
         ZStack {
             // Soft blurred shadow projection
-            LazyImageView(photoId: photos[currentIndex].id, maxPixelSize: 150, contentMode: .fill, isVideo: photos[currentIndex].isVideo)
+            LazyImageView(photoId: photos[currentIndex].id, maxPixelSize: 150, contentMode: .fill, isVideo: photos[currentIndex].isVideo, photo: photos[currentIndex])
                 .frame(height: 150)
                 .blur(radius: 24)
                 .opacity(0.35)
                 .scaleEffect(0.94)
             
-            LazyImageView(photoId: photos[currentIndex].id, maxPixelSize: 400, contentMode: .fit, isVideo: photos[currentIndex].isVideo)
+            LazyImageView(photoId: photos[currentIndex].id, maxPixelSize: 400, contentMode: .fit, isVideo: photos[currentIndex].isVideo, photo: photos[currentIndex])
                 .frame(height: 150)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
