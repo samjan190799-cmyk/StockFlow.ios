@@ -1123,7 +1123,9 @@ struct UploadQueueView: View {
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @ObservedObject var viewModel: QueueViewModel
     @ObservedObject private var storeManager = StoreManager.shared
+    @ObservedObject private var rewardManager = RewardAdManager.shared
     @State private var showPaywall = false
+    @State private var showRewardedAd = false
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var searchText = ""
     @State private var selectedFilter: PhotoStatus? = nil
@@ -1177,34 +1179,59 @@ struct UploadQueueView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        HapticHelper.trigger(.light)
-                        showPaywall = true
-                    }) {
-                        HStack(spacing: 4) {
-                            if storeManager.isProUser {
-                                Image(systemName: "crown.fill")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.yellow)
-                                Text("PRO")
-                                    .font(.system(size: 11, weight: .heavy))
-                                    .foregroundStyle(.yellow)
-                            } else {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 12))
-                                Text("PRO")
-                                    .font(.system(size: 11, weight: .heavy))
+                    HStack(spacing: 6) {
+                        Button(action: {
+                            HapticHelper.trigger(.light)
+                            showPaywall = true
+                        }) {
+                            HStack(spacing: 4) {
+                                if storeManager.isProUser {
+                                    Image(systemName: "crown.fill")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(.yellow)
+                                    Text("PRO")
+                                        .font(.system(size: 11, weight: .heavy))
+                                        .foregroundStyle(.yellow)
+                                } else {
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 12))
+                                    Text("PRO")
+                                        .font(.system(size: 11, weight: .heavy))
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(storeManager.isProUser ? Color.yellow.opacity(0.18) : Color.purple.opacity(0.18))
+                            .foregroundStyle(storeManager.isProUser ? Color.yellow : Color.purple)
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule()
+                                    .stroke(storeManager.isProUser ? Color.yellow.opacity(0.4) : Color.purple.opacity(0.4), lineWidth: 1)
+                            )
+                        }
+                        
+                        if !storeManager.isProUser {
+                            Button(action: {
+                                HapticHelper.trigger(.light)
+                                showRewardedAd = true
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "play.circle.fill")
+                                        .font(.system(size: 11))
+                                    Text("+5")
+                                        .font(.system(size: 11, weight: .bold))
+                                }
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(Color.orange.opacity(0.18))
+                                .foregroundStyle(Color.orange)
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.orange.opacity(0.4), lineWidth: 1)
+                                )
                             }
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(storeManager.isProUser ? Color.yellow.opacity(0.18) : Color.purple.opacity(0.18))
-                        .foregroundStyle(storeManager.isProUser ? Color.yellow : Color.purple)
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(storeManager.isProUser ? Color.yellow.opacity(0.4) : Color.purple.opacity(0.4), lineWidth: 1)
-                        )
                     }
                 }
                 
@@ -1283,6 +1310,9 @@ struct UploadQueueView: View {
             }
             .sheet(isPresented: $showPaywall) {
                 PaywallView()
+            }
+            .sheet(isPresented: $showRewardedAd) {
+                RewardedAdView()
             }
             .alert("Ошибка загрузки".localized, isPresented: $showingErrorAlert) {
                 Button("Скопировать".localized) {
