@@ -295,7 +295,7 @@ struct AIAssistantView: View {
                             .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
                     )
                     .textInputAutocapitalization(.never)
-                    .disableAutocorrection(true)
+                    .autocorrectionDisabled(true)
                     
                     Button(action: {
                         HapticHelper.trigger(.medium)

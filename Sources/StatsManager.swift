@@ -239,18 +239,7 @@ final class StatsManager: ObservableObject {
             }
 
             // Вычисляем инкремент в зависимости от метрики
-            let increment: Double
-            if metric == .sales {
-                let hash = abs(record.filename.hashValue ^ record.platformId.hashValue)
-                if hash % 100 < 35 {
-                    increment = Double((hash % 4) + 1)
-                } else {
-                    increment = 0.0
-                }
-            } else {
-                increment = 1.0
-            }
-
+            let increment: Double = 1.0
             guard increment > 0 else { continue }
 
             // Находим ближайшую точку графика
@@ -261,7 +250,7 @@ final class StatsManager: ObservableObject {
                 // Ищем ближайшую доступную метку
                 for point in datePoints.reversed() {
                     if record.date >= point.date {
-                        countByLabel[point.label] = (countByLabel[point.label] ?? 0) + 1
+                        countByLabel[point.label] = (countByLabel[point.label] ?? 0) + increment
                         break
                     }
                 }

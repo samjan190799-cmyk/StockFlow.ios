@@ -4,7 +4,7 @@ from google import genai
 from google.genai import types
 
 class Agent:
-    def __init__(self, client: genai.Client, model: str = "gemini-3.5-flash"):
+    def __init__(self, client: genai.Client, model: str = "gemini-3.7-flash"):
         self.client = client
         self.model = model
 

@@ -189,14 +189,15 @@ struct StockSettingsView: View {
         isVerifying = true
         Task {
             do {
+                let parsed = FTPSecureClient.parseHostAndPort(from: platform.host, defaultPort: 21)
                 try await FTPSecureClient.testConnection(
-                    host: platform.host,
-                    port: 21,
+                    host: parsed.host,
+                    port: parsed.port,
                     username: platform.username,
                     password: platform.passwordHash
                 )
                 isVerifying = false
-                alertMessage = "Успешное соединение с сервером".localized + " \(platform.host)"
+                alertMessage = "Успешное соединение с сервером".localized + " \(parsed.host):\(parsed.port)"
                 showingAlert = true
             } catch {
                 isVerifying = false

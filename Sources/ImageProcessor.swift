@@ -3,6 +3,7 @@ import ImageIO
 import UIKit
 import AVFoundation
 import CoreImage
+import UniformTypeIdentifiers
 
 /// Фоновый актор для ресурсоемких операций с изображениями и видео
 actor ImageProcessor {
@@ -42,7 +43,7 @@ actor ImageProcessor {
             }
         }
         
-        // 2. Внедрение метаданных IPTC / EXIF
+        // 2. Внедрение метаданных IPTC / EXIF и гарантия JPEG-контейнера
         let preparedData = writeMetadata(
             to: processedData,
             title: photo.title,
@@ -69,7 +70,7 @@ actor ImageProcessor {
     }
     
     /// Апскейл изображения с использованием высшего качества фильтрации
-    private func upscaleImage(_ image: UIImage, scaleFactor: CGFloat) -> UIImage? {
+    func upscaleImage(_ image: UIImage, scaleFactor: CGFloat) -> UIImage? {
         let targetSize = CGSize(width: image.size.width * scaleFactor, height: image.size.height * scaleFactor)
         
         let format = UIGraphicsImageRendererFormat()
@@ -91,10 +92,11 @@ actor ImageProcessor {
         categories: [String]
     ) -> Data? {
         guard let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return nil }
-        guard let type = CGImageSourceGetType(source) else { return nil }
         
+        // Всегда используем стандартный контейнер JPEG (public.jpeg)
+        let jpegType = UTType.jpeg.identifier as CFString
         let destinationData = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(destinationData, type, 1, nil) else { return nil }
+        guard let destination = CGImageDestinationCreateWithData(destinationData, jpegType, 1, nil) else { return nil }
         
         var properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]) ?? [:]
         

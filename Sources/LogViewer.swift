@@ -2,11 +2,11 @@ import SwiftUI
 
 struct LogViewer: View {
     @ObservedObject var logger = FTPTranscriptLogger.shared
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     @State private var isCopied = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color.black.ignoresSafeArea()
                 
@@ -18,7 +18,7 @@ struct LogViewer: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding()
                             .id("Bottom")
-                            .onChange(of: logger.logs.count) { _ in
+                            .onChange(of: logger.logs.count) {
                                 withAnimation {
                                     proxy.scrollTo("Bottom", anchor: .bottom)
                                 }
@@ -34,7 +34,7 @@ struct LogViewer: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Закрыть".localized) {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {

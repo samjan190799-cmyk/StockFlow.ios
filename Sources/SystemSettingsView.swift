@@ -453,7 +453,7 @@ struct SystemSettingsView: View {
     private var versionFooterSection: some View {
         HStack {
             Spacer()
-            Text("SmartStock v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6") (Сборка \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"))")
+            Text("SmartStock v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7") (Сборка \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "8"))")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
             Spacer()

@@ -127,7 +127,8 @@ final class ImageCacheHelper {
             generator.requestedTimeToleranceBefore = .zero
             generator.requestedTimeToleranceAfter = .zero
             
-            let durationSeconds: Double = asset.duration.seconds
+            let duration = try? await asset.load(.duration)
+            let durationSeconds: Double = duration?.seconds ?? 0
             
             guard durationSeconds > 0 else {
                 if let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil),

@@ -22,6 +22,8 @@ class FTPSecureClient {
 
     // MARK: - Public Upload API
 
+    // MARK: - Public Upload API
+
     /// Загрузка файла по FTPS (Explicit TLS) с поддержкой Session Resumption.
     /// Полностью работает на устройстве без ПК.
     static func upload(
@@ -33,17 +35,40 @@ class FTPSecureClient {
         password: String,
         progress: (@Sendable (Double) -> Void)? = nil
     ) async throws {
-        // Блокирующие сокеты выполняются в фоновом потоке
         try await Task.detached(priority: .userInitiated) {
-            try Self.performUpload(
-                data: data,
-                filename: filename,
-                host: host,
-                port: port,
-                username: username,
-                password: password,
-                progress: progress
-            )
+            let parsed = Self.parseHostAndPort(from: host, defaultPort: port)
+            if parsed.isSFTP {
+                throw Self.ftpError("Adobe Stock и платформы SFTP требуют протокол SFTP (порт 22). Включите 'Загрузка через ПК-сервер' в Настройках приложения для автоматической выгрузки.")
+            }
+            
+            var attempts = 0
+            let maxAttempts = 3
+            var lastError: Error? = nil
+            
+            while attempts < maxAttempts {
+                attempts += 1
+                do {
+                    try Self.performUpload(
+                        data: data,
+                        filename: filename,
+                        host: parsed.host,
+                        port: parsed.port,
+                        username: username,
+                        password: password,
+                        progress: progress
+                    )
+                    return
+                } catch {
+                    lastError = error
+                    if attempts < maxAttempts {
+                        logMsg("[SecureTransport] ⚠️ Ошибка соединения (\(error.localizedDescription)). Повтор через 1.5 сек...")
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    }
+                }
+            }
+            if let err = lastError {
+                throw err
+            }
         }.value
     }
 
@@ -58,6 +83,11 @@ class FTPSecureClient {
         progress: (@Sendable (Double) -> Void)? = nil
     ) async throws {
         try await Task.detached(priority: .userInitiated) {
+            let parsed = Self.parseHostAndPort(from: host, defaultPort: port)
+            if parsed.isSFTP {
+                throw Self.ftpError("Adobe Stock и платформы SFTP требуют протокол SFTP (порт 22). Включите 'Загрузка через ПК-сервер' в Настройках приложения для автоматической выгрузки.")
+            }
+            
             var attempts = 0
             let maxAttempts = 3
             var lastError: Error? = nil
@@ -68,8 +98,8 @@ class FTPSecureClient {
                     try Self.performUpload(
                         fileURL: fileURL,
                         filename: filename,
-                        host: host,
-                        port: port,
+                        host: parsed.host,
+                        port: parsed.port,
                         username: username,
                         password: password,
                         progress: progress
@@ -123,20 +153,22 @@ class FTPSecureClient {
         username: String,
         password: String
     ) throws {
-        let cleanHost = cleanedHost(host)
+        let parsed = parseHostAndPort(from: host, defaultPort: port)
+        let cleanHost = parsed.host
+        let actualPort = parsed.port
+        let resolvedIp = resolveHost(cleanHost) ?? cleanHost
         
-        let scheme = schemeFor(host: host)
-        if scheme == "sftp" {
-            let resolvedIp = resolveHost(cleanHost) ?? cleanHost
-            let sock = try tcpConnect(host: resolvedIp, port: port == 21 ? 22 : port, timeoutSec: 10)
+        if parsed.isSFTP {
+            logMsg("[SecureTransport] SFTP ping: проверка доступности порта \(cleanHost):\(actualPort)")
+            let sock = try tcpConnect(host: resolvedIp, port: actualPort, timeoutSec: 10)
             Darwin.close(sock)
+            logMsg("[SecureTransport] ✅ SFTP сервер \(cleanHost):\(actualPort) доступен")
             return
         }
         
-        let resolvedIp = resolveHost(cleanHost) ?? cleanHost
-        logMsg("[SecureTransport] Проверка соединения с \(cleanHost) [\(resolvedIp)]:\(port)")
+        logMsg("[SecureTransport] Проверка соединения с \(cleanHost) [\(resolvedIp)]:\(actualPort)")
         
-        let controlSock = try tcpConnect(host: resolvedIp, port: port, timeoutSec: 10)
+        let controlSock = try tcpConnect(host: resolvedIp, port: actualPort, timeoutSec: 10)
         setSocketTimeout(controlSock, seconds: 10)
         setNoSigPipe(controlSock)
         
@@ -237,7 +269,7 @@ class FTPSecureClient {
         }
 
         // === ШАГ 4: Upgrade контрольного канала на TLS ===
-        let requireValidCert = cleanHost.contains("shutterstock.com") || cleanHost.contains("gettyimages.com")
+        let requireValidCert = UserDefaults.standard.bool(forKey: "sys_verify_tls")
         controlSSL = try createSSLContext(sock: controlSock, peerName: cleanHost, peerId: peerId, requireValidCertificate: requireValidCert)
         try performSSLHandshake(context: controlSSL!, requireValidCertificate: requireValidCert)
         logMsg("[SecureTransport] ✅ TLS handshake контрольного канала завершён")
@@ -258,25 +290,18 @@ class FTPSecureClient {
         }
         logMsg("[SecureTransport] ✅ Авторизация успешна")
 
-        // === ШАГ 6: PBSZ + PROT P ===
+        // === ШАГ 6: PBSZ + PROT ===
         try sslWriteCmd(context: controlSSL!, cmd: "PBSZ 0\r\n")
         _ = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
 
-        // Сначала пробуем PROT C (открытый канал данных) — проще, не требует Session Resumption
-        try sslWriteCmd(context: controlSSL!, cmd: "PROT C\r\n")
-        let protCResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
-        let useTlsDataChannel: Bool
-        if protCResp.hasPrefix("200") {
-            logMsg("[SecureTransport] PROT C принят — канал данных без шифрования")
+        try sslWriteCmd(context: controlSSL!, cmd: "PROT P\r\n")
+        let protResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
+        var useTlsDataChannel = true
+        if !protResp.hasPrefix("200") {
+            logMsg("[SecureTransport] PROT P отклонен (\(protResp)), используем PROT C")
+            try sslWriteCmd(context: controlSSL!, cmd: "PROT C\r\n")
+            _ = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
             useTlsDataChannel = false
-        } else {
-            logMsg("[SecureTransport] PROT C отклонен (\(protCResp)), используем PROT P")
-            try sslWriteCmd(context: controlSSL!, cmd: "PROT P\r\n")
-            let protPResp = try sslReadResponse(context: controlSSL!, buffer: &sslBuf)
-            guard protPResp.hasPrefix("200") else {
-                throw ftpError("PROT P отклонен: \(protPResp)")
-            }
-            useTlsDataChannel = true
         }
 
         // === ШАГ 7: TYPE I (бинарный режим) ===
@@ -1234,15 +1259,37 @@ class FTPSecureClient {
 
     // MARK: - Utilities
 
-    private static func cleanedHost(_ host: String) -> String {
-        var h = host.trimmingCharacters(in: .whitespacesAndNewlines)
-        for prefix in ["sftp://", "ftps://", "ftp://"] {
-            if h.lowercased().hasPrefix(prefix) {
-                h = String(h.dropFirst(prefix.count))
-            }
+    public static func parseHostAndPort(from rawHost: String, defaultPort: Int = 21) -> (host: String, port: Int, isSFTP: Bool) {
+        var h = rawHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        var isSFTP = false
+        if h.lowercased().hasPrefix("sftp://") {
+            isSFTP = true
+            h = String(h.dropFirst(7))
+        } else if h.lowercased().hasPrefix("ftps://") {
+            h = String(h.dropFirst(7))
+        } else if h.lowercased().hasPrefix("ftp://") {
+            h = String(h.dropFirst(6))
         }
         if h.hasSuffix("/") { h = String(h.dropLast()) }
-        return h
+        
+        let lower = h.lowercased()
+        if lower.hasPrefix("sftp.") || lower.contains(".sftp.") {
+            isSFTP = true
+        }
+        
+        var port = isSFTP ? 22 : defaultPort
+        if let colonIndex = h.firstIndex(of: ":") {
+            let portStr = String(h[h.index(after: colonIndex)...])
+            if let customPort = Int(portStr), customPort > 0 && customPort <= 65535 {
+                port = customPort
+            }
+            h = String(h[..<colonIndex])
+        }
+        return (host: h, port: port, isSFTP: isSFTP)
+    }
+
+    private static func cleanedHost(_ host: String) -> String {
+        return parseHostAndPort(from: host).host
     }
 
     private static func logMsg(_ message: String) {

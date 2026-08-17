@@ -651,14 +651,16 @@ class QueueViewModel: ObservableObject {
             var attempts = 0
             var uploadError: Error? = nil
             
+            let parsed = FTPSecureClient.parseHostAndPort(from: platform.host, defaultPort: 21)
+            
             while attempts < maxAttempts {
                 do {
                     // Используем потоковую отправку по URL
                     try await FTPSecureClient.upload(
                         fileURL: fileURLToUpload,
                         filename: photo.filename,
-                        host: platform.host,
-                        port: 21,
+                        host: parsed.host,
+                        port: parsed.port,
                         username: platform.username,
                         password: password,
                         progress: progress
@@ -1795,12 +1797,8 @@ struct UploadQueueView: View {
                             let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
                             if sizeMB < thresholdMB, let uiImage = UIImage(data: finalData) {
                                 let scale: CGFloat = factorStr.contains("4x") ? 4.0 : 2.0
-                                let newSize = CGSize(width: uiImage.size.width * scale, height: uiImage.size.height * scale)
-                                UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-                                uiImage.draw(in: CGRect(origin: .zero, size: newSize))
-                                let upscaled = UIGraphicsGetImageFromCurrentImageContext()
-                                UIGraphicsEndImageContext()
-                                if let upscaled, let upscaledData = upscaled.jpegData(compressionQuality: 0.92) {
+                                if let upscaled = await ImageProcessor.shared.upscaleImage(uiImage, scaleFactor: scale),
+                                   let upscaledData = upscaled.jpegData(compressionQuality: 0.92) {
                                     finalData = upscaledData
                                     FTPTranscriptLogger.shared.logInfo("[Upscale] \(String(format: "%.1f", sizeMB)) МБ -> \(String(format: "%.1f", Double(upscaledData.count)/1024/1024)) МБ (\(Int(scale))x)")
                                 }
@@ -2657,8 +2655,8 @@ struct QueueKeywordChip: View {
                 HapticHelper.trigger(.light)
                 onRemove()
             }) {
-                Image(systemName: "pencil")
-                    .font(.system(size: 9))
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(PlainButtonStyle())

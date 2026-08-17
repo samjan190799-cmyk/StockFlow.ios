@@ -46,29 +46,15 @@ final class SchedulerManager {
         // Планируем сразу следующий запуск
         scheduleNextBackgroundTask()
         
-        let queue = OperationQueue()
-        queue.maxConcurrentOperationCount = 1
+        let backgroundJob = Task {
+            await self.runSchedulerUploadCycle()
+            task.setTaskCompleted(success: true)
+        }
         
         task.expirationHandler = {
-            queue.cancelAllOperations()
+            backgroundJob.cancel()
+            task.setTaskCompleted(success: false)
         }
-        
-        let operation = BlockOperation {
-            let semaphore = DispatchSemaphore(value: 0)
-            
-            Task {
-                await self.runSchedulerUploadCycle()
-                semaphore.signal()
-            }
-            
-            semaphore.wait()
-        }
-        
-        operation.completionBlock = {
-            task.setTaskCompleted(success: !operation.isCancelled)
-        }
-        
-        queue.addOperation(operation)
     }
     
     /// Основной цикл сканирования папки и автозагрузки

@@ -81,7 +81,7 @@ struct SimulatedSignInView: View {
                                         .stroke(Color.white.opacity(0.12), lineWidth: 1)
                                 )
                                 .textInputAutocapitalization(.never)
-                                .disableAutocorrection(true)
+                                .autocorrectionDisabled(true)
                         }
                         .glassCard(cornerRadius: 16, padding: 18)
                         
