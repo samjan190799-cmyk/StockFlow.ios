@@ -40,6 +40,8 @@ struct SystemSettingsView: View {
     @State private var isRunningScheduler = false
     @State private var cacheSizeMB: Double = 0.0
     
+    @ObservedObject private var storeManager = StoreManager.shared
+    @State private var showPaywall = false
     @State private var showingSavedToast = false
     @State private var savedToastMessage = ""
     @State private var showGoogleHelpSheet = false
@@ -87,6 +89,9 @@ struct SystemSettingsView: View {
                 .sheet(isPresented: $showGoogleHelpSheet) {
                     GoogleOAuthHelpSheet()
                 }
+                .sheet(isPresented: $showPaywall) {
+                    PaywallView()
+                }
         }
     }
 
@@ -98,6 +103,7 @@ struct SystemSettingsView: View {
             LiquidBackgroundView()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    subscriptionSection
                     interfaceSection
                     googlePhotosSection
                     schedulerSection
@@ -112,6 +118,100 @@ struct SystemSettingsView: View {
                 .padding()
             }
         }
+    }
+
+    @ViewBuilder
+    private var subscriptionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if storeManager.isProUser {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(colors: [.yellow, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 38, height: 38)
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.white)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("SmartStock PRO")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(.white)
+                            
+                            Text("АКТИВЕН".localized)
+                                .font(.system(size: 9, weight: .heavy))
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.yellow)
+                                .clipShape(Capsule())
+                        }
+                        
+                        Text("Все премиум-функции и безлимитный ИИ активны".localized)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        HapticHelper.trigger(.light)
+                        showPaywall = true
+                    }) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                Button(action: {
+                    HapticHelper.trigger(.medium)
+                    showPaywall = true
+                }) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(colors: [Color(hex: "8B5CF6"), Color(hex: "3B82F6")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 42, height: 42)
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.white)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text("Перейти на SmartStock PRO".localized)
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(.white)
+                                
+                                Text("PRO")
+                                    .font(.system(size: 10, weight: .heavy))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(LinearGradient(colors: [.orange, .red], startPoint: .leading, endPoint: .trailing))
+                                    .clipShape(Capsule())
+                            }
+                            
+                            Text("Безлимитный ИИ, 10+ стоков и автозагрузка".localized)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                    .padding(4)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .glassCard()
     }
 
     @ViewBuilder

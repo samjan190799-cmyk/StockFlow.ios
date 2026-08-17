@@ -1008,6 +1008,10 @@ class QueueViewModel: ObservableObject {
             if photos[idx].selectedStocks.contains(stockName) {
                 photos[idx].selectedStocks.remove(stockName)
             } else {
+                if !StoreManager.shared.isProUser && photos[idx].selectedStocks.count >= 2 {
+                    triggerToast("В бесплатной версии доступно до 2 стоков. Перейдите на PRO для одновременной выгрузки на все стоки!".localized)
+                    return
+                }
                 photos[idx].selectedStocks.insert(stockName)
             }
             savePhotosToDisk()
@@ -1118,6 +1122,8 @@ struct UploadQueueView: View {
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @ObservedObject var viewModel: QueueViewModel
+    @ObservedObject private var storeManager = StoreManager.shared
+    @State private var showPaywall = false
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var searchText = ""
     @State private var selectedFilter: PhotoStatus? = nil
@@ -1170,6 +1176,38 @@ struct UploadQueueView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        HapticHelper.trigger(.light)
+                        showPaywall = true
+                    }) {
+                        HStack(spacing: 4) {
+                            if storeManager.isProUser {
+                                Image(systemName: "crown.fill")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.yellow)
+                                Text("PRO")
+                                    .font(.system(size: 11, weight: .heavy))
+                                    .foregroundStyle(.yellow)
+                            } else {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 12))
+                                Text("PRO")
+                                    .font(.system(size: 11, weight: .heavy))
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(storeManager.isProUser ? Color.yellow.opacity(0.18) : Color.purple.opacity(0.18))
+                        .foregroundStyle(storeManager.isProUser ? Color.yellow : Color.purple)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(storeManager.isProUser ? Color.yellow.opacity(0.4) : Color.purple.opacity(0.4), lineWidth: 1)
+                        )
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {
                         if !viewModel.photos.isEmpty {
@@ -1242,6 +1280,9 @@ struct UploadQueueView: View {
             }
             .sheet(item: $selectedDetailPhoto) { photo in
                 PhotoDetailSheet(photo: photo, viewModel: viewModel)
+            }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView()
             }
             .alert("Ошибка загрузки".localized, isPresented: $showingErrorAlert) {
                 Button("Скопировать".localized) {

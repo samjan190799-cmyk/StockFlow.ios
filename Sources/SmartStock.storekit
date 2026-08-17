@@ -1,0 +1,120 @@
+{
+  "identifier" : "E2B6A312",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "59.99",
+      "familyShareable" : false,
+      "internalID" : "6797021833",
+      "localizations" : [
+        {
+          "description" : "Неограниченный доступ ко всем возможностям навсегда.",
+          "displayName" : "Пожизненный PRO",
+          "locale" : "ru"
+        },
+        {
+          "description" : "Unlimited lifetime access to all pro features.",
+          "displayName" : "Lifetime PRO",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.samvel.smartstock.lifetime",
+      "referenceName" : "SmartStock Lifetime PRO",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "ru",
+    "_storefront" : "RUS",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21458923",
+      "localizations" : [
+        {
+          "description" : "Подписка SmartStock PRO",
+          "displayName" : "SmartStock PRO",
+          "locale" : "ru"
+        }
+      ],
+      "name" : "SmartStock PRO",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : true,
+          "groupNumber" : 2,
+          "internalID" : "6797021834",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Ежемесячный доступ ко всем возможностям SmartStock PRO.",
+              "displayName" : "Месячная подписка",
+              "locale" : "ru"
+            },
+            {
+              "description" : "Monthly access to all SmartStock PRO features.",
+              "displayName" : "Monthly Subscription",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.samvel.smartstock.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "SmartStock Monthly PRO",
+          "subscriptionGroupID" : "21458923",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "29.99",
+          "familyShareable" : true,
+          "groupNumber" : 1,
+          "internalID" : "6797021835",
+          "introductoryOffer" : {
+            "internalID" : "54231890",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P3D"
+          },
+          "localizations" : [
+            {
+              "description" : "Годовой доступ со скидкой 50% и 3 днями бесплатно.",
+              "displayName" : "Годовая подписка (Скидка 50%)",
+              "locale" : "ru"
+            },
+            {
+              "description" : "Yearly access with 50% discount and 3-day free trial.",
+              "displayName" : "Yearly Subscription (50% Off)",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.samvel.smartstock.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "SmartStock Yearly PRO",
+          "subscriptionGroupID" : "21458923",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
