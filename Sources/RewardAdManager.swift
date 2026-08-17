@@ -7,6 +7,10 @@ import Combine
 public final class RewardAdManager: ObservableObject {
     public static let shared = RewardAdManager()
     
+    // Идентификаторы Google AdMob пользователя
+    public static let adMobAppID = "ca-app-pub-1230774710816122~9425524877"
+    public static let rewardedAdUnitID = "ca-app-pub-1230774710816122/7729299826"
+    
     // Ключи UserDefaults
     private let bonusCreditsKey = "bonus_upload_credits_v1"
     private let totalAdsWatchedKey = "total_reward_ads_watched"
