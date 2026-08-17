@@ -167,22 +167,21 @@ class QueueViewModel: ObservableObject {
         }
     }
     
-    /// Разрешает реальный URL медиафайла для чтения без копирования его в папку приложения
+    /// Разрешает реальный URL медиафайла для чтения
     func resolveSourceURL(for photo: PhotoMetadata) -> (url: URL, needAccessStop: Bool)? {
-        let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
-        let actualExt = ext.isEmpty ? (photo.isVideo ? "mp4" : "jpg") : ext
-        let localAppURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
-        
-        // 1. Приоритет #1: Постоянный локальный файл приложения (гарантированно уникален по photo.id)
-        if FileManager.default.fileExists(atPath: localAppURL.path) {
-            return (localAppURL, false)
-        }
-        
-        // 2. Приоритет #2: Ранее сохраненный путь localURLPath
-        if let path = photo.localURLPath {
+        // 1. Приоритет #1: Ранее сохраненный прямой путь localURLPath
+        if let path = photo.localURLPath, !path.isEmpty {
             let url = URL(fileURLWithPath: path)
             if FileManager.default.fileExists(atPath: url.path) {
                 return (url, false)
+            }
+        }
+        
+        // 2. Приоритет #2: Поиск файла в папке photosDirectoryURL по photo.id
+        let prefix = photo.id.uuidString
+        if let files = try? FileManager.default.contentsOfDirectory(at: self.photosDirectoryURL, includingPropertiesForKeys: nil) {
+            if let matched = files.first(where: { $0.lastPathComponent.hasPrefix(prefix) }) {
+                return (matched, false)
             }
         }
         
@@ -206,6 +205,10 @@ class QueueViewModel: ObservableObject {
             for item in items {
                 do {
                     let data = try await GooglePhotosManager.shared.downloadItemData(item)
+                    guard !data.isEmpty else {
+                        throw NSError(domain: "GooglePhotos", code: 404, userInfo: [NSLocalizedDescriptionKey: "Получен пустой файл"])
+                    }
+                    
                     // Берём реальное расширение из имени файла (mp4, mov, jpg, heic и т.д.)
                     let ext = item.fileExtension
                     let newId = UUID()
@@ -213,7 +216,7 @@ class QueueViewModel: ObservableObject {
                     try data.write(to: fileURL, options: .atomic)
                     
                     let thumbImg = await ImageCacheHelper.shared.loadAndDownsample(fileURL: fileURL, maxPixelSize: 300)
-                    let thumbData = thumbImg?.jpegData(compressionQuality: 0.75)
+                    let thumbData = thumbImg?.jpegData(compressionQuality: 0.75) ?? (item.isVideo ? nil : data)
                     let sizeStr = String(format: "%.1f MB", Double(data.count) / (1024.0 * 1024.0))
                     
                     let newPhoto = PhotoMetadata(
@@ -227,7 +230,7 @@ class QueueViewModel: ObservableObject {
                         selectedStocks: Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]),
                         localURLPath: fileURL.path,
                         thumbnailData: thumbData,
-                        imageData: data,
+                        imageData: nil, // Файл уже надёжно сохранён на диск
                         isVideo: item.isVideo
                     )
                     self.addPhoto(newPhoto)
@@ -295,20 +298,35 @@ class QueueViewModel: ObservableObject {
     }
     
     private func getAIImagesData(for photo: PhotoMetadata) async -> [Data] {
-        guard let (sourceURL, needStop) = resolveSourceURL(for: photo) else { return [] }
+        guard let (sourceURL, needStop) = resolveSourceURL(for: photo) else {
+            if let thumb = photo.thumbnailData, !thumb.isEmpty {
+                return [thumb]
+            }
+            return []
+        }
         defer {
             if needStop { sourceURL.stopAccessingSecurityScopedResource() }
         }
         if photo.isVideo {
-            return await ImageCacheHelper.shared.extractFrames(fileURL: sourceURL, count: 3)
+            let frames = await ImageCacheHelper.shared.extractFrames(fileURL: sourceURL, count: 3)
+            if !frames.isEmpty {
+                return frames
+            }
+            if let thumb = photo.thumbnailData, !thumb.isEmpty {
+                return [thumb]
+            }
+            return []
         } else {
-            if let data = try? Data(contentsOf: sourceURL), !data.isEmpty {
-                if data.count > 4 * 1024 * 1024,
-                   let uiImg = UIImage(data: data),
-                   let compressed = uiImg.jpegData(compressionQuality: 0.85) {
-                    return [compressed]
-                }
-                return [data]
+            // Гарантированно конвертируем в стандартный сжатый JPEG с оптимальным разрешением до 1568px для ИИ-моделей
+            if let image = await ImageCacheHelper.shared.loadAndDownsample(fileURL: sourceURL, maxPixelSize: 1568),
+               let jpegData = image.jpegData(compressionQuality: 0.85) {
+                return [jpegData]
+            } else if let rawData = try? Data(contentsOf: sourceURL), !rawData.isEmpty,
+                      let uiImg = UIImage(data: rawData),
+                      let jpegData = uiImg.jpegData(compressionQuality: 0.85) {
+                return [jpegData]
+            } else if let thumb = photo.thumbnailData, !thumb.isEmpty {
+                return [thumb]
             }
             return []
         }
@@ -948,15 +966,33 @@ class QueueViewModel: ObservableObject {
     
     func addPhoto(_ photo: PhotoMetadata) {
         var photoCopy = photo
-        if let data = photo.imageData {
-            let ext = photo.isVideo ? (URL(fileURLWithPath: photo.filename).pathExtension.lowercased()) : "jpg"
-            let actualExt = ext.isEmpty ? (photo.isVideo ? "mp4" : "jpg") : ext
+        if let data = photo.imageData, !data.isEmpty {
+            let rawExt = (photo.filename as NSString).pathExtension.lowercased()
+            let actualExt = rawExt.isEmpty ? (photo.isVideo ? "mp4" : "jpg") : rawExt
             let fileURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(actualExt)")
             
-            // Синхронная запись в локальный диск приложения для предотвращения гонки при отправке
+            // Синхронная запись на локальный диск приложения
             try? data.write(to: fileURL, options: .atomic)
             photoCopy.localURLPath = fileURL.path
             photoCopy.imageData = nil // Освобождаем ОЗУ
+            
+            if photoCopy.thumbnailData == nil {
+                if let thumbImg = UIImage(data: data) {
+                    photoCopy.thumbnailData = thumbImg.jpegData(compressionQuality: 0.75)
+                }
+            }
+        }
+        
+        if photoCopy.thumbnailData == nil, let path = photoCopy.localURLPath {
+            let fileURL = URL(fileURLWithPath: path)
+            Task {
+                if let thumb = await ImageCacheHelper.shared.loadAndDownsample(fileURL: fileURL, maxPixelSize: 300) {
+                    if let idx = self.photos.firstIndex(where: { $0.id == photoCopy.id }) {
+                        self.photos[idx].thumbnailData = thumb.jpegData(compressionQuality: 0.75)
+                        self.savePhotosToDisk()
+                    }
+                }
+            }
         }
         
         if let idx = photos.firstIndex(where: { $0.id == photoCopy.id }) {

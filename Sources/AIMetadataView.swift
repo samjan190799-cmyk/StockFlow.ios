@@ -396,15 +396,17 @@ struct AIMetadataView: View {
                 }
             }
             do {
-                let imagesData: [Data]
                 if isVideo {
                     imagesData = await ImageCacheHelper.shared.extractFrames(
                         fileURL: fileURL,
                         count: 3
                     )
                 } else {
-                    if let data = try? Data(contentsOf: fileURL) {
-                        imagesData = [data]
+                    if let image = await ImageCacheHelper.shared.loadAndDownsample(fileURL: fileURL, maxPixelSize: 1568),
+                       let jpeg = image.jpegData(compressionQuality: 0.85) {
+                        imagesData = [jpeg]
+                    } else if let data = try? Data(contentsOf: fileURL), let uiImg = UIImage(data: data), let jpeg = uiImg.jpegData(compressionQuality: 0.85) {
+                        imagesData = [jpeg]
                     } else {
                         imagesData = []
                     }

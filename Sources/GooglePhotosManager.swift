@@ -684,13 +684,12 @@ final class GooglePhotosManager: ObservableObject {
     // MARK: - Refresh single item's baseUrl (anti-stale)
 
     /// Получает свежий baseUrl для одного элемента Google Photos (живёт 60 мин).
-    /// Вызывается перед скачиванием, если item.isBaseUrlStale == true.
-    func refreshedItem(_ item: GoogleMediaItem) async -> GoogleMediaItem {
+    /// Вызывается перед скачиванием или если получен 401/403.
+    func refreshedItem(_ item: GoogleMediaItem, force: Bool = false) async -> GoogleMediaItem {
         guard !item.id.isEmpty,
-              // Drive-элементы не протухают (webContentLink стабилен)
               !item.baseUrl.contains("drive.google.com"),
               !item.baseUrl.contains("content.googleapis.com"),
-              item.isBaseUrlStale,
+              (force || item.isBaseUrlStale),
               let token = accessToken else {
             return item
         }
@@ -731,39 +730,84 @@ final class GooglePhotosManager: ObservableObject {
 
     // MARK: - Download Media
 
-    /// Скачивает реальный медиафайл из Google Photos по URL.
-    /// Автоматически обновляет baseUrl если он устарел (> 55 мин).
+    /// Скачивает реальный медиафайл из Google Photos / Google Drive без повреждений.
     func downloadItemData(_ item: GoogleMediaItem) async throws -> Data {
-        // Получаем свежий item если baseUrl протух
-        let freshItem = await refreshedItem(item)
+        self.downloadProgress[item.id] = 0.1
+        let currentToken = accessToken
 
-        guard let url = freshItem.downloadURL ?? URL(string: freshItem.baseUrl) else {
-            throw URLError(.badURL)
-        }
+        // 1. Попытка скачивания через Google Photos API (CDN без Bearer заголовка)
+        if !item.baseUrl.isEmpty && !item.baseUrl.contains("drive.google.com") && !item.baseUrl.contains("googleapis.com/drive") {
+            let freshItem = await refreshedItem(item)
+            if let photoUrl = freshItem.downloadURL ?? URL(string: freshItem.baseUrl) {
+                // Прямой публичный запрос к Google CDN
+                if let (data, response) = try? await URLSession.shared.data(from: photoUrl),
+                   let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200, !data.isEmpty {
+                    if item.isVideo || UIImage(data: data) != nil || data.count > 1024 {
+                        self.downloadProgress[item.id] = 1.0
+                        return data
+                    }
+                }
 
-        self.downloadProgress[item.id] = 0.2
-
-        var request = URLRequest(url: url)
-        if let token = accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        var (data, response) = try await URLSession.shared.data(for: request)
-
-        if let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 401 {
-            if await refreshAccessTokenIfNeeded(), let newToken = accessToken {
-                request.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
-                let (retryData, retryResponse) = try await URLSession.shared.data(for: request)
-                data = retryData
-                response = retryResponse
+                // Если ссылка протухла — форсированно обновляем через Photos API
+                let reFreshItem = await refreshedItem(item, force: true)
+                if let retryURL = reFreshItem.downloadURL ?? URL(string: reFreshItem.baseUrl),
+                   let (retryData, retryResp) = try? await URLSession.shared.data(from: retryURL),
+                   (retryResp as? HTTPURLResponse)?.statusCode == 200, !retryData.isEmpty {
+                    if item.isVideo || UIImage(data: retryData) != nil || retryData.count > 1024 {
+                        self.downloadProgress[item.id] = 1.0
+                        return retryData
+                    }
+                }
             }
         }
 
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw URLError(.badServerResponse)
+        // 2. Попытка скачивания через Google Drive API с Bearer токеном
+        if let token = currentToken, !token.isEmpty {
+            let driveURL = URL(string: "https://www.googleapis.com/drive/v3/files/\(item.id)?alt=media")
+            if let driveURL = driveURL {
+                var request = URLRequest(url: driveURL)
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                request.timeoutInterval = 30
+
+                if let (data, response) = try? await URLSession.shared.data(for: request),
+                   let httpResp = response as? HTTPURLResponse {
+                    if httpResp.statusCode == 200 && !data.isEmpty {
+                        self.downloadProgress[item.id] = 1.0
+                        return data
+                    } else if httpResp.statusCode == 401 {
+                        if await refreshAccessTokenIfNeeded(), let newToken = accessToken {
+                            var retryReq = URLRequest(url: driveURL)
+                            retryReq.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                            if let (retryData, retryResp) = try? await URLSession.shared.data(for: retryReq),
+                               (retryResp as? HTTPURLResponse)?.statusCode == 200 && !retryData.isEmpty {
+                                self.downloadProgress[item.id] = 1.0
+                                return retryData
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        self.downloadProgress[item.id] = 1.0
-        return data
+        // 3. Резервный запрос по downloadURL / baseUrl
+        if let fallbackURL = item.downloadURL ?? URL(string: item.baseUrl) {
+            if let (pubData, pubResp) = try? await URLSession.shared.data(from: fallbackURL),
+               (pubResp as? HTTPURLResponse)?.statusCode == 200, !pubData.isEmpty {
+                self.downloadProgress[item.id] = 1.0
+                return pubData
+            }
+
+            if let token = currentToken, !token.isEmpty {
+                var authReq = URLRequest(url: fallbackURL)
+                authReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                if let (authData, authResp) = try? await URLSession.shared.data(for: authReq),
+                   (authResp as? HTTPURLResponse)?.statusCode == 200, !authData.isEmpty {
+                    self.downloadProgress[item.id] = 1.0
+                    return authData
+                }
+            }
+        }
+
+        throw NSError(domain: "GooglePhotosManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Не удалось загрузить файл \(item.filename) из Google Фото / Диска"])
     }
 }
