@@ -257,7 +257,7 @@ struct InsightsView: View {
                             .foregroundStyle(icon.color)
                     }
 
-                    Text(selectedStock)
+                    Text(selectedStock == "Все стоки" ? "Все стоки".localized : selectedStock)
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.primary)
 
@@ -314,7 +314,7 @@ struct InsightsView: View {
                                         .foregroundStyle(icon.color)
                                 }
 
-                                Text(stock)
+                                Text(stock == "Все стоки" ? "Все стоки".localized : stock)
                                     .font(.system(size: 13, weight: isSelected ? .bold : .medium))
                                     .foregroundStyle(isSelected ? .primary : .secondary)
 
@@ -447,7 +447,7 @@ struct InsightsView: View {
                         HStack(spacing: 4) {
                             Image(systemName: metric.icon)
                                 .font(.system(size: 8, weight: .bold))
-                            Text(metric.rawValue.uppercased())
+                            Text(metric.rawValue.localized.uppercased())
                                 .font(.system(size: 8, weight: .bold))
                         }
                         .foregroundStyle(isSelected ? .white.opacity(0.85) : .secondary)
@@ -493,7 +493,7 @@ struct InsightsView: View {
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text((selectedMetric.rawValue + (selectedStock == "Все стоки" ? "" : " — " + selectedStock)).uppercased())
+                    Text((selectedMetric.rawValue.localized + (selectedStock == "Все стоки" ? "" : " — " + selectedStock)).uppercased())
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.secondary)
 

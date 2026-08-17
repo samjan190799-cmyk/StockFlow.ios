@@ -206,6 +206,31 @@ struct SystemSettingsView: View {
                     }
                 }
             }
+            
+            Divider().background(Color.primary.opacity(0.08))
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Google OAuth Client ID (необязательно)".localized)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                
+                TextField("Ваш Client ID из Google Cloud Console...".localized, text: $customGoogleClientId)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, design: .monospaced))
+                    .padding(10)
+                    .background(colorScheme == .dark ? Color.black.opacity(0.25) : Color.black.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                
+                Text("Используется для прямого доступа к API Google Фото и Drive.".localized)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
         }
         .glassCard()
     }

@@ -96,11 +96,12 @@ struct SmartStockApp: App {
                             Label("Агентства".localized, systemImage: "arrow.left.and.right")
                         }
                     
-                        SystemSettingsView()
-                            .tabItem {
-                                Label("Настройки".localized, systemImage: "gearshape")
-                            }
+                    SystemSettingsView()
+                        .tabItem {
+                            Label("Настройки".localized, systemImage: "gearshape")
+                        }
                 }
+                .id(sysLanguage)
             }
             .preferredColorScheme(colorScheme)
             .tint(Color(hex: "007AFF"))

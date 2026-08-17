@@ -185,6 +185,8 @@ final class GooglePhotosManager: ObservableObject {
                     self.isAuthenticated = true
                     self.userEmail = UserDefaults.standard.string(forKey: "google_photos_user_email") ?? "Пользователь Google"
                     self.statusMessage = "Подключено к Google Фото".localized
+                } else {
+                    self.isAuthenticated = false
                 }
             }
         }
@@ -195,7 +197,7 @@ final class GooglePhotosManager: ObservableObject {
         self.statusMessage = "Открытие окна авторизации Google...".localized
 
         let currentKey = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !currentKey.isEmpty, !currentKey.contains("stockflow.apps.googleusercontent.com") else {
+        guard !currentKey.isEmpty else {
             self.isLoading = false
             self.statusMessage = "Пожалуйста, введите ваш Google Client ID в параметрах системы.".localized
             return
@@ -230,7 +232,7 @@ final class GooglePhotosManager: ObservableObject {
             URLQueryItem(name: "code_challenge", value: codeChallenge),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
             URLQueryItem(name: "access_type", value: "offline"),
-            URLQueryItem(name: "prompt", value: "consent")
+            URLQueryItem(name: "prompt", value: "consent select_account")
         ]
 
         guard let authURL = urlComponents?.url else {
@@ -251,7 +253,7 @@ final class GooglePhotosManager: ObservableObject {
                     }
                 }
                 session.presentationContextProvider = self.webAuthContextProvider
-                session.prefersEphemeralWebBrowserSession = false
+                session.prefersEphemeralWebBrowserSession = true
                 session.start()
             }
 
@@ -413,6 +415,7 @@ final class GooglePhotosManager: ObservableObject {
 
     func signOut() {
         KeychainHelper.shared.delete(for: "com.stockflow.googlephotos")
+        KeychainHelper.shared.delete(for: "com.stockflow.googlephotos.refresh")
         UserDefaults.standard.removeObject(forKey: "google_photos_user_email")
         self.accessToken = nil
         self.userEmail = ""
