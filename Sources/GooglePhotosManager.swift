@@ -161,8 +161,7 @@ final class GooglePhotosManager: ObservableObject {
     // Google OAuth 2.0 Configuration
     var clientID: String {
         let savedKey = UserDefaults.standard.string(forKey: "google_oauth_client_id") ?? ""
-        let trimmed = savedKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "1084227092144-stockflow.apps.googleusercontent.com" : trimmed
+        return savedKey.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     private let redirectScheme = "com.samvel.smartstock"
 

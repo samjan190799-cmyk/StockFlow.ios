@@ -167,32 +167,62 @@ struct GooglePhotosPickerView: View {
         }
     }
 
+    @AppStorage("google_oauth_client_id") private var customGoogleClientId: String = ""
+
     // MARK: - Subviews
 
     private var unauthenticatedView: some View {
-        VStack(spacing: 20) {
-            Spacer().frame(height: 20)
+        VStack(spacing: 18) {
+            Spacer().frame(height: 10)
 
             Circle()
                 .fill(Color.white)
-                .frame(width: 84, height: 84)
+                .frame(width: 76, height: 76)
                 .overlay(
                     Image(systemName: "photo.stack")
-                        .font(.system(size: 40, weight: .semibold))
+                        .font(.system(size: 36, weight: .semibold))
                         .foregroundStyle(LinearGradient(colors: [.red, .yellow, .green, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
                 )
                 .shadow(color: Color.black.opacity(0.15), radius: 12)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Text("Подключение Google Фото".localized)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(.primary)
 
                 Text("Выбирайте исходные видео и фото прямо из вашего облачного архива для публикации на стоках.".localized)
-                    .font(.system(size: 14))
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 16)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Google OAuth Client ID".localized)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                
+                TextField("Вставьте Client ID из Google Cloud Console...".localized, text: $customGoogleClientId)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11, design: .monospaced))
+                    .padding(10)
+                    .background(Color.black.opacity(0.2))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    )
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+            }
+            .padding(.horizontal, 8)
+
+            if !manager.statusMessage.isEmpty {
+                Text(manager.statusMessage)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 12)
             }
 
             Button(action: {
@@ -202,25 +232,30 @@ struct GooglePhotosPickerView: View {
                 }
             }) {
                 HStack(spacing: 10) {
-                    Image(systemName: "g.circle.fill")
-                        .font(.system(size: 20))
-                    Text("Войти через Google".localized)
-                        .font(.system(size: 15, weight: .bold))
+                    if manager.isLoading {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "g.circle.fill")
+                            .font(.system(size: 18))
+                        Text("Войти через Google".localized)
+                            .font(.system(size: 14, weight: .bold))
+                    }
                 }
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, 12)
                 .background(LinearGradient(colors: [Color(hex: "4285F4"), Color(hex: "34A853")], startPoint: .leading, endPoint: .trailing))
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .shadow(color: Color(hex: "4285F4").opacity(0.3), radius: 8)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(color: Color(hex: "4285F4").opacity(0.3), radius: 6)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .disabled(manager.isLoading)
+            .padding(.horizontal, 8)
 
-            Spacer()
+            Spacer().frame(height: 10)
         }
-        .glassCard(cornerRadius: 20, padding: 24)
-        .padding(.vertical, 20)
+        .glassCard(cornerRadius: 20, padding: 20)
+        .padding(.vertical, 16)
     }
 
     private var authenticatedContent: some View {
