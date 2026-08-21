@@ -598,19 +598,21 @@ struct OAuthHelpSheet: View {
                             .foregroundStyle(.secondary)
                             .lineSpacing(3)
                             
-                            Link(destination: URL(string: "https://contributor.adobestock.com/")!) {
-                                HStack {
-                                    Image(systemName: "safari")
-                                    Text("Открыть Adobe Stock Contributor".localized)
+                            if let adobeURL = URL(string: "https://contributor.adobestock.com/") {
+                                Link(destination: adobeURL) {
+                                    HStack {
+                                        Image(systemName: "safari")
+                                        Text("Открыть Adobe Stock Contributor".localized)
+                                    }
+                                    .font(.system(size: 13, weight: .bold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(Color(hex: "FF0000"))
+                                    .foregroundStyle(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                                 }
-                                .font(.system(size: 13, weight: .bold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(Color(hex: "FF0000"))
-                                .foregroundStyle(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .buttonStyle(PremiumButtonStyle())
                             }
-                            .buttonStyle(PremiumButtonStyle())
                         }
                         .glassCard(cornerRadius: 18, padding: 16)
                         
@@ -630,19 +632,21 @@ struct OAuthHelpSheet: View {
                             .foregroundStyle(.secondary)
                             .lineSpacing(3)
                             
-                            Link(destination: URL(string: "https://submit.shutterstock.com/")!) {
-                                HStack {
-                                    Image(systemName: "safari")
-                                    Text("Открыть submit.shutterstock.com".localized)
+                            if let shutterURL = URL(string: "https://submit.shutterstock.com/") {
+                                Link(destination: shutterURL) {
+                                    HStack {
+                                        Image(systemName: "safari")
+                                        Text("Открыть submit.shutterstock.com".localized)
+                                    }
+                                    .font(.system(size: 13, weight: .bold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(Color(hex: "FF6600"))
+                                    .foregroundStyle(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                                 }
-                                .font(.system(size: 13, weight: .bold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(Color(hex: "FF6600"))
-                                .foregroundStyle(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .buttonStyle(PremiumButtonStyle())
                             }
-                            .buttonStyle(PremiumButtonStyle())
                         }
                         .glassCard(cornerRadius: 18, padding: 16)
                     }

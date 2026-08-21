@@ -13,8 +13,8 @@ public struct PaywallView: View {
     @State private var isRestoring = false
     
     // Privacy & Terms URLs (Apple Guidelines requirement)
-    private let privacyPolicyURL = URL(string: "https://github.com/samjan190799-cmyk/StockFlow.ios/blob/main/PRIVACY_POLICY.md")!
-    private let termsOfUseURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
+    private let privacyPolicyURL = URL(string: "https://github.com/samjan190799-cmyk/StockFlow.ios/blob/main/PRIVACY_POLICY.md") ?? URL(fileURLWithPath: "/")
+    private let termsOfUseURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/") ?? URL(fileURLWithPath: "/")
     
     public init() {}
     

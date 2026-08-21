@@ -676,9 +676,10 @@ class FTPSecureClient {
         }
 
         try data.withUnsafeBytes { buffer in
+            guard let basePtr = buffer.baseAddress else { return }
             var totalSent = 0
             while totalSent < data.count {
-                let ptr = buffer.baseAddress!.advanced(by: totalSent)
+                let ptr = basePtr.advanced(by: totalSent)
                 let remaining = data.count - totalSent
                 let sent = send(sock, ptr, remaining, 0)
                 if sent > 0 {
@@ -701,9 +702,10 @@ class FTPSecureClient {
             let chunk = Data(data[offset..<end])
 
             try chunk.withUnsafeBytes { buffer in
+                guard let basePtr = buffer.baseAddress else { return }
                 var totalSent = 0
                 while totalSent < chunk.count {
-                    let ptr = buffer.baseAddress!.advanced(by: totalSent)
+                    let ptr = basePtr.advanced(by: totalSent)
                     let remaining = chunk.count - totalSent
                     let sent = send(sock, ptr, remaining, 0)
                     if sent > 0 {
@@ -1046,9 +1048,10 @@ class FTPSecureClient {
             if chunk.isEmpty { break }
             
             try chunk.withUnsafeBytes { buffer in
+                guard let basePtr = buffer.baseAddress else { return }
                 var totalSent = 0
                 while totalSent < chunk.count {
-                    let ptr = buffer.baseAddress!.advanced(by: totalSent)
+                    let ptr = basePtr.advanced(by: totalSent)
                     let remaining = chunk.count - totalSent
                     let sent = send(sock, ptr, remaining, 0)
                     if sent > 0 {
@@ -1236,8 +1239,8 @@ class FTPSecureClient {
         if getaddrinfo(host, nil, &hints, &res) == 0 {
             defer { freeaddrinfo(res) }
             var ptr = res
-            while ptr != nil {
-                let info = ptr!.pointee
+            while let currentPtr = ptr {
+                let info = currentPtr.pointee
                 var hostname = [CChar](repeating: 0, count: 1025)
                 if getnameinfo(info.ai_addr, info.ai_addrlen, &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
                     let ipString = String(cString: hostname)

@@ -10,7 +10,11 @@ final class SchedulerManager {
     /// Регистрирует фоновую задачу при старте приложения
     func registerBackgroundTask() {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.samvel.smartstock.backgroundRefresh", using: nil) { task in
-            self.handleBackgroundTask(task: task as! BGAppRefreshTask)
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            self.handleBackgroundTask(task: refreshTask)
         }
     }
     
