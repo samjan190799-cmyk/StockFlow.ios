@@ -144,13 +144,6 @@ public final class StoreManager: ObservableObject {
         
         self.purchasedProductIDs = activePurchases
         self.isProUser = !activePurchases.isEmpty
-        
-        #if DEBUG
-        // Для удобства локальной отладки в симуляторе
-        if UserDefaults.standard.bool(forKey: "debug_force_pro_user") {
-            self.isProUser = true
-        }
-        #endif
     }
     
     // MARK: - Слушатель транзакций

@@ -9,6 +9,8 @@ struct AIMetadataView: View {
     @State private var currentIndex: Int
     @State private var newKeyword = ""
     @State private var isRegenerating = false
+    @State private var showingAlert = false
+    @State private var alertMessage = ""
 
     private let shutterstockCategories = [
         "Abstract", "Animals/Wildlife", "Arts", "Backgrounds/Textures", "Beauty/Fashion",
@@ -65,6 +67,11 @@ struct AIMetadataView: View {
         }
         .navigationTitle("Метаданные".localized)
         .navigationBarTitleDisplayMode(.inline)
+        .alert("ИИ-Ассистент".localized, isPresented: $showingAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(alertMessage)
+        }
     }
 
     // MARK: Sections
@@ -365,15 +372,9 @@ struct AIMetadataView: View {
         let curIdx = currentIndex
         
         guard !apiKey.trimmingCharacters(in: .whitespaces).isEmpty else {
-            // Mock fallback
-            Task {
-                try? await Task.sleep(nanoseconds: 700_000_000)
-                self.photos[curIdx].title = "Драматичное закатное небо над горой Арарат (Демо)"
-                self.photos[curIdx].keywords = ["Арарат", "гора", "закат", "Армения", "пейзаж", "природа", "демо"]
-                self.photos[curIdx].description = "Демо-описание: Введите ваш API-ключ в настройках ИИ для запуска полноценного анализа."
-                self.photos[curIdx].categories = ["Nature", "Backgrounds/Textures"]
-                self.isRegenerating = false
-            }
+            isRegenerating = false
+            alertMessage = "Для генерации метаданных с помощью ИИ укажите API-ключ в настройках ИИ-Ассистента (Gemini, OpenAI или Claude).".localized
+            showingAlert = true
             return
         }
         
