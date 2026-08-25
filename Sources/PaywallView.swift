@@ -1,7 +1,7 @@
 import SwiftUI
 import StoreKit
 
-/// Премиальный экран покупки подписки SmartStock PRO (StoreKit 2 / Glassmorphism)
+/// Премиальный экран покупки подписки SmartStock PRO (Apple HIG / StoreKit 2 / Glassmorphism)
 @MainActor
 public struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
@@ -24,8 +24,8 @@ public struct PaywallView: View {
             LiquidBackgroundView()
             
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    // Верхняя панель: закрыть и восстановить
+                VStack(spacing: 22) {
+                    // Верхняя панель: закрыть и восстановить (44pt Hit targets)
                     headerControls
                     
                     // Заголовок и PRO-бейдж
@@ -44,9 +44,11 @@ public struct PaywallView: View {
                     footerLegalSection
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                .padding(.top, 14)
+                .padding(.bottom, 24)
             }
         }
+        .preferredColorScheme(.dark)
         .alert("Подписка".localized, isPresented: $showingAlert) {
             Button("OK", role: .cancel) {
                 if storeManager.isProUser {
@@ -58,7 +60,7 @@ public struct PaywallView: View {
         }
         .overlay {
             if storeManager.isLoading || isRestoring {
-                Color.black.opacity(0.4)
+                Color.black.opacity(0.5)
                     .ignoresSafeArea()
                     .overlay(
                         VStack(spacing: 14) {
@@ -66,10 +68,17 @@ public struct PaywallView: View {
                                 .tint(.purple)
                                 .scaleEffect(1.3)
                             Text("Связь с App Store...".localized)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(.white)
                         }
-                        .glassCard(cornerRadius: 20, padding: 24)
+                        .padding(24)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.3), radius: 16, y: 8)
                     )
             }
         }
@@ -88,10 +97,16 @@ public struct PaywallView: View {
                 HapticHelper.trigger(.light)
                 dismiss()
             }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 26))
-                    .foregroundStyle(.white.opacity(0.6))
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(Color.white.opacity(0.12)))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(PremiumButtonStyle())
+            .accessibilityLabel("Закрыть".localized)
             
             Spacer()
             
@@ -100,26 +115,36 @@ public struct PaywallView: View {
             }) {
                 Text("Восстановить".localized)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
                     .background(Color.white.opacity(0.12))
                     .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(PremiumButtonStyle())
         }
     }
     
     private var proHeader: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.yellow)
+                if #available(iOS 17.0, *) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(.yellow)
+                        .symbolEffect(.pulse)
+                } else {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(.yellow)
+                }
                 Text("SMARTSTOCK PRO")
-                    .font(.system(size: 13, weight: .heavy))
-                    .tracking(2)
+                    .font(.system(size: 12, weight: .heavy))
+                    .tracking(2.2)
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color.yellow, Color.purple, Color.blue],
+                            colors: [Color(hex: "FDE047"), Color(hex: "C084FC"), Color(hex: "60A5FA")],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -127,7 +152,7 @@ public struct PaywallView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
-            .background(Color.purple.opacity(0.2))
+            .background(Color.purple.opacity(0.22))
             .clipShape(Capsule())
             .overlay(
                 Capsule()
@@ -135,79 +160,85 @@ public struct PaywallView: View {
             )
             
             Text("Максимум продаж на стоках".localized)
-                .font(.system(size: 26, weight: .bold))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white)
             
             Text("Автоматизируйте рутину и отправляйте сотни фото и видео на 10+ стоков в один клик.".localized)
-                .font(.system(size: 13))
+                .font(.system(size: 13, weight: .regular))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.7))
-                .padding(.horizontal, 10)
+                .foregroundStyle(.white.opacity(0.72))
+                .padding(.horizontal, 12)
         }
-        .padding(.top, 6)
+        .padding(.top, 4)
     }
     
     private var featuresList: some View {
         VStack(spacing: 12) {
             featureRow(
                 icon: "sparkles.rectangle.stack.fill",
-                color: .purple,
+                color: Color(hex: "A855F7"),
                 title: "Безлимитный ИИ-анализ кадра".localized,
                 subtitle: "Генерация коммерческих названий, описаний и до 50 тегов через Gemini 2.5, GPT-4o, Claude".localized
             )
             
             featureRow(
                 icon: "paperplane.fill",
-                color: .blue,
+                color: Color(hex: "3B82F6"),
                 title: "Выгрузка на все 10+ стоков сразу".localized,
                 subtitle: "Shutterstock, Adobe Stock, Getty Images, Freepik, Depositphotos, Dreamstime и др.".localized
             )
             
             featureRow(
                 icon: "infinity",
-                color: .green,
+                color: Color(hex: "10B981"),
                 title: "Безлимитная очередь файлов".localized,
                 subtitle: "Пакетная обработка и загрузка сотен фото и 4K/8K видео без пауз и ограничений".localized
             )
             
             featureRow(
                 icon: "icloud.and.arrow.down.fill",
-                color: .orange,
+                color: Color(hex: "F97316"),
                 title: "Google Фото и Google Диск".localized,
                 subtitle: "Неограниченный импорт исходных медиафайлов прямо из облака".localized
             )
             
             featureRow(
                 icon: "tablecells.fill",
-                color: .cyan,
+                color: Color(hex: "06B6D4"),
                 title: "Экспорт CSV и метаданных".localized,
                 subtitle: "Мгновенное создание таблиц метаданных для любых агентств".localized
             )
         }
         .padding(16)
-        .glassCard(cornerRadius: 20)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
     }
     
     private func featureRow(icon: String, color: Color, title: String, subtitle: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(color.opacity(0.2))
+                    .fill(color.opacity(0.18))
                     .frame(width: 36, height: 36)
                 
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
+                    .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(color)
             }
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                 Text(subtitle)
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(.white.opacity(0.68))
                     .fixedSize(horizontal: false, vertical: true)
             }
             
@@ -247,6 +278,7 @@ public struct PaywallView: View {
                 isPopular: false
             )
         }
+        .animation(.spring(response: 0.35, dampingFraction: 0.78), value: selectedProductID)
     }
     
     private func pricingCard(
@@ -264,7 +296,7 @@ public struct PaywallView: View {
             selectedProductID = productID
         }) {
             ZStack(alignment: .topTrailing) {
-                HStack {
+                HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Text(title)
@@ -284,41 +316,42 @@ public struct PaywallView: View {
                         
                         Text(subtitle)
                             .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .foregroundStyle(.white.opacity(0.65))
                     }
                     
                     Spacer()
                     
-                    VStack(alignment: .trailing, spacing: 2) {
+                    VStack(alignment: .trailing, spacing: 3) {
                         Text(price)
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                         
                         ZStack {
                             Circle()
-                                .stroke(isSelected ? Color.purple : Color.white.opacity(0.3), lineWidth: 2)
-                                .frame(width: 22, height: 22)
+                                .stroke(isSelected ? Color(hex: "A855F7") : Color.white.opacity(0.3), lineWidth: 2)
+                                .frame(width: 20, height: 20)
                             
                             if isSelected {
                                 Circle()
-                                    .fill(Color.purple)
-                                    .frame(width: 14, height: 14)
+                                    .fill(Color(hex: "A855F7"))
+                                    .frame(width: 12, height: 12)
+                                    .transition(.scale.combined(with: .opacity))
                             }
                         }
                     }
                 }
                 .padding(16)
                 .background(
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(isSelected ? Color.purple.opacity(0.22) : Color.white.opacity(0.06))
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(isSelected ? Color.purple.opacity(0.24) : Color.white.opacity(0.06))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(isSelected ? Color.purple : Color.white.opacity(0.12), lineWidth: isSelected ? 2 : 1)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(isSelected ? Color(hex: "A855F7") : Color.white.opacity(0.12), lineWidth: isSelected ? 2 : 1)
                 )
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PremiumButtonStyle())
     }
     
     private var actionButton: some View {
@@ -333,8 +366,14 @@ public struct PaywallView: View {
                     Text("Загрузка...".localized)
                         .font(.system(size: 16, weight: .bold))
                 } else {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 16, weight: .bold))
+                    if #available(iOS 17.0, *) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16, weight: .bold))
+                            .symbolEffect(.bounce, value: selectedProductID)
+                    } else {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16, weight: .bold))
+                    }
                     
                     Text(selectedProductID == StoreManager.ProductID.yearly ? "Попробовать 3 дня бесплатно".localized : "Продолжить с SmartStock PRO".localized)
                         .font(.system(size: 16, weight: .bold))
@@ -342,7 +381,7 @@ public struct PaywallView: View {
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .frame(height: 54)
             .background(
                 LinearGradient(
                     colors: [Color(hex: "8B5CF6"), Color(hex: "3B82F6")],
@@ -350,9 +389,14 @@ public struct PaywallView: View {
                     endPoint: .trailing
                 )
             )
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.25), lineWidth: 1)
+            )
             .shadow(color: Color.purple.opacity(0.4), radius: 12, y: 4)
         }
+        .buttonStyle(PremiumButtonStyle())
         .disabled(storeManager.isLoading)
         .padding(.top, 4)
     }
@@ -362,19 +406,19 @@ public struct PaywallView: View {
             Text("Подписка продлевается автоматически, пока не будет отменена в настройках Apple ID не менее чем за 24 часа до окончания текущего периода.".localized)
                 .font(.system(size: 10))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.55))
             
             HStack(spacing: 16) {
                 Link("Условия использования (EULA)".localized, destination: termsOfUseURL)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.white.opacity(0.75))
                 
                 Text("•")
                     .foregroundStyle(.white.opacity(0.4))
                 
                 Link("Политика конфиденциальности".localized, destination: privacyPolicyURL)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.white.opacity(0.75))
             }
         }
         .padding(.top, 4)
@@ -435,3 +479,4 @@ public struct PaywallView: View {
         }
     }
 }
+
