@@ -1294,7 +1294,7 @@ struct UploadQueueView: View {
                         }
                         
                         Button(action: {
-                            HapticHelper.trigger(.selection)
+                            HapticHelper.selection()
                             sysNotifications.toggle()
                             if sysNotifications {
                                 NotificationHelper.requestAuthorization()

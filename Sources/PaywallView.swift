@@ -292,7 +292,7 @@ public struct PaywallView: View {
         let isSelected = selectedProductID == productID
         
         return Button(action: {
-            HapticHelper.trigger(.selection)
+            HapticHelper.selection()
             selectedProductID = productID
         }) {
             ZStack(alignment: .topTrailing) {
