@@ -232,7 +232,7 @@ public struct PaywallView: View {
                 productID: StoreManager.ProductID.monthly,
                 badge: nil,
                 title: "Месячная подписка".localized,
-                price: getPriceString(for: StoreManager.ProductID.monthly, fallback: "499 ₽ / месяц ($4.99)"),
+                price: getPriceString(for: StoreManager.ProductID.monthly, fallback: "399 ₽ / месяц ($3.99)"),
                 subtitle: "Ежемесячный доступ со всеми обновлениями.".localized,
                 isPopular: false
             )
@@ -260,7 +260,7 @@ public struct PaywallView: View {
         let isSelected = selectedProductID == productID
         
         return Button(action: {
-            HapticHelper.trigger(.light)
+            HapticHelper.trigger(.selection)
             selectedProductID = productID
         }) {
             ZStack(alignment: .topTrailing) {
@@ -323,14 +323,22 @@ public struct PaywallView: View {
     
     private var actionButton: some View {
         Button(action: {
+            HapticHelper.trigger(.medium)
             makePurchase()
         }) {
             HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 16, weight: .bold))
-                
-                Text(selectedProductID == StoreManager.ProductID.yearly ? "Попробовать 3 дня бесплатно".localized : "Продолжить с SmartStock PRO".localized)
-                    .font(.system(size: 16, weight: .bold))
+                if storeManager.isLoading {
+                    ProgressView()
+                        .tint(.white)
+                    Text("Загрузка...".localized)
+                        .font(.system(size: 16, weight: .bold))
+                } else {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16, weight: .bold))
+                    
+                    Text(selectedProductID == StoreManager.ProductID.yearly ? "Попробовать 3 дня бесплатно".localized : "Продолжить с SmartStock PRO".localized)
+                        .font(.system(size: 16, weight: .bold))
+                }
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
@@ -345,6 +353,7 @@ public struct PaywallView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: Color.purple.opacity(0.4), radius: 12, y: 4)
         }
+        .disabled(storeManager.isLoading)
         .padding(.top, 4)
     }
     
@@ -412,6 +421,7 @@ public struct PaywallView: View {
     }
     
     private func restorePurchases() {
+        HapticHelper.trigger(.medium)
         isRestoring = true
         Task {
             let hasRestored = await storeManager.restorePurchases()

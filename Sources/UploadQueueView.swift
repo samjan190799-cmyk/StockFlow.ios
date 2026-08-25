@@ -1121,6 +1121,7 @@ class QueueViewModel: ObservableObject {
 struct UploadQueueView: View {
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
+    @AppStorage("sys_notifications") private var sysNotifications: Bool = true
     @ObservedObject var viewModel: QueueViewModel
     @ObservedObject private var storeManager = StoreManager.shared
     @ObservedObject private var rewardManager = RewardAdManager.shared
@@ -1293,11 +1294,15 @@ struct UploadQueueView: View {
                         }
                         
                         Button(action: {
-                            HapticHelper.trigger(.light)
+                            HapticHelper.trigger(.selection)
+                            sysNotifications.toggle()
+                            if sysNotifications {
+                                NotificationHelper.requestAuthorization()
+                            }
                         }) {
-                            Image(systemName: "bell")
+                            Image(systemName: sysNotifications ? "bell.fill" : "bell.slash")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(sysNotifications ? Color(hex: "7C3AED") : .secondary)
                         }
                     }
                 }
