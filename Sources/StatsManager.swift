@@ -203,12 +203,7 @@ final class StatsManager: ObservableObject {
 
         let pointCount = period == "90D" ? 3 : (period == "7D" ? 7 : 5)
 
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        switch period {
-        case "90D": formatter.dateFormat = "MMM"
-        default:    formatter.dateFormat = "dd MMM"
-        }
+        let formatter = period == "90D" ? AppDateFormatters.monthFormatter : AppDateFormatters.dayMonthFormatter
 
         // Строим метки временных точек
         var datePoints: [(label: String, date: Date)] = []

@@ -775,12 +775,7 @@ struct InsightsView: View {
                     VStack(spacing: 0) {
                         ForEach(records) { record in
                             let icon = stockIcon(record.platformName)
-                            let df: DateFormatter = {
-                                let formatter = DateFormatter()
-                                formatter.locale = Locale(identifier: "ru_RU")
-                                formatter.dateFormat = "dd MMM HH:mm"
-                                return formatter
-                            }()
+                            let df = AppDateFormatters.recordFormatter
                             
                             HStack(spacing: 12) {
                                 // Иконка стока

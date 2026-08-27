@@ -725,10 +725,7 @@ struct SystemSettingsView: View {
             return "Еще не запускался".localized
         }
         let date = Date(timeIntervalSince1970: lastRunTimestamp)
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .medium
-        return formatter.string(from: date)
+        return AppDateFormatters.shortDateTimeFormatter.string(from: date)
     }
     
     private func runSchedulerNow() {

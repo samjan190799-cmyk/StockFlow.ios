@@ -32,23 +32,20 @@ public final class RewardAdManager: ObservableObject {
         checkAndResetDailyCount()
     }
     
-    // MARK: - Сброс дневного счетчика в полночь
+    // MARK: - Сброс дневного счетчика в полночь (чистый календарный расчет без ICU-блокировок)
     
-    private var todayDateString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone.current
-        return formatter.string(from: Date())
+    private var currentDayOrdinal: Int {
+        Calendar.current.ordinality(of: .day, in: .era, for: Date()) ?? 0
     }
     
     public func checkAndResetDailyCount() {
-        let today = todayDateString
-        let savedDate = UserDefaults.standard.string(forKey: dailyUploadsDateKey) ?? ""
+        let todayDay = currentDayOrdinal
+        let savedDay = UserDefaults.standard.integer(forKey: "daily_free_uploads_day_v2")
         
-        if savedDate != today {
+        if savedDay != todayDay {
             self.dailyUploadsUsed = 0
             UserDefaults.standard.set(0, forKey: dailyUploadsUsedKey)
-            UserDefaults.standard.set(today, forKey: dailyUploadsDateKey)
+            UserDefaults.standard.set(todayDay, forKey: "daily_free_uploads_day_v2")
         } else {
             self.dailyUploadsUsed = UserDefaults.standard.integer(forKey: dailyUploadsUsedKey)
         }
@@ -63,13 +60,12 @@ public final class RewardAdManager: ObservableObject {
         return !gemini.isEmpty || !openai.isEmpty || !claude.isEmpty
     }
     
-    // MARK: - Остаток доступных отправок сегодня
+    // MARK: - Остаток доступных отправок сегодня (чистый геттер без вызова мутаций в теле SwiftUI)
     
     public var remainingUploadsToday: Int {
         if StoreManager.shared.isProUser {
             return Int.max
         }
-        checkAndResetDailyCount()
         let baseRemaining = max(0, RewardAdManager.baseDailyLimit - dailyUploadsUsed)
         return baseRemaining + bonusCredits
     }

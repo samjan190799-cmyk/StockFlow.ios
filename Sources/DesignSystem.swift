@@ -344,3 +344,34 @@ struct LiquidGlassBorderModifier: ViewModifier {
     }
 }
 
+// MARK: - Thread-Safe Cached Date Formatters (Zero ICU Lock Contention)
+public enum AppDateFormatters {
+    public static let recordFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "dd MMM HH:mm"
+        return formatter
+    }()
+    
+    public static let shortDateTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .medium
+        return formatter
+    }()
+    
+    public static let monthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "MMM"
+        return formatter
+    }()
+    
+    public static let dayMonthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "dd MMM"
+        return formatter
+    }()
+}
+
