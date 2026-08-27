@@ -203,6 +203,15 @@ class QueueViewModel: ObservableObject {
             }
         }
         
+        // 4. Приоритет #4: Авто-восстановление на диск из данных в памяти (imageData или thumbnailData)
+        if let data = photo.imageData ?? photo.thumbnailData, !data.isEmpty {
+            let ext = photo.isVideo ? "mp4" : "jpg"
+            let recoveryURL = self.photosDirectoryURL.appendingPathComponent("\(photo.id.uuidString).\(ext)")
+            if (try? data.write(to: recoveryURL, options: .atomic)) != nil {
+                return (recoveryURL, false)
+            }
+        }
+        
         return nil
     }
     
@@ -215,7 +224,6 @@ class QueueViewModel: ObservableObject {
                         throw NSError(domain: "GooglePhotos", code: 404, userInfo: [NSLocalizedDescriptionKey: "Получен пустой файл"])
                     }
                     
-                    // Берём реальное расширение из имени файла (mp4, mov, jpg, heic и т.д.)
                     let ext = item.fileExtension
                     let newId = UUID()
                     let fileURL = self.photosDirectoryURL.appendingPathComponent("\(newId.uuidString).\(ext)")
@@ -236,7 +244,7 @@ class QueueViewModel: ObservableObject {
                         selectedStocks: StoreManager.shared.isProUser ? Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]) : Set(["Shutterstock", "Adobe Stock"]),
                         localURLPath: fileURL.path,
                         thumbnailData: thumbData,
-                        imageData: nil, // Файл уже надёжно сохранён на диск
+                        imageData: nil,
                         isVideo: item.isVideo
                     )
                     self.addPhoto(newPhoto)
@@ -262,7 +270,6 @@ class QueueViewModel: ObservableObject {
                 let newId = UUID()
                 let targetURL = self.photosDirectoryURL.appendingPathComponent("\(newId.uuidString).\(actualExt)")
                 
-                // Копируем файл из временной папки системного пикера в изоляционное хранилище приложения
                 try? FileManager.default.copyItem(at: url, to: targetURL)
                 
                 let thumbImage = await ImageCacheHelper.shared.loadAndDownsample(fileURL: targetURL, maxPixelSize: 300)
@@ -309,38 +316,35 @@ class QueueViewModel: ObservableObject {
     }
     
     private func getAIImagesData(for photo: PhotoMetadata) async -> [Data] {
-        guard let (sourceURL, needStop) = resolveSourceURL(for: photo) else {
-            if let thumb = photo.thumbnailData, !thumb.isEmpty {
-                return [thumb]
+        if let (sourceURL, needStop) = resolveSourceURL(for: photo) {
+            defer {
+                if needStop { sourceURL.stopAccessingSecurityScopedResource() }
             }
-            return []
+            if photo.isVideo {
+                let frames = await ImageCacheHelper.shared.extractFrames(fileURL: sourceURL, count: 3)
+                if !frames.isEmpty {
+                    return frames
+                }
+            } else {
+                if let image = await ImageCacheHelper.shared.loadAndDownsample(fileURL: sourceURL, maxPixelSize: 1568),
+                   let jpegData = image.jpegData(compressionQuality: 0.85) {
+                    return [jpegData]
+                } else if let rawData = try? Data(contentsOf: sourceURL), !rawData.isEmpty,
+                          let uiImg = UIImage(data: rawData),
+                          let jpegData = uiImg.jpegData(compressionQuality: 0.85) {
+                    return [jpegData]
+                }
+            }
         }
-        defer {
-            if needStop { sourceURL.stopAccessingSecurityScopedResource() }
+        
+        // Резервный источник: данные миниатюры или бинарные данные фото
+        if let thumb = photo.thumbnailData, !thumb.isEmpty {
+            return [thumb]
         }
-        if photo.isVideo {
-            let frames = await ImageCacheHelper.shared.extractFrames(fileURL: sourceURL, count: 3)
-            if !frames.isEmpty {
-                return frames
-            }
-            if let thumb = photo.thumbnailData, !thumb.isEmpty {
-                return [thumb]
-            }
-            return []
-        } else {
-            // Гарантированно конвертируем в стандартный сжатый JPEG с оптимальным разрешением до 1568px для ИИ-моделей
-            if let image = await ImageCacheHelper.shared.loadAndDownsample(fileURL: sourceURL, maxPixelSize: 1568),
-               let jpegData = image.jpegData(compressionQuality: 0.85) {
-                return [jpegData]
-            } else if let rawData = try? Data(contentsOf: sourceURL), !rawData.isEmpty,
-                      let uiImg = UIImage(data: rawData),
-                      let jpegData = uiImg.jpegData(compressionQuality: 0.85) {
-                return [jpegData]
-            } else if let thumb = photo.thumbnailData, !thumb.isEmpty {
-                return [thumb]
-            }
-            return []
+        if let imgData = photo.imageData, !imgData.isEmpty {
+            return [imgData]
         }
+        return []
     }
     
     func runAIForPhoto(_ id: UUID) {
@@ -2147,6 +2151,8 @@ struct UploadQueueView: View {
                             description: "",
                             categories: [],
                             status: .new,
+                            selectedStocks: StoreManager.shared.isProUser ? Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]) : Set(["Shutterstock", "Adobe Stock"]),
+                            localURLPath: targetURL.path,
                             isVideo: true
                         )
                         vm.addPhoto(newPhoto)
@@ -2195,11 +2201,19 @@ struct UploadQueueView: View {
                             }
                         }
                         
+                        let photoId = UUID()
+                        let targetURL = vm.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).jpg")
+                        try finalData.write(to: targetURL, options: .atomic)
+                        
+                        let thumbImage = await ImageCacheHelper.shared.loadAndDownsample(fileURL: targetURL, maxPixelSize: 300)
+                        let thumbData = thumbImage?.jpegData(compressionQuality: 0.75)
+                        
                         let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
                         let fileSizeStr = String(format: "%.2f МБ", sizeMB)
                         let filename = "IMG_\(randomNum).JPG"
                         
                         let newPhoto = PhotoMetadata(
+                            id: photoId,
                             filename: filename,
                             fileSize: fileSizeStr,
                             title: "",
@@ -2207,7 +2221,9 @@ struct UploadQueueView: View {
                             description: "",
                             categories: [],
                             status: .new,
-                            imageData: finalData,
+                            selectedStocks: StoreManager.shared.isProUser ? Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]) : Set(["Shutterstock", "Adobe Stock"]),
+                            localURLPath: targetURL.path,
+                            thumbnailData: thumbData,
                             isVideo: false
                         )
                         vm.addPhoto(newPhoto)
