@@ -350,21 +350,13 @@ class QueueViewModel: ObservableObject {
     func runAIForPhoto(_ id: UUID) {
         guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
         
-        let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? AIProvider.gemini.rawValue
         let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
+        let provider = AIProvider.gemini.rawValue
+        let apiKey = AIManager.defaultSystemGeminiKey
         
-        let apiKey: String
-        if provider.contains("Gemini") {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_gemini") ?? ""
-        } else if provider.contains("OpenAI") {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_openai") ?? ""
-        } else {
-            apiKey = UserDefaults.standard.string(forKey: "api_key_claude") ?? ""
-        }
-        
-        // 1. Проверяем дневной лимит бесплатных запросов (15 в день + бонусы, если нет своего ключа и нет PRO)
+        // 1. Проверяем дневной лимит бесплатных запросов (15 в день + бонусы, если нет PRO)
         if !RewardAdManager.shared.canPerformAction(isAIAnalysis: true) {
-            triggerToast("Достигнут дневной лимит (15 ИИ-анализов в день). Посмотрите видео (+5) или введите свой ключ!".localized)
+            triggerToast("Достигнут дневной лимит (15 ИИ-анализов в день). Посмотрите видео (+5) или оформите PRO!".localized)
             shouldShowDailyLimitAlert = true
             HapticHelper.notification(.warning)
             return
@@ -447,8 +439,8 @@ class QueueViewModel: ObservableObject {
                 
                 let imagesData = await getAIImagesData(for: photo)
                 let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
-                let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? "Gemini"
-                let apiKey = UserDefaults.standard.string(forKey: "ai_api_key") ?? ""
+                let provider = AIProvider.gemini.rawValue
+                let apiKey = AIManager.defaultSystemGeminiKey
                 
                 do {
                     let metadata = try await AIManager.shared.analyzePhoto(
@@ -726,8 +718,8 @@ class QueueViewModel: ObservableObject {
                     
                     let imagesData = await getAIImagesData(for: photo)
                     let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
-                    let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? "Gemini"
-                    let apiKey = UserDefaults.standard.string(forKey: "ai_api_key") ?? ""
+                    let provider = AIProvider.gemini.rawValue
+                    let apiKey = AIManager.defaultSystemGeminiKey
                     
                     do {
                         let metadata = try await AIManager.shared.analyzePhoto(

@@ -86,11 +86,6 @@ struct SmartStockApp: App {
                              Label("ИИ".localized, systemImage: "brain")
                          }
                     
-                    InsightsView()
-                         .tabItem {
-                             Label("Статистика".localized, systemImage: "chart.line.uptrend.xyaxis")
-                         }
-                    
                     StockSettingsView()
                         .tabItem {
                             Label("Агентства".localized, systemImage: "arrow.left.and.right")

@@ -606,7 +606,7 @@ struct SystemSettingsView: View {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(Color(hex: "007AFF"))
                     .font(.system(size: 14))
-                Text("Правовая информация и товарные знаки".localized)
+                Text("Правовая информация и конфиденциальность".localized)
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
@@ -617,6 +617,22 @@ struct SystemSettingsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .lineSpacing(2)
+            
+            Divider().background(Color.primary.opacity(0.08))
+            
+            HStack(spacing: 16) {
+                Link("Политика конфиденциальности".localized, destination: URL(string: "https://github.com/samjan190799-cmyk/StockFlow.ios/blob/main/PRIVACY_POLICY.md")!)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color(hex: "007AFF"))
+                
+                Text("•")
+                    .foregroundStyle(.secondary)
+                
+                Link("Условия использования (EULA)".localized, destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color(hex: "007AFF"))
+            }
+            .padding(.top, 2)
         }
         .glassCard(cornerRadius: 16, padding: 16)
     }
