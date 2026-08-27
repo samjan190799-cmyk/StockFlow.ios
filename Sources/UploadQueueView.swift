@@ -128,6 +128,7 @@ class QueueViewModel: ObservableObject {
         }
     }
     @Published var isAnalyzingAll = false
+    @Published var isRunningAutopilot = false
     @Published var toastMessage = ""
     @Published var showToast = false
     @Published var shouldShowPaywallFromLimit = false
@@ -642,6 +643,92 @@ class QueueViewModel: ObservableObject {
                 title: "Выгрузка завершена".localized,
                 body: "Все готовые файлы успешно отправлены на стоки!".localized
             )
+        }
+    }
+    
+    /// ⚡️ Режим Автопилота: Последовательный ИИ-анализ и автоматическая отправка на стоки в 1 клик
+    func runAutopilotPipeline() {
+        let targets = photos.filter { $0.status != .success }
+        guard !targets.isEmpty else {
+            triggerToast("Все файлы в очереди уже успешно загружены!".localized)
+            return
+        }
+        guard checkStockCredentials() else {
+            triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!".localized)
+            return
+        }
+        
+        isRunningAutopilot = true
+        triggerToast("⚡️ Автопилот запущен для".localized + " \(targets.count) " + "файлов...".localized)
+        
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "SmartStock.Autopilot") {
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+        }
+        
+        let currentBgTask = bgTask
+        Task {
+            defer {
+                if currentBgTask != .invalid {
+                    UIApplication.shared.endBackgroundTask(currentBgTask)
+                }
+                self.isRunningAutopilot = false
+            }
+            
+            var processedCount = 0
+            for photo in targets {
+                // 1. Если статус .new или .error — запускаем ИИ анализ
+                if photo.status == .new || photo.status == .error {
+                    if !RewardAdManager.shared.canPerformAction(isAIAnalysis: true) {
+                        self.triggerToast("Достигнут дневной лимит ИИ. Автопилот приостановлен.".localized)
+                        self.shouldShowDailyLimitAlert = true
+                        break
+                    }
+                    self.runAIForPhoto(photo.id)
+                    
+                    // Ожидаем завершения ИИ анализа для этого файла (до 20 сек)
+                    var waited = 0
+                    while waited < 40 {
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                        waited += 1
+                        if let current = self.photos.first(where: { $0.id == photo.id }), current.status == .ready {
+                            break
+                        }
+                    }
+                }
+                
+                // 2. Если фото готово — сразу отправляем на стоки
+                if let readyPhoto = self.photos.first(where: { $0.id == photo.id }), readyPhoto.status == .ready {
+                    if !RewardAdManager.shared.canPerformAction(isAIAnalysis: false) {
+                        self.triggerToast("Достигнут дневной лимит отправок. Посмотрите видео (+5) для продолжения.".localized)
+                        self.shouldShowDailyLimitAlert = true
+                        break
+                    }
+                    self.uploadPhoto(readyPhoto.id)
+                    processedCount += 1
+                }
+                
+                // Анти-спам пауза
+                try? await Task.sleep(nanoseconds: 3_500_000_000)
+            }
+            
+            // Ожидаем завершения всех активных загрузок
+            while true {
+                let stillActive = self.photos.contains { $0.status == .uploading || $0.status == .inQueue || $0.status == .aiAnalyzing }
+                if !stillActive {
+                    break
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            
+            NotificationHelper.sendNotification(
+                title: "⚡️ Автопилот завершён".localized,
+                body: "Успешно обработано и выгружено \(processedCount) файлов.".localized
+            )
+            self.triggerToast("⚡️ Автопилот успешно завершил работу!".localized)
         }
     }
     
@@ -1258,49 +1345,63 @@ struct UploadQueueView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     HStack(spacing: 6) {
-                        Button(action: {
-                            HapticHelper.trigger(.light)
-                            showPaywall = true
-                        }) {
-                            HStack(spacing: 4) {
-                                if storeManager.isProUser {
+                        if storeManager.isProUser {
+                            Button(action: {
+                                HapticHelper.trigger(.light)
+                                showPaywall = true
+                            }) {
+                                HStack(spacing: 5) {
                                     Image(systemName: "crown.fill")
-                                        .font(.system(size: 13))
+                                        .font(.system(size: 11, weight: .bold))
                                         .foregroundStyle(.yellow)
-                                    Text("PRO")
+                                    Text("PRO Безлимит".localized)
                                         .font(.system(size: 11, weight: .heavy))
                                         .foregroundStyle(.yellow)
-                                } else {
-                                    Image(systemName: "sparkles")
-                                        .font(.system(size: 12))
-                                    Text("PRO")
-                                        .font(.system(size: 11, weight: .heavy))
                                 }
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(Color.yellow.opacity(0.18))
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.yellow.opacity(0.4), lineWidth: 1)
+                                )
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(storeManager.isProUser ? Color.yellow.opacity(0.18) : Color.purple.opacity(0.18))
-                            .foregroundStyle(storeManager.isProUser ? Color.yellow : Color.purple)
-                            .clipShape(Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(storeManager.isProUser ? Color.yellow.opacity(0.4) : Color.purple.opacity(0.4), lineWidth: 1)
-                            )
-                        }
-                        
-                        if !storeManager.isProUser {
+                        } else {
+                            Button(action: {
+                                HapticHelper.trigger(.light)
+                                showPaywall = true
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "bolt.fill")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(Color(hex: "A855F7"))
+                                    Text("\(rewardManager.remainingUploadsToday)/15")
+                                        .font(.system(size: 11, weight: .heavy))
+                                        .foregroundStyle(.primary)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(Color(hex: "A855F7").opacity(0.15))
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color(hex: "A855F7").opacity(0.35), lineWidth: 1)
+                                )
+                            }
+                            
                             Button(action: {
                                 HapticHelper.trigger(.light)
                                 showRewardedAd = true
                             }) {
-                                HStack(spacing: 4) {
+                                HStack(spacing: 3) {
                                     Image(systemName: "play.circle.fill")
                                         .font(.system(size: 11))
                                     Text("+5")
                                         .font(.system(size: 11, weight: .bold))
                                 }
                                 .padding(.horizontal, 7)
-                                .padding(.vertical, 4)
+                                .padding(.vertical, 5)
                                 .background(Color.orange.opacity(0.18))
                                 .foregroundStyle(Color.orange)
                                 .clipShape(Capsule())
@@ -1784,39 +1885,76 @@ struct UploadQueueView: View {
                         .buttonStyle(PremiumButtonStyle())
                         .disabled(selectedPhotoIds.isEmpty)
                     } else {
+                        // 1. Кнопка АВТОПИЛОТ (Анализ + Выгрузка в 1 клик)
+                        Button(action: {
+                            HapticHelper.trigger(.medium)
+                            viewModel.runAutopilotPipeline()
+                        }) {
+                            HStack(spacing: 5) {
+                                if #available(iOS 17.0, *) {
+                                    Image(systemName: "bolt.badge.sparkle")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .symbolEffect(.pulse, options: .repeating, value: viewModel.isRunningAutopilot)
+                                } else {
+                                    Image(systemName: "bolt.fill")
+                                        .font(.system(size: 11, weight: .bold))
+                                }
+                                Text("Автопилот".localized)
+                                    .font(.system(size: 11, weight: .heavy))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color(hex: "8B5CF6"), Color(hex: "EC4899")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .neonShadow(color: Color(hex: "EC4899"), radius: 6)
+                        }
+                        .buttonStyle(PremiumButtonStyle())
+                        .disabled(viewModel.isRunningAutopilot)
+                        
+                        // 2. Кнопка ТОЛЬКО ИИ
                         Button(action: {
                             HapticHelper.trigger(.medium)
                             viewModel.runAIForAll()
                         }) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 4) {
                                 if #available(iOS 17.0, *) {
                                     Image(systemName: "sparkles")
+                                        .font(.system(size: 11))
                                         .symbolEffect(.pulse, options: .repeating, value: viewModel.isAnalyzingAll)
                                 } else {
                                     Image(systemName: "sparkles")
+                                        .font(.system(size: 11))
                                 }
-                                Text("Заполнить все ИИ".localized)
+                                Text("ИИ".localized)
+                                    .font(.system(size: 11, weight: .bold))
                             }
-                            .font(.system(size: 11, weight: .black))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                             .background(AppleTheme.primaryGradient)
                             .foregroundStyle(.white)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .neonShadow(color: Color(hex: "7C3AED"), radius: 5)
                         }
                         .buttonStyle(PremiumButtonStyle())
-                        .disabled(viewModel.isAnalyzingAll)
+                        .disabled(viewModel.isAnalyzingAll || viewModel.isRunningAutopilot)
                         
+                        // 3. Кнопка ОТПРАВИТЬ
                         Button(action: {
                             HapticHelper.trigger(.medium)
                             viewModel.uploadAllReady()
                         }) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 4) {
                                 Image(systemName: "paperplane.fill")
+                                    .font(.system(size: 11))
                                 Text("Отправить".localized)
+                                    .font(.system(size: 11, weight: .bold))
                             }
-                            .font(.system(size: 11, weight: .black))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                             .background(colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08))
@@ -1828,6 +1966,7 @@ struct UploadQueueView: View {
                             )
                         }
                         .buttonStyle(PremiumButtonStyle())
+                        .disabled(viewModel.isRunningAutopilot)
                     }
                 }
                 .padding(10)
