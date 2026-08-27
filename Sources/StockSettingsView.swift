@@ -179,16 +179,19 @@ struct StockSettingsView: View {
     }
     
     private func savePlatforms() {
-        for platform in platforms {
-            let serviceKey = "com.samvel.smartstock.platform.\(platform.id)"
-            if !platform.passwordHash.isEmpty {
-                KeychainHelper.shared.save(password: platform.passwordHash, for: serviceKey)
-            } else {
-                KeychainHelper.shared.delete(for: serviceKey)
+        let platformsCopy = self.platforms
+        Task.detached(priority: .utility) {
+            for platform in platformsCopy {
+                let serviceKey = "com.samvel.smartstock.platform.\(platform.id)"
+                if !platform.passwordHash.isEmpty {
+                    KeychainHelper.shared.save(password: platform.passwordHash, for: serviceKey)
+                } else {
+                    KeychainHelper.shared.delete(for: serviceKey)
+                }
             }
-        }
-        if let encoded = try? JSONEncoder().encode(platforms) {
-            UserDefaults.standard.set(encoded, forKey: "stock_platforms")
+            if let encoded = try? JSONEncoder().encode(platformsCopy) {
+                UserDefaults.standard.set(encoded, forKey: "stock_platforms")
+            }
         }
     }
     

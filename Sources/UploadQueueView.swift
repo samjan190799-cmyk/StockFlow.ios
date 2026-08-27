@@ -122,11 +122,7 @@ actor UploadQueueManager {
 class QueueViewModel: ObservableObject {
     static var shared: QueueViewModel? = nil
     
-    @Published var photos: [PhotoMetadata] = [] {
-        didSet {
-            savePhotosToDisk()
-        }
-    }
+    @Published var photos: [PhotoMetadata] = []
     @Published var isAnalyzingAll = false
     @Published var isRunningAutopilot = false
     @Published var toastMessage = ""
@@ -135,6 +131,8 @@ class QueueViewModel: ObservableObject {
     @Published var shouldShowDailyLimitAlert = false
     /// Скорость загрузки в KB/с для каждого активного файла
     @Published var uploadSpeedKBps: [UUID: Double] = [:]
+    
+    private var saveTask: Task<Void, Never>? = nil
     
     private var metadataURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -153,15 +151,18 @@ class QueueViewModel: ObservableObject {
         QueueViewModel.shared = self
     }
     
-    /// Сохраняет строго маловесные метаданные JSON (<10KB) без тяжелых бинарников на диске!
+    /// Сохраняет строго маловесные метаданные JSON (<10KB) с дебаунсом (300мс), защищая диск и процессор
     func savePhotosToDisk() {
+        saveTask?.cancel()
         let photosCopy = self.photos
         let metaURL = self.metadataURL
         
-        Task.detached(priority: .background) {
+        saveTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            
             do {
                 let encoder = JSONEncoder()
-                encoder.outputFormatting = .prettyPrinted
                 let data = try encoder.encode(photosCopy)
                 try data.write(to: metaURL, options: .atomic)
             } catch {
