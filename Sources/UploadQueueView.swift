@@ -363,7 +363,22 @@ class QueueViewModel: ObservableObject {
         photos[idx].status = .aiAnalyzing
         let photo = photos[idx]
         
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "SmartStock.AI.\(id.uuidString)") {
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+        }
+        
+        let currentBgTask = bgTask
         Task {
+            defer {
+                if currentBgTask != .invalid {
+                    UIApplication.shared.endBackgroundTask(currentBgTask)
+                }
+            }
+            
             let imagesData = await getAIImagesData(for: photo)
             
             do {
@@ -404,7 +419,23 @@ class QueueViewModel: ObservableObject {
         isAnalyzingAll = true
         triggerToast("Запущен ИИ-анализ для".localized + " \(unanalyzed.count) " + "файлов...".localized)
         
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "SmartStock.BatchAI") {
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+        }
+        
+        let currentBgTask = bgTask
         Task {
+            defer {
+                if currentBgTask != .invalid {
+                    UIApplication.shared.endBackgroundTask(currentBgTask)
+                }
+            }
+            
+            var processedCount = 0
             for photo in unanalyzed {
                 if !RewardAdManager.shared.canPerformAction(isAIAnalysis: true) {
                     self.triggerToast("Достигнут дневной лимит ИИ. Посмотрите видео (+5) для продолжения.".localized)
@@ -412,10 +443,17 @@ class QueueViewModel: ObservableObject {
                     break
                 }
                 self.runAIForPhoto(photo.id)
+                processedCount += 1
                 // Плавная задержка между вызовами (3.5 сек) для защиты от 429
                 try? await Task.sleep(nanoseconds: 3_500_000_000)
             }
             self.isAnalyzingAll = false
+            
+            // Локальное уведомление, если пользователь свернул приложение
+            NotificationHelper.sendNotification(
+                title: "ИИ-анализ завершён".localized,
+                body: "Метаданные успешно заполнены для \(processedCount) файлов.".localized
+            )
         }
     }
     
@@ -571,12 +609,39 @@ class QueueViewModel: ObservableObject {
             return
         }
         
-        let maxStreams = UserDefaults.standard.integer(forKey: "sys_parallel_streams")
-        let streamLimit = maxStreams > 0 ? maxStreams : 1
         triggerToast("Началась отправка".localized + " \(readyPhotos.count) " + "файлов...".localized)
         
-        for photo in readyPhotos {
-            uploadPhoto(photo.id)
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "SmartStock.BatchUpload") {
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+        }
+        
+        let currentBgTask = bgTask
+        Task {
+            for photo in readyPhotos {
+                uploadPhoto(photo.id)
+            }
+            
+            // Ожидаем завершения всех выгрузок очереди
+            while true {
+                let stillActive = self.photos.contains { $0.status == .uploading || $0.status == .inQueue }
+                if !stillActive {
+                    break
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            
+            if currentBgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(currentBgTask)
+            }
+            
+            NotificationHelper.sendNotification(
+                title: "Выгрузка завершена".localized,
+                body: "Все готовые файлы успешно отправлены на стоки!".localized
+            )
         }
     }
     
