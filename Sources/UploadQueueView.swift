@@ -147,8 +147,10 @@ class QueueViewModel: ObservableObject {
     }
     
     init() {
-        loadPhotosFromDisk()
         QueueViewModel.shared = self
+        Task {
+            await loadPhotosFromDiskAsync()
+        }
     }
     
     /// Сохраняет строго маловесные метаданные JSON (<10KB) с дебаунсом (300мс), защищая диск и процессор
@@ -289,15 +291,20 @@ class QueueViewModel: ObservableObject {
         }
     }
 
-    func loadPhotosFromDisk() {
-        do {
-            let metaURL = self.metadataURL
-            guard FileManager.default.fileExists(atPath: metaURL.path) else { return }
-            let data = try Data(contentsOf: metaURL)
-            let decoded = try JSONDecoder().decode([PhotoMetadata].self, from: data)
-            self.photos = decoded
-        } catch {
-            print("Error loading photos from disk: \(error.localizedDescription)")
+    func loadPhotosFromDiskAsync() async {
+        let metaURL = self.metadataURL
+        guard FileManager.default.fileExists(atPath: metaURL.path) else { return }
+        
+        let loaded: [PhotoMetadata]? = await Task.detached(priority: .userInitiated) {
+            guard let data = try? Data(contentsOf: metaURL),
+                  let decoded = try? JSONDecoder().decode([PhotoMetadata].self, from: data) else {
+                return nil
+            }
+            return decoded
+        }.value
+        
+        if let loaded {
+            self.photos = loaded
         }
     }
     
