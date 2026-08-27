@@ -1443,7 +1443,9 @@ struct UploadQueueView: View {
                                     Image(systemName: "bolt.fill")
                                         .font(.system(size: 11, weight: .bold))
                                         .foregroundStyle(Color(hex: "A855F7"))
-                                    Text("\(rewardManager.remainingUploadsToday)/15")
+                                    let baseRemaining = max(0, 15 - rewardManager.dailyUploadsUsed)
+                                    let text = rewardManager.bonusCredits > 0 ? "\(baseRemaining)/15 (+\(rewardManager.bonusCredits))" : "\(rewardManager.remainingUploadsToday)/15"
+                                    Text(text)
                                         .font(.system(size: 11, weight: .heavy))
                                         .foregroundStyle(.primary)
                                 }
