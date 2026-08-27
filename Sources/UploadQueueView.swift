@@ -354,16 +354,13 @@ class QueueViewModel: ObservableObject {
         let provider = AIProvider.gemini.rawValue
         let apiKey = AIManager.defaultSystemGeminiKey
         
-        // 1. Проверяем дневной лимит бесплатных запросов (15 в день + бонусы, если нет PRO)
-        if !RewardAdManager.shared.canPerformAction(isAIAnalysis: true) {
+        // 1. Проверяем и сразу списываем слот
+        guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true) else {
             triggerToast("Достигнут дневной лимит (15 ИИ-анализов в день). Посмотрите видео (+5) или оформите PRO!".localized)
             shouldShowDailyLimitAlert = true
             HapticHelper.notification(.warning)
             return
         }
-        
-        // Списываем слот
-        RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true)
         
         photos[idx].status = .aiAnalyzing
         let photo = photos[idx]
@@ -396,6 +393,7 @@ class QueueViewModel: ObservableObject {
                     self.triggerToast("ИИ успешно заполнил метаданные для".localized + " \(photo.filename)!")
                 }
             } catch {
+                RewardAdManager.shared.refundActionSlot(isAIAnalysis: true)
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].status = .error
                     self.photos[index].errorMessage = "Ошибка ИИ: \(error.localizedDescription)"
@@ -426,13 +424,12 @@ class QueueViewModel: ObservableObject {
             
             var processedCount = 0
             for photo in unanalyzed {
-                if !RewardAdManager.shared.canPerformAction(isAIAnalysis: true) {
+                guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true) else {
                     self.triggerToast("Достигнут дневной лимит ИИ. Посмотрите видео (+5) для продолжения.".localized)
                     self.shouldShowDailyLimitAlert = true
                     break
                 }
                 
-                RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true)
                 if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
                     self.photos[idx].status = .aiAnalyzing
                 }
@@ -459,6 +456,7 @@ class QueueViewModel: ObservableObject {
                         processedCount += 1
                     }
                 } catch {
+                    RewardAdManager.shared.refundActionSlot(isAIAnalysis: true)
                     if let index = self.photos.firstIndex(where: { $0.id == photo.id }) {
                         self.photos[index].status = .error
                         self.photos[index].errorMessage = "Ошибка ИИ: \(error.localizedDescription)"
@@ -499,8 +497,8 @@ class QueueViewModel: ObservableObject {
             return
         }
         
-        // Проверяем дневной лимит отправок (15 в день + бонусы для Free-пользователей)
-        if !RewardAdManager.shared.canPerformAction(isAIAnalysis: false) {
+        // Проверяем и сразу списываем слот на отправку
+        guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false) else {
             triggerToast("Достигнут дневной лимит (15 отправок в день). Посмотрите видео (+5) или оформите PRO!".localized)
             shouldShowDailyLimitAlert = true
             HapticHelper.notification(.warning)
@@ -589,7 +587,6 @@ class QueueViewModel: ObservableObject {
                     self.photos[index].status = .success
                     self.photos[index].uploadProgress = 1.0
                     self.uploadSpeedKBps.removeValue(forKey: id)
-                    RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false)
                     self.savePhotosToDisk()
                     self.triggerToast("Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized)
                     NotificationHelper.sendNotification(
@@ -600,6 +597,7 @@ class QueueViewModel: ObservableObject {
             } catch {
                 progressContinuation.finish()
                 _ = await progressTask.result
+                RewardAdManager.shared.refundActionSlot(isAIAnalysis: false)
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].status = .error
                     self.photos[index].errorMessage = error.localizedDescription
@@ -637,7 +635,7 @@ class QueueViewModel: ObservableObject {
             
             var successCount = 0
             for photo in readyPhotos {
-                if !RewardAdManager.shared.canPerformAction(isAIAnalysis: false) {
+                guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false) else {
                     self.triggerToast("Достигнут дневной лимит отправок. Посмотрите видео (+5) для продолжения.".localized)
                     self.shouldShowDailyLimitAlert = true
                     break
@@ -654,10 +652,10 @@ class QueueViewModel: ObservableObject {
                         self.photos[idx].uploadProgress = 1.0
                         self.photos[idx].errorMessage = nil
                         self.savePhotosToDisk()
-                        RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false)
                         successCount += 1
                     }
                 } catch {
+                    RewardAdManager.shared.refundActionSlot(isAIAnalysis: false)
                     if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
                         self.photos[idx].status = .error
                         self.photos[idx].errorMessage = error.localizedDescription
@@ -704,13 +702,11 @@ class QueueViewModel: ObservableObject {
             for photo in targets {
                 // 1. ИИ Анализ (если требуется)
                 if photo.status == .new || photo.status == .error {
-                    if !RewardAdManager.shared.canPerformAction(isAIAnalysis: true) {
+                    guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true) else {
                         self.triggerToast("Достигнут дневной лимит ИИ. Автопилот приостановлен.".localized)
                         self.shouldShowDailyLimitAlert = true
                         break
                     }
-                    
-                    RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true)
                     
                     if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
                         self.photos[idx].status = .aiAnalyzing
@@ -737,6 +733,7 @@ class QueueViewModel: ObservableObject {
                             self.savePhotosToDisk()
                         }
                     } catch {
+                        RewardAdManager.shared.refundActionSlot(isAIAnalysis: true)
                         if let index = self.photos.firstIndex(where: { $0.id == photo.id }) {
                             self.photos[index].status = .error
                             self.photos[index].errorMessage = "Ошибка ИИ: \(error.localizedDescription)"
@@ -747,7 +744,7 @@ class QueueViewModel: ObservableObject {
                 
                 // 2. Отправка на стоки
                 if let readyPhoto = self.photos.first(where: { $0.id == photo.id }), readyPhoto.status == .ready {
-                    if !RewardAdManager.shared.canPerformAction(isAIAnalysis: false) {
+                    guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false) else {
                         self.triggerToast("Достигнут дневной лимит отправок. Посмотрите видео (+5) для продолжения.".localized)
                         self.shouldShowDailyLimitAlert = true
                         break
@@ -764,10 +761,10 @@ class QueueViewModel: ObservableObject {
                             self.photos[idx].uploadProgress = 1.0
                             self.photos[idx].errorMessage = nil
                             self.savePhotosToDisk()
-                            RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false)
                             processedCount += 1
                         }
                     } catch {
+                        RewardAdManager.shared.refundActionSlot(isAIAnalysis: false)
                         if let idx = self.photos.firstIndex(where: { $0.id == readyPhoto.id }) {
                             self.photos[idx].status = .error
                             self.photos[idx].errorMessage = error.localizedDescription
@@ -1431,15 +1428,31 @@ struct UploadQueueView: View {
                                 HapticHelper.trigger(.light)
                                 showPaywall = true
                             }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "bolt.fill")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(Color(hex: "A855F7"))
-                                    let baseRemaining = max(0, 15 - rewardManager.dailyUploadsUsed)
-                                    let text = rewardManager.bonusCredits > 0 ? "\(baseRemaining)/15 (+\(rewardManager.bonusCredits))" : "\(rewardManager.remainingUploadsToday)/15"
-                                    Text(text)
-                                        .font(.system(size: 11, weight: .heavy))
-                                        .foregroundStyle(.primary)
+                                HStack(spacing: 5) {
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "sparkles")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundStyle(Color(hex: "A855F7"))
+                                        Text("\(rewardManager.remainingAIToday)")
+                                            .font(.system(size: 11, weight: .heavy))
+                                            .foregroundStyle(.primary)
+                                    }
+                                    Text("•")
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(.secondary)
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "paperplane.fill")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundStyle(Color(hex: "3B82F6"))
+                                        Text("\(rewardManager.remainingUploadsToday)")
+                                            .font(.system(size: 11, weight: .heavy))
+                                            .foregroundStyle(.primary)
+                                    }
+                                    if rewardManager.bonusCredits > 0 {
+                                        Text("(+\(rewardManager.bonusCredits))")
+                                            .font(.system(size: 9, weight: .heavy))
+                                            .foregroundStyle(Color.orange)
+                                    }
                                 }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 5)
@@ -1573,7 +1586,7 @@ struct UploadQueueView: View {
                 }
                 Button("Закрыть".localized, role: .cancel) {}
             } message: {
-                Text("В бесплатной версии доступно 15 отправок/ИИ-анализов в день. Вы можете посмотреть видео за +5 бонусных слотов, ввести свой личный API-ключ в настройках ИИ или перейти на PRO.".localized)
+                Text("В бесплатной версии доступно 15 ИИ-анализов и 15 отправок на стоки в день. Вы можете посмотреть видео (+5 слотов) или перейти на безлимитный PRO.".localized)
             }
             .alert("Ошибка загрузки".localized, isPresented: $showingErrorAlert) {
                 Button("Скопировать".localized) {

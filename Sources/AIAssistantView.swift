@@ -163,8 +163,8 @@ struct AIAssistantView: View {
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(Color(hex: "F59E0B"))
                     } else {
-                        let baseRemaining = max(0, 15 - rewardManager.dailyUploadsUsed)
-                        let text = rewardManager.bonusCredits > 0 ? "\(baseRemaining)/15 (+\(rewardManager.bonusCredits) бонус)" : "\(rewardManager.remainingUploadsToday)/15 доступно"
+                        let baseRemaining = max(0, 15 - rewardManager.dailyAIUsed)
+                        let text = rewardManager.bonusCredits > 0 ? "\(baseRemaining)/15 (+\(rewardManager.bonusCredits) бонус)" : "\(rewardManager.remainingAIToday)/15 доступно"
                         Text(text)
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(.primary)
