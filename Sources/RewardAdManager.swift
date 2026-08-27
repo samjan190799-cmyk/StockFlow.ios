@@ -70,18 +70,14 @@ public final class RewardAdManager: ObservableObject {
         return baseRemaining + bonusCredits
     }
     
-    // MARK: - Проверка возможности выполнить действие
+    // MARK: - Проверка возможности выполнить действие (Строго 15 в день для всех без PRO)
     
     public func canPerformAction(isAIAnalysis: Bool = false) -> Bool {
-        // 1. PRO пользователи — безлимит
+        // 1. Только PRO пользователи имеют безлимит
         if StoreManager.shared.isProUser {
             return true
         }
-        // 2. Если это ИИ-анализ и пользователь использует свой личный ключ — безлимит
-        if isAIAnalysis && hasCustomAPIKey {
-            return true
-        }
-        // 3. Бесплатный лимит на системном ключе (15 в день + бонусы)
+        // 2. Для всех остальных — лимит 15 действий в день (+ бонусы за просмотр рекламы)
         checkAndResetDailyCount()
         return remainingUploadsToday > 0
     }
@@ -91,9 +87,6 @@ public final class RewardAdManager: ObservableObject {
     @discardableResult
     public func consumeActionSlot(isAIAnalysis: Bool = false) -> Bool {
         if StoreManager.shared.isProUser {
-            return true
-        }
-        if isAIAnalysis && hasCustomAPIKey {
             return true
         }
         
