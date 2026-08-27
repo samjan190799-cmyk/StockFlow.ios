@@ -260,12 +260,13 @@ struct AIAssistantView: View {
             
             VStack(alignment: .leading, spacing: 12) {
                 let hasKey = !activeKey.wrappedValue.isEmpty
+                let isGemini = selectedProvider.contains("Gemini")
                 
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(activeProviderName)
                             .font(.system(size: 15, weight: .bold))
-                        Text("Введите личный токен аутентификации API".localized)
+                        Text(hasKey ? "Используется ваш личный API-ключ (Безлимит)".localized : (isGemini ? "Активен встроенный SmartStock ИИ".localized : "Введите личный токен аутентификации API".localized))
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
@@ -274,32 +275,32 @@ struct AIAssistantView: View {
                     // Status Badge (Glassmorphic)
                     HStack(spacing: 5) {
                         Circle()
-                            .fill(hasKey ? Color.green : Color.red)
+                            .fill(hasKey ? Color.green : (isGemini ? Color.purple : Color.orange))
                             .frame(width: 5, height: 5)
                         
-                        Text((hasKey ? "Настроен" : "Не настроен").localized)
+                        Text((hasKey ? "Личный ключ" : (isGemini ? "Встроенный" : "Не настроен")).localized)
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(hasKey ? Color.green : Color.red)
+                            .foregroundStyle(hasKey ? Color.green : (isGemini ? Color.purple : Color.orange))
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(hasKey ? Color.green.opacity(0.12) : Color.red.opacity(0.12))
+                    .background(hasKey ? Color.green.opacity(0.12) : (isGemini ? Color.purple.opacity(0.12) : Color.orange.opacity(0.12)))
                     .clipShape(Capsule())
                     .overlay(
                         Capsule()
-                            .stroke(hasKey ? Color.green.opacity(0.3) : Color.red.opacity(0.3), lineWidth: 1)
+                            .stroke(hasKey ? Color.green.opacity(0.3) : (isGemini ? Color.purple.opacity(0.3) : Color.orange.opacity(0.3)), lineWidth: 1)
                     )
                 }
                 
                 HStack(spacing: 10) {
                     HStack(spacing: 8) {
                         // Dynamic padlock state icon
-                        Image(systemName: hasKey ? "lock.fill" : "lock.open.fill")
+                        Image(systemName: hasKey ? "lock.fill" : (isGemini ? "sparkles" : "lock.open.fill"))
                             .font(.system(size: 14))
-                            .foregroundStyle(hasKey ? .green : .red)
+                            .foregroundStyle(hasKey ? .green : (isGemini ? .purple : .orange))
                             .animation(.default, value: hasKey)
                         
-                        SecureField("Вставьте ключ API...".localized, text: activeKey)
+                        SecureField(isGemini ? "Встроенный ключ (или вставьте свой)...".localized : "Вставьте ключ API...".localized, text: activeKey)
                             .textFieldStyle(.plain)
                             .font(.system(size: 13, design: .monospaced))
                     }
@@ -315,7 +316,8 @@ struct AIAssistantView: View {
                     
                     Button(action: {
                         HapticHelper.trigger(.medium)
-                        verifyKey(activeKey.wrappedValue, for: activeProviderName)
+                        let keyToVerify = activeKey.wrappedValue.isEmpty && isGemini ? AIManager.defaultSystemGeminiKey : activeKey.wrappedValue
+                        verifyKey(keyToVerify, for: activeProviderName)
                     }) {
                         Image(systemName: "bolt.shield.fill")
                             .font(.system(size: 14, weight: .bold))
@@ -326,6 +328,11 @@ struct AIAssistantView: View {
                     }
                     .buttonStyle(PremiumButtonStyle())
                 }
+                
+                Text("💡 По умолчанию активен встроенный Gemini ИИ (до 15 запросов в день). Для полного безлимита без подписки вы можете вставить свой личный ключ от Google AI Studio, OpenAI или Claude.".localized)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 2)
             }
             .glassCard(cornerRadius: 20, padding: 14)
         }

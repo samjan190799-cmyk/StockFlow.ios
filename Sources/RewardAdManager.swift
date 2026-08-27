@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 
-/// Менеджер вознаграждений за просмотр рекламы (Rewarded Ads / Bonus Credits)
+/// Менеджер вознаграждений за рекламу и дневных лимитов (15 бесплатных отправок/анализов в день + бонусы)
 @MainActor
 public final class RewardAdManager: ObservableObject {
     public static let shared = RewardAdManager()
@@ -11,22 +11,117 @@ public final class RewardAdManager: ObservableObject {
     public static let adMobAppID = "ca-app-pub-1230774710816122~9425524877"
     public static let rewardedAdUnitID = "ca-app-pub-1230774710816122/7729299826"
     
+    // Базовый дневной лимит бесплатных отправок/анализов
+    public static let baseDailyLimit: Int = 15
+    
     // Ключи UserDefaults
     private let bonusCreditsKey = "bonus_upload_credits_v1"
     private let totalAdsWatchedKey = "total_reward_ads_watched"
+    private let dailyUploadsUsedKey = "daily_free_uploads_used_v1"
+    private let dailyUploadsDateKey = "daily_free_uploads_date_v1"
     
     @Published public private(set) var bonusCredits: Int = 0
     @Published public private(set) var totalAdsWatched: Int = 0
+    @Published public private(set) var dailyUploadsUsed: Int = 0
     @Published public var isShowingRewardModal: Bool = false
+    @Published public var showDailyLimitAlert: Bool = false
     
     private init() {
         self.bonusCredits = UserDefaults.standard.integer(forKey: bonusCreditsKey)
         self.totalAdsWatched = UserDefaults.standard.integer(forKey: totalAdsWatchedKey)
+        checkAndResetDailyCount()
     }
     
-    // MARK: - Начисление и списание бонусов
+    // MARK: - Сброс дневного счетчика в полночь
     
-    /// Начислить бонусные фото за просмотр видео
+    private var todayDateString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone.current
+        return formatter.string(from: Date())
+    }
+    
+    public func checkAndResetDailyCount() {
+        let today = todayDateString
+        let savedDate = UserDefaults.standard.string(forKey: dailyUploadsDateKey) ?? ""
+        
+        if savedDate != today {
+            self.dailyUploadsUsed = 0
+            UserDefaults.standard.set(0, forKey: dailyUploadsUsedKey)
+            UserDefaults.standard.set(today, forKey: dailyUploadsDateKey)
+        } else {
+            self.dailyUploadsUsed = UserDefaults.standard.integer(forKey: dailyUploadsUsedKey)
+        }
+    }
+    
+    // MARK: - Проверка наличия личного API-ключа
+    
+    public var hasCustomAPIKey: Bool {
+        let gemini = UserDefaults.standard.string(forKey: "api_key_gemini")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let openai = UserDefaults.standard.string(forKey: "api_key_openai")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let claude = UserDefaults.standard.string(forKey: "api_key_claude")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !gemini.isEmpty || !openai.isEmpty || !claude.isEmpty
+    }
+    
+    // MARK: - Остаток доступных отправок сегодня
+    
+    public var remainingUploadsToday: Int {
+        if StoreManager.shared.isProUser {
+            return Int.max
+        }
+        checkAndResetDailyCount()
+        let baseRemaining = max(0, RewardAdManager.baseDailyLimit - dailyUploadsUsed)
+        return baseRemaining + bonusCredits
+    }
+    
+    // MARK: - Проверка возможности выполнить действие
+    
+    public func canPerformAction(isAIAnalysis: Bool = false) -> Bool {
+        // 1. PRO пользователи — безлимит
+        if StoreManager.shared.isProUser {
+            return true
+        }
+        // 2. Если это ИИ-анализ и пользователь использует свой личный ключ — безлимит
+        if isAIAnalysis && hasCustomAPIKey {
+            return true
+        }
+        // 3. Бесплатный лимит на системном ключе (15 в день + бонусы)
+        checkAndResetDailyCount()
+        return remainingUploadsToday > 0
+    }
+    
+    // MARK: - Списание слота (1 отправка или ИИ-анализ)
+    
+    @discardableResult
+    public func consumeActionSlot(isAIAnalysis: Bool = false) -> Bool {
+        if StoreManager.shared.isProUser {
+            return true
+        }
+        if isAIAnalysis && hasCustomAPIKey {
+            return true
+        }
+        
+        checkAndResetDailyCount()
+        
+        // Сначала списываем бонусные слоты за рекламу, если есть
+        if bonusCredits > 0 {
+            bonusCredits -= 1
+            UserDefaults.standard.set(bonusCredits, forKey: bonusCreditsKey)
+            return true
+        }
+        
+        // Иначе используем базовый дневной слот
+        if dailyUploadsUsed < RewardAdManager.baseDailyLimit {
+            dailyUploadsUsed += 1
+            UserDefaults.standard.set(dailyUploadsUsed, forKey: dailyUploadsUsedKey)
+            return true
+        }
+        
+        return false
+    }
+    
+    // MARK: - Начисление бонусов за просмотр рекламы (+5 слотов)
+    
     public func rewardUser(with credits: Int = 5) {
         self.bonusCredits += credits
         self.totalAdsWatched += 1
@@ -36,17 +131,6 @@ public final class RewardAdManager: ObservableObject {
         HapticHelper.notification(.success)
     }
     
-    /// Списать один бонусный слот при загрузке
-    public func consumeCredit() -> Bool {
-        if bonusCredits > 0 {
-            bonusCredits -= 1
-            UserDefaults.standard.set(bonusCredits, forKey: bonusCreditsKey)
-            return true
-        }
-        return false
-    }
-    
-    /// Общий лимит файлов для пользователя (PRO = безлимит, Free = 20 + бонусы)
     public func getMaxQueueLimit(baseLimit: Int = 20) -> Int {
         if StoreManager.shared.isProUser {
             return Int.max

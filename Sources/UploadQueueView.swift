@@ -130,6 +130,8 @@ class QueueViewModel: ObservableObject {
     @Published var isAnalyzingAll = false
     @Published var toastMessage = ""
     @Published var showToast = false
+    @Published var shouldShowPaywallFromLimit = false
+    @Published var shouldShowDailyLimitAlert = false
     /// Скорость загрузки в KB/с для каждого активного файла
     @Published var uploadSpeedKBps: [UUID: Double] = [:]
     
@@ -227,7 +229,7 @@ class QueueViewModel: ObservableObject {
                         keywords: [],
                         description: "",
                         status: .new,
-                        selectedStocks: Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]),
+                        selectedStocks: StoreManager.shared.isProUser ? Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]) : Set(["Shutterstock", "Adobe Stock"]),
                         localURLPath: fileURL.path,
                         thumbnailData: thumbData,
                         imageData: nil, // Файл уже надёжно сохранён на диск
@@ -274,7 +276,7 @@ class QueueViewModel: ObservableObject {
                     keywords: [],
                     description: "",
                     status: .new,
-                    selectedStocks: Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]),
+                    selectedStocks: StoreManager.shared.isProUser ? Set(["Shutterstock", "Adobe Stock", "iStock / Getty"]) : Set(["Shutterstock", "Adobe Stock"]),
                     localURLPath: targetURL.path,
                     thumbnailData: thumbData,
                     isVideo: isVideo
@@ -347,23 +349,16 @@ class QueueViewModel: ObservableObject {
             apiKey = UserDefaults.standard.string(forKey: "api_key_claude") ?? ""
         }
         
-        guard !apiKey.trimmingCharacters(in: .whitespaces).isEmpty else {
-            photos[idx].status = .aiAnalyzing
-            triggerToast("Запущен демо-анализ (ключ API не введен)".localized)
-            
-            Task {
-                try? await Task.sleep(nanoseconds: 1_200_000_000)
-                if let index = self.photos.firstIndex(where: { $0.id == id }) {
-                    self.photos[index].title = "Драматичный закат в горах (Демо)".localized
-                    self.photos[index].keywords = ["закат", "облака", "небо", "горы", "пейзаж", "демо"]
-                    self.photos[index].description = "Демо-описание: Живописный закат солнца над горным хребтом.".localized
-                    self.photos[index].categories = ["Природа", "Пейзаж"]
-                    self.photos[index].status = .ready
-                    self.savePhotosToDisk()
-                }
-            }
+        // 1. Проверяем дневной лимит бесплатных запросов (15 в день + бонусы, если нет своего ключа и нет PRO)
+        if !RewardAdManager.shared.canPerformAction(isAIAnalysis: true) {
+            triggerToast("Достигнут дневной лимит (15 ИИ-анализов в день). Посмотрите видео (+5) или введите свой ключ!".localized)
+            shouldShowDailyLimitAlert = true
+            HapticHelper.notification(.warning)
             return
         }
+        
+        // Списываем слот
+        RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true)
         
         photos[idx].status = .aiAnalyzing
         let photo = photos[idx]
@@ -411,8 +406,14 @@ class QueueViewModel: ObservableObject {
         
         Task {
             for photo in unanalyzed {
+                if !RewardAdManager.shared.canPerformAction(isAIAnalysis: true) {
+                    self.triggerToast("Достигнут дневной лимит ИИ. Посмотрите видео (+5) для продолжения.".localized)
+                    self.shouldShowDailyLimitAlert = true
+                    break
+                }
                 self.runAIForPhoto(photo.id)
-                try? await Task.sleep(nanoseconds: 800_000_000)
+                // Плавная задержка между вызовами (3.5 сек) для защиты от 429
+                try? await Task.sleep(nanoseconds: 3_500_000_000)
             }
             self.isAnalyzingAll = false
         }
@@ -436,6 +437,14 @@ class QueueViewModel: ObservableObject {
         guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
         guard checkStockCredentials() else {
             triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!".localized)
+            return
+        }
+        
+        // Проверяем дневной лимит отправок (15 в день + бонусы для Free-пользователей)
+        if !RewardAdManager.shared.canPerformAction(isAIAnalysis: false) {
+            triggerToast("Достигнут дневной лимит (15 отправок в день). Посмотрите видео (+5) или оформите PRO!".localized)
+            shouldShowDailyLimitAlert = true
+            HapticHelper.notification(.warning)
             return
         }
         
@@ -524,6 +533,7 @@ class QueueViewModel: ObservableObject {
                         self.photos[index].status = .success
                         self.photos[index].uploadProgress = 1.0
                         self.uploadSpeedKBps.removeValue(forKey: id)
+                        RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false)
                         self.triggerToast("Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized)
                         NotificationHelper.sendNotification(
                             title: "Успешная выгрузка".localized,
@@ -1010,6 +1020,8 @@ class QueueViewModel: ObservableObject {
             } else {
                 if !StoreManager.shared.isProUser && photos[idx].selectedStocks.count >= 2 {
                     triggerToast("В бесплатной версии доступно до 2 стоков. Перейдите на PRO для одновременной выгрузки на все стоки!".localized)
+                    shouldShowPaywallFromLimit = true
+                    HapticHelper.notification(.warning)
                     return
                 }
                 photos[idx].selectedStocks.insert(stockName)
@@ -1318,6 +1330,23 @@ struct UploadQueueView: View {
             }
             .sheet(isPresented: $showRewardedAd) {
                 RewardedAdView()
+            }
+            .onChange(of: viewModel.shouldShowPaywallFromLimit) { show in
+                if show {
+                    showPaywall = true
+                    viewModel.shouldShowPaywallFromLimit = false
+                }
+            }
+            .alert("Дневной лимит исчерпан".localized, isPresented: $viewModel.shouldShowDailyLimitAlert) {
+                Button("🎬 Получить +5 слотов".localized) {
+                    showRewardedAd = true
+                }
+                Button("👑 SmartStock PRO".localized) {
+                    showPaywall = true
+                }
+                Button("Закрыть".localized, role: .cancel) {}
+            } message: {
+                Text("В бесплатной версии доступно 15 отправок/ИИ-анализов в день. Вы можете посмотреть видео за +5 бонусных слотов, ввести свой личный API-ключ в настройках ИИ или перейти на PRO.".localized)
             }
             .alert("Ошибка загрузки".localized, isPresented: $showingErrorAlert) {
                 Button("Скопировать".localized) {
