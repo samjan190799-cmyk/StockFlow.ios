@@ -194,13 +194,6 @@ public struct PaywallView: View {
     private var featuresList: some View {
         VStack(spacing: 9) {
             featureRow(
-                icon: "sparkles.rectangle.stack.fill",
-                color: Color(hex: "A855F7"),
-                title: "Безлимитный ИИ-анализ кадра".localized,
-                subtitle: "Генерация названий, описаний и тегов через Gemini 2.5, GPT-4o, Claude".localized
-            )
-            
-            featureRow(
                 icon: "paperplane.fill",
                 color: Color(hex: "3B82F6"),
                 title: "Выгрузка на все 10+ стоков сразу".localized,
