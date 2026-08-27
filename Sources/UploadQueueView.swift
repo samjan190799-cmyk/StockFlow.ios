@@ -364,20 +364,12 @@ class QueueViewModel: ObservableObject {
         photos[idx].status = .aiAnalyzing
         let photo = photos[idx]
         
-        var bgTask: UIBackgroundTaskIdentifier = .invalid
-        bgTask = UIApplication.shared.beginBackgroundTask(withName: "SmartStock.AI.\(id.uuidString)") {
-            if bgTask != .invalid {
-                UIApplication.shared.endBackgroundTask(bgTask)
-                bgTask = .invalid
-            }
-        }
+        let taskName = "SmartStock.AI.\(id.uuidString)"
+        BackgroundTaskManager.shared.beginTask(named: taskName)
         
-        let currentBgTask = bgTask
         Task {
             defer {
-                if currentBgTask != .invalid {
-                    UIApplication.shared.endBackgroundTask(currentBgTask)
-                }
+                BackgroundTaskManager.shared.endTask(named: taskName)
             }
             
             let imagesData = await getAIImagesData(for: photo)
@@ -420,20 +412,12 @@ class QueueViewModel: ObservableObject {
         isAnalyzingAll = true
         triggerToast("Запущен ИИ-анализ для".localized + " \(unanalyzed.count) " + "файлов...".localized)
         
-        var bgTask: UIBackgroundTaskIdentifier = .invalid
-        bgTask = UIApplication.shared.beginBackgroundTask(withName: "SmartStock.BatchAI") {
-            if bgTask != .invalid {
-                UIApplication.shared.endBackgroundTask(bgTask)
-                bgTask = .invalid
-            }
-        }
+        BackgroundTaskManager.shared.beginTask(named: "SmartStock.BatchAI")
         
-        let currentBgTask = bgTask
         Task {
             defer {
-                if currentBgTask != .invalid {
-                    UIApplication.shared.endBackgroundTask(currentBgTask)
-                }
+                BackgroundTaskManager.shared.endTask(named: "SmartStock.BatchAI")
+                self.isAnalyzingAll = false
             }
             
             var processedCount = 0
@@ -443,18 +427,50 @@ class QueueViewModel: ObservableObject {
                     self.shouldShowDailyLimitAlert = true
                     break
                 }
-                self.runAIForPhoto(photo.id)
-                processedCount += 1
-                // Плавная задержка между вызовами (3.5 сек) для защиты от 429
-                try? await Task.sleep(nanoseconds: 3_500_000_000)
+                
+                RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true)
+                if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
+                    self.photos[idx].status = .aiAnalyzing
+                }
+                
+                let imagesData = await getAIImagesData(for: photo)
+                let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
+                let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? "Gemini"
+                let apiKey = UserDefaults.standard.string(forKey: "ai_api_key") ?? ""
+                
+                do {
+                    let metadata = try await AIManager.shared.analyzePhoto(
+                        imagesData: imagesData,
+                        customPrompt: customPrompt,
+                        provider: provider,
+                        apiKey: apiKey
+                    )
+                    if let index = self.photos.firstIndex(where: { $0.id == photo.id }) {
+                        self.photos[index].title = metadata.title
+                        self.photos[index].keywords = metadata.keywords
+                        self.photos[index].description = metadata.description
+                        self.photos[index].categories = metadata.categories ?? []
+                        self.photos[index].status = .ready
+                        self.savePhotosToDisk()
+                        processedCount += 1
+                    }
+                } catch {
+                    if let index = self.photos.firstIndex(where: { $0.id == photo.id }) {
+                        self.photos[index].status = .error
+                        self.photos[index].errorMessage = "Ошибка ИИ: \(error.localizedDescription)"
+                        self.savePhotosToDisk()
+                    }
+                }
+                
+                // Плавная задержка между вызовами (2.5 сек) для защиты от 429
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
             }
-            self.isAnalyzingAll = false
             
-            // Локальное уведомление, если пользователь свернул приложение
             NotificationHelper.sendNotification(
                 title: "ИИ-анализ завершён".localized,
-                body: "Метаданные успешно заполнены для \(processedCount) файлов.".localized
+                body: "Метаданные успешно заполнены для".localized + " \(processedCount) " + "файлов.".localized
             )
+            self.triggerToast("ИИ-анализ успешно завершён!".localized)
         }
     }
     
@@ -500,7 +516,9 @@ class QueueViewModel: ObservableObject {
         photos[idx].errorMessage = nil
         let targetPhoto = photos[idx]
         
-        let currentBgTask = bgTask
+        let taskName = "SmartStock.Upload.\(id.uuidString)"
+        BackgroundTaskManager.shared.beginTask(named: taskName)
+        
         Task {
             let maxStreams = UserDefaults.standard.integer(forKey: "sys_parallel_streams")
             let streamLimit = maxStreams > 0 ? maxStreams : 1
@@ -521,17 +539,13 @@ class QueueViewModel: ObservableObject {
                         seqVideo: seqVideo,
                         seqPhoto: seqPhoto
                     )
-                    if currentBgTask != .invalid {
-                        UIApplication.shared.endBackgroundTask(currentBgTask)
-                    }
+                    BackgroundTaskManager.shared.endTask(named: taskName)
                 }
             }
             
-            await MainActor.run {
-                if let i = self.photos.firstIndex(where: { $0.id == id }) {
-                    self.photos[i].status = .uploading
-                    self.triggerToast("Загрузка файла".localized + " \(self.photos[i].filename)...")
-                }
+            if let i = self.photos.firstIndex(where: { $0.id == id }) {
+                self.photos[i].status = .uploading
+                self.triggerToast("Загрузка файла".localized + " \(self.photos[i].filename)...")
             }
             
             let tracker = UploadSpeedTracker()
@@ -567,33 +581,31 @@ class QueueViewModel: ObservableObject {
                 progressContinuation.finish()
                 _ = await progressTask.result
                 
-                await MainActor.run {
-                    if let index = self.photos.firstIndex(where: { $0.id == id }) {
-                        self.photos[index].status = .success
-                        self.photos[index].uploadProgress = 1.0
-                        self.uploadSpeedKBps.removeValue(forKey: id)
-                        RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false)
-                        self.triggerToast("Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized)
-                        NotificationHelper.sendNotification(
-                            title: "Успешная выгрузка".localized,
-                            body: "Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized
-                        )
-                    }
+                if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                    self.photos[index].status = .success
+                    self.photos[index].uploadProgress = 1.0
+                    self.uploadSpeedKBps.removeValue(forKey: id)
+                    RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false)
+                    self.savePhotosToDisk()
+                    self.triggerToast("Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized)
+                    NotificationHelper.sendNotification(
+                        title: "Успешная выгрузка".localized,
+                        body: "Файл".localized + " \(self.photos[index].filename) " + "успешно загружен на стоки!".localized
+                    )
                 }
             } catch {
                 progressContinuation.finish()
                 _ = await progressTask.result
-                await MainActor.run {
-                    if let index = self.photos.firstIndex(where: { $0.id == id }) {
-                        self.photos[index].status = .error
-                        self.photos[index].errorMessage = error.localizedDescription
-                        self.uploadSpeedKBps.removeValue(forKey: id)
-                        self.triggerToast("Ошибка выгрузки".localized + " \(self.photos[index].filename): \(error.localizedDescription)")
-                        NotificationHelper.sendNotification(
-                            title: "Ошибка выгрузки".localized,
-                            body: "Файл".localized + " \(self.photos[index].filename): \(error.localizedDescription)"
-                        )
-                    }
+                if let index = self.photos.firstIndex(where: { $0.id == id }) {
+                    self.photos[index].status = .error
+                    self.photos[index].errorMessage = error.localizedDescription
+                    self.uploadSpeedKBps.removeValue(forKey: id)
+                    self.savePhotosToDisk()
+                    self.triggerToast("Ошибка выгрузки".localized + " \(self.photos[index].filename): \(error.localizedDescription)")
+                    NotificationHelper.sendNotification(
+                        title: "Ошибка выгрузки".localized,
+                        body: "Файл".localized + " \(self.photos[index].filename): \(error.localizedDescription)"
+                    )
                 }
             }
         }
@@ -612,37 +624,51 @@ class QueueViewModel: ObservableObject {
         
         triggerToast("Началась отправка".localized + " \(readyPhotos.count) " + "файлов...".localized)
         
-        var bgTask: UIBackgroundTaskIdentifier = .invalid
-        bgTask = UIApplication.shared.beginBackgroundTask(withName: "SmartStock.BatchUpload") {
-            if bgTask != .invalid {
-                UIApplication.shared.endBackgroundTask(bgTask)
-                bgTask = .invalid
-            }
-        }
+        BackgroundTaskManager.shared.beginTask(named: "SmartStock.BatchUpload")
         
-        let currentBgTask = bgTask
         Task {
-            for photo in readyPhotos {
-                uploadPhoto(photo.id)
+            defer {
+                BackgroundTaskManager.shared.endTask(named: "SmartStock.BatchUpload")
             }
             
-            // Ожидаем завершения всех выгрузок очереди
-            while true {
-                let stillActive = self.photos.contains { $0.status == .uploading || $0.status == .inQueue }
-                if !stillActive {
+            var successCount = 0
+            for photo in readyPhotos {
+                if !RewardAdManager.shared.canPerformAction(isAIAnalysis: false) {
+                    self.triggerToast("Достигнут дневной лимит отправок. Посмотрите видео (+5) для продолжения.".localized)
+                    self.shouldShowDailyLimitAlert = true
                     break
                 }
+                
+                if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
+                    self.photos[idx].status = .uploading
+                }
+                
+                do {
+                    try await self.performRealUpload(for: photo)
+                    if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
+                        self.photos[idx].status = .success
+                        self.photos[idx].uploadProgress = 1.0
+                        self.photos[idx].errorMessage = nil
+                        self.savePhotosToDisk()
+                        RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false)
+                        successCount += 1
+                    }
+                } catch {
+                    if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
+                        self.photos[idx].status = .error
+                        self.photos[idx].errorMessage = error.localizedDescription
+                        self.savePhotosToDisk()
+                    }
+                }
+                
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
-            }
-            
-            if currentBgTask != .invalid {
-                UIApplication.shared.endBackgroundTask(currentBgTask)
             }
             
             NotificationHelper.sendNotification(
                 title: "Выгрузка завершена".localized,
                 body: "Все готовые файлы успешно отправлены на стоки!".localized
             )
+            self.triggerToast("Выгрузка успешно завершена!".localized)
         }
     }
     
@@ -661,67 +687,93 @@ class QueueViewModel: ObservableObject {
         isRunningAutopilot = true
         triggerToast("⚡️ Автопилот запущен для".localized + " \(targets.count) " + "файлов...".localized)
         
-        var bgTask: UIBackgroundTaskIdentifier = .invalid
-        bgTask = UIApplication.shared.beginBackgroundTask(withName: "SmartStock.Autopilot") {
-            if bgTask != .invalid {
-                UIApplication.shared.endBackgroundTask(bgTask)
-                bgTask = .invalid
-            }
-        }
+        BackgroundTaskManager.shared.beginTask(named: "SmartStock.Autopilot")
         
-        let currentBgTask = bgTask
         Task {
             defer {
-                if currentBgTask != .invalid {
-                    UIApplication.shared.endBackgroundTask(currentBgTask)
-                }
+                BackgroundTaskManager.shared.endTask(named: "SmartStock.Autopilot")
                 self.isRunningAutopilot = false
             }
             
             var processedCount = 0
+            
             for photo in targets {
-                // 1. Если статус .new или .error — запускаем ИИ анализ
+                // 1. ИИ Анализ (если требуется)
                 if photo.status == .new || photo.status == .error {
                     if !RewardAdManager.shared.canPerformAction(isAIAnalysis: true) {
                         self.triggerToast("Достигнут дневной лимит ИИ. Автопилот приостановлен.".localized)
                         self.shouldShowDailyLimitAlert = true
                         break
                     }
-                    self.runAIForPhoto(photo.id)
                     
-                    // Ожидаем завершения ИИ анализа для этого файла (до 20 сек)
-                    var waited = 0
-                    while waited < 40 {
-                        try? await Task.sleep(nanoseconds: 500_000_000)
-                        waited += 1
-                        if let current = self.photos.first(where: { $0.id == photo.id }), current.status == .ready {
-                            break
+                    RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true)
+                    
+                    if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
+                        self.photos[idx].status = .aiAnalyzing
+                    }
+                    
+                    let imagesData = await getAIImagesData(for: photo)
+                    let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
+                    let provider = UserDefaults.standard.string(forKey: "ai_provider") ?? "Gemini"
+                    let apiKey = UserDefaults.standard.string(forKey: "ai_api_key") ?? ""
+                    
+                    do {
+                        let metadata = try await AIManager.shared.analyzePhoto(
+                            imagesData: imagesData,
+                            customPrompt: customPrompt,
+                            provider: provider,
+                            apiKey: apiKey
+                        )
+                        if let index = self.photos.firstIndex(where: { $0.id == photo.id }) {
+                            self.photos[index].title = metadata.title
+                            self.photos[index].keywords = metadata.keywords
+                            self.photos[index].description = metadata.description
+                            self.photos[index].categories = metadata.categories ?? []
+                            self.photos[index].status = .ready
+                            self.savePhotosToDisk()
+                        }
+                    } catch {
+                        if let index = self.photos.firstIndex(where: { $0.id == photo.id }) {
+                            self.photos[index].status = .error
+                            self.photos[index].errorMessage = "Ошибка ИИ: \(error.localizedDescription)"
+                            self.savePhotosToDisk()
                         }
                     }
                 }
                 
-                // 2. Если фото готово — сразу отправляем на стоки
+                // 2. Отправка на стоки
                 if let readyPhoto = self.photos.first(where: { $0.id == photo.id }), readyPhoto.status == .ready {
                     if !RewardAdManager.shared.canPerformAction(isAIAnalysis: false) {
                         self.triggerToast("Достигнут дневной лимит отправок. Посмотрите видео (+5) для продолжения.".localized)
                         self.shouldShowDailyLimitAlert = true
                         break
                     }
-                    self.uploadPhoto(readyPhoto.id)
-                    processedCount += 1
+                    
+                    if let idx = self.photos.firstIndex(where: { $0.id == readyPhoto.id }) {
+                        self.photos[idx].status = .uploading
+                    }
+                    
+                    do {
+                        try await self.performRealUpload(for: readyPhoto)
+                        if let idx = self.photos.firstIndex(where: { $0.id == readyPhoto.id }) {
+                            self.photos[idx].status = .success
+                            self.photos[idx].uploadProgress = 1.0
+                            self.photos[idx].errorMessage = nil
+                            self.savePhotosToDisk()
+                            RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false)
+                            processedCount += 1
+                        }
+                    } catch {
+                        if let idx = self.photos.firstIndex(where: { $0.id == readyPhoto.id }) {
+                            self.photos[idx].status = .error
+                            self.photos[idx].errorMessage = error.localizedDescription
+                            self.savePhotosToDisk()
+                        }
+                    }
                 }
                 
                 // Анти-спам пауза
-                try? await Task.sleep(nanoseconds: 3_500_000_000)
-            }
-            
-            // Ожидаем завершения всех активных загрузок
-            while true {
-                let stillActive = self.photos.contains { $0.status == .uploading || $0.status == .inQueue || $0.status == .aiAnalyzing }
-                if !stillActive {
-                    break
-                }
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
             }
             
             NotificationHelper.sendNotification(
@@ -1895,7 +1947,7 @@ struct UploadQueueView: View {
                         }) {
                             HStack(spacing: 5) {
                                 if #available(iOS 17.0, *) {
-                                    Image(systemName: "bolt.badge.sparkle")
+                                    Image(systemName: "bolt.fill")
                                         .font(.system(size: 12, weight: .bold))
                                         .symbolEffect(.pulse, options: .repeating, value: viewModel.isRunningAutopilot)
                                 } else {

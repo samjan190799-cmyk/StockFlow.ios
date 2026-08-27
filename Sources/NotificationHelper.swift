@@ -18,8 +18,8 @@ struct NotificationHelper: Sendable {
         content.body = body
         content.sound = .default
         
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
+        // Pass trigger: nil for immediate delivery per Apple UserNotifications guidelines
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
