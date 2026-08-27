@@ -2,14 +2,16 @@ import SwiftUI
 
 @MainActor
 struct StockSettingsView: View {
+    @ObservedObject private var storeManager = StoreManager.shared
     @State private var platforms: [StockPlatform] = []
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @State private var selectedPlatformId: String? = nil
     
-    // For connection verification
+    // For connection verification and Paywall
     @State private var showingAlert = false
     @State private var alertMessage = ""
     @State private var isVerifying = false
+    @State private var showingPaywall = false
     
     var body: some View {
         NavigationStack {
@@ -67,9 +69,15 @@ struct StockSettingsView: View {
                         },
                         testConnection: { platform in
                             testConnection(platform)
+                        },
+                        onRequirePro: {
+                            showingPaywall = true
                         }
                     )
                 }
+            }
+            .sheet(isPresented: $showingPaywall) {
+                PaywallView()
             }
             .alert("Подключение".localized, isPresented: $showingAlert) {
                 Button("OK", role: .cancel) {}
@@ -150,7 +158,19 @@ struct StockSettingsView: View {
                 let serviceKey = "com.samvel.smartstock.platform.\(decoded[i].id)"
                 decoded[i].passwordHash = KeychainHelper.shared.read(for: serviceKey) ?? ""
             }
+            if !storeManager.isProUser {
+                var enabledCount = 0
+                for i in 0..<decoded.count {
+                    if decoded[i].isEnabled {
+                        enabledCount += 1
+                        if enabledCount > 2 {
+                            decoded[i].isEnabled = false
+                        }
+                    }
+                }
+            }
             self.platforms = decoded
+            savePlatforms()
         } else {
             // Prepopulate with defaults
             self.platforms = StockPlatform.defaults
@@ -173,6 +193,14 @@ struct StockSettingsView: View {
     }
     
     private func togglePlatform(_ id: String, isEnabled: Bool) {
+        if isEnabled && !storeManager.isProUser {
+            let activeCount = platforms.filter { $0.isEnabled && $0.id != id }.count
+            if activeCount >= 2 {
+                HapticHelper.notification(.warning)
+                showingPaywall = true
+                return
+            }
+        }
         if let idx = platforms.firstIndex(where: { $0.id == id }) {
             platforms[idx].isEnabled = isEnabled
             savePlatforms()
@@ -342,6 +370,7 @@ struct PlatformDetailSheet: View {
     var isVerifying: Bool
     var onSave: () -> Void
     var testConnection: (StockPlatform) -> Void
+    var onRequirePro: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var showingOAuthHelp = false
     @State private var showingStockHelper = false
@@ -363,7 +392,24 @@ struct PlatformDetailSheet: View {
                                 Text("Активен".localized)
                                     .font(.system(size: 14, weight: .medium))
                                 Spacer()
-                                Toggle("", isOn: $platform.isEnabled)
+                                Toggle("", isOn: Binding(
+                                    get: { platform.isEnabled },
+                                    set: { value in
+                                        if value && !StoreManager.shared.isProUser && !platform.isEnabled {
+                                            if let data = UserDefaults.standard.data(forKey: "stock_platforms"),
+                                               let saved = try? JSONDecoder().decode([StockPlatform].self, from: data) {
+                                                let activeCount = saved.filter { $0.isEnabled && $0.id != platform.id }.count
+                                                if activeCount >= 2 {
+                                                    HapticHelper.notification(.warning)
+                                                    onRequirePro()
+                                                    return
+                                                }
+                                            }
+                                        }
+                                        platform.isEnabled = value
+                                        onSave()
+                                    }
+                                ))
                                     .labelsHidden()
                                     .tint(Color(hex: "007AFF"))
                             }

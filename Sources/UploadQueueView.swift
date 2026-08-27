@@ -792,8 +792,11 @@ class QueueViewModel: ObservableObject {
             throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Настройки стоков не найдены"])
         }
         
-        let activePlatforms = platforms.filter { platform in
+        var activePlatforms = platforms.filter { platform in
             platform.isEnabled && photo.selectedStocks.contains(platform.name)
+        }
+        if !StoreManager.shared.isProUser && activePlatforms.count > 2 {
+            activePlatforms = Array(activePlatforms.prefix(2))
         }
         guard !activePlatforms.isEmpty else {
             throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Нет активных стоков для отправки. Включите фотостоки в настройках и отметьте их для этого фото."])
