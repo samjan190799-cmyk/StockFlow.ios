@@ -1,2 +1,19 @@
+# Xcode & Build
+build/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.xcarchive
 
-SmartStock.ipa
+# Certificates & Keys (Sensitive)
+*.p12
+*.cer
+*.pem
+*.key
+*.certSigningRequest
+*.mobileprovision
+
+# macOS & System
+.DS_Store
+*.swp
+*~
