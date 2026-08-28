@@ -13,9 +13,6 @@ extension String {
 }
 
 struct Localizer {
-    /// Рекурсивная блокировка для защиты обращения к словарям из любых потоков (Data Race & Deadlock Prevention)
-    private static let lock = NSRecursiveLock()
-    
     private static let enTranslations: [String: String] = [
         " — применится при запуске": " — will apply on restart",
         " — применится при следующей загрузке": " — will apply on next upload",
@@ -200,7 +197,6 @@ struct Localizer {
         "Запустить проверку сейчас": "Run Check Now",
         "Запущен ИИ-анализ для": "AI analysis started for",
         "Зарегистрироваться": "Register",
-        "ИИ": "AI Engines",
         "ИИ АНАЛИЗ": "AI ANALYZE",
         "ИИ Анализ": "AI Analysis",
         "ИИ для выбранных": "AI for Selected",
@@ -689,7 +685,6 @@ struct Localizer {
         "Запустить проверку сейчас": "Գործարկել ստուգումը հիմա",
         "Запущен ИИ-анализ для": "Գործարկվել է ԱԻ վերլուծություն սրա համար՝",
         "Зарегистрироваться": "Գրանցվել",
-        "ИИ": "ԱԻ Մոդելներ",
         "ИИ АНАЛИЗ": "ԱԻ ՎԵՐԼՈՒԾՈՒԹՅՈՒՆ",
         "ИИ Анализ": "ԱԻ Վերլուծություն",
         "ИИ для выбранных": "ԱԻ ընտրվածների համար",
@@ -1003,14 +998,11 @@ struct Localizer {
         "часов": "ժամ"
     ]
     
-    /// Потокобезопасный перевод строки с синхронизацией через NSLock
+    /// Потокобезопасный перевод строки через иммутабельные словари
     static func translate(_ text: String, to lang: String) -> String {
         guard lang != "Русский" && !text.isEmpty else {
             return text
         }
-        
-        lock.lock()
-        defer { lock.unlock() }
         
         let dict = (lang == "Հայերեն" || lang == "Armenian") ? hyTranslations : enTranslations
         

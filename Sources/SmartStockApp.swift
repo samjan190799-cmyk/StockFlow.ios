@@ -96,7 +96,6 @@ struct SmartStockApp: App {
                             Label("Настройки".localized, systemImage: "gearshape")
                         }
                 }
-                .id(sysLanguage)
             }
             .preferredColorScheme(colorScheme)
             .tint(Color(hex: "007AFF"))
