@@ -45,6 +45,13 @@ jobs:
           sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
           xcodebuild -version
 
+      - name: Install Apple WWDR Intermediate Certificates
+        run: |
+          for cert in AppleWWDRCAG3.cer AppleWWDRCAG4.cer AppleWWDRCAG5.cer AppleWWDRCAG6.cer AppleIncRootCertificate.cer; do
+            curl -fsSL "https://www.apple.com/certificateauthority/$cert" -o "/tmp/$cert" || true
+            sudo security add-certificates -k /Library/Keychains/System.keychain "/tmp/$cert" || true
+          done
+
       - name: Import Code Signing Certificates
         uses: apple-actions/import-codesign-certs@v3
         with:
@@ -92,19 +99,16 @@ jobs:
 
       - name: Diagnose Signing Environment
         run: |
-          echo "=== Installed Profiles ==="
-          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/" 2>/dev/null || echo "No profiles"
+          echo "=== Certificate Details (OpenSSL) ==="
+          security find-certificate -a -c "Apple Distribution" -p | openssl x509 -noout -dates -subject -issuer 2>/dev/null || echo "Could not parse cert"
 
-          echo "=== Profile UUID and Name ==="
+          echo "=== Provisioning Profile Details ==="
           security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision" 2>/dev/null \
-            | grep -E "(UUID|Name|TeamIdentifier|ExpirationDate|application-identifier)" \
-            | head -20 || echo "Could not read profile"
+            | grep -A 1 -E "(UUID|Name|TeamIdentifier|ExpirationDate|application-identifier)" \
+            | head -30 || echo "Could not read profile"
 
           echo "=== All code signing identities ==="
           security find-identity -v -p codesigning 2>/dev/null || echo "No certificates found"
-
-          echo "=== Raw certificate names ==="
-          security find-identity -v 2>/dev/null | grep -E "(Apple|iPhone|iOS|Distribution)" | head -10 || echo "None"
 
       - name: Archive App
         shell: bash
