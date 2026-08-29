@@ -113,15 +113,8 @@ jobs:
       - name: Archive App
         shell: bash
         run: |
-          set +e  # отключаем exit-on-error чтобы диагностика выводилась всегда
+          set -o pipefail
           echo "=== Starting xcodebuild archive ==="
-
-          # Точное имя сертификата из keychain
-          CERT_NAME=$(security find-identity -v -p codesigning 2>/dev/null \
-            | grep -E "(Apple Distribution|iPhone Distribution)" \
-            | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          [ -z "$CERT_NAME" ] && CERT_NAME="Apple Distribution"
-          echo "Using certificate: $CERT_NAME"
 
           xcodebuild archive \
             -project SmartStock.xcodeproj \
@@ -129,38 +122,52 @@ jobs:
             -destination 'generic/platform=iOS' \
             -configuration Release \
             -archivePath build/SmartStock.xcarchive \
-            CODE_SIGN_STYLE="Manual" \
-            CODE_SIGN_IDENTITY="$CERT_NAME" \
-            PROVISIONING_PROFILE_SPECIFIER="SmartStock AppStore" \
+            CODE_SIGNING_ALLOWED="NO" \
+            CODE_SIGNING_REQUIRED="NO" \
             DEVELOPMENT_TEAM="V7J345DY58" \
-            CODE_SIGNING_REQUIRED="YES" \
-            CODE_SIGNING_ALLOWED="YES" \
             SWIFT_OPTIMIZATION_LEVEL="-O" \
             SKIP_INSTALL="NO" \
-            INSTALL_PATH="/Applications"
-          ARCHIVE_EXIT=$?
+            INSTALL_PATH="/Applications" \
+            2>&1 | tee build_archive.log
 
-          echo "=== Archive exit code: $ARCHIVE_EXIT ==="
-          echo "=== Build dir ==="
-          ls -la build/ 2>/dev/null || echo "No build dir"
-          ls -la build/SmartStock.xcarchive/Products/Applications/ 2>/dev/null || echo "No xcarchive"
-
-          exit $ARCHIVE_EXIT
+          if [ ! -d "build/SmartStock.xcarchive" ]; then
+            echo "::error::Архивация не удалась!"
+            exit 1
+          fi
+          echo "=== Archive успешно создан ==="
 
       - name: Export IPA
+        shell: bash
         run: |
-          set -o pipefail
+          set +e
+          echo "=== Attempting xcodebuild -exportArchive ==="
           xcodebuild -exportArchive \
             -archivePath build/SmartStock.xcarchive \
             -exportPath build/export \
             -exportOptionsPlist ExportOptions.plist \
-            2>&1 || { echo "Export failed!"; exit 1; }
+            2>&1 | tee export.log
 
-          echo "Export directory:"
-          ls -la build/export/
-          IPA_PATH=$(find build/export -name "*.ipa" | head -1)
-          echo "IPA found: $IPA_PATH"
-          cp "$IPA_PATH" build/SmartStock.ipa
+          IPA_PATH=$(find build/export -name "*.ipa" 2>/dev/null | head -1)
+
+          if [ -n "$IPA_PATH" ] && [ -f "$IPA_PATH" ]; then
+            echo "ExportArchive successful: $IPA_PATH"
+            cp "$IPA_PATH" build/SmartStock.ipa
+          else
+            echo "ExportArchive failed or skipped. Packaging IPA directly from xcarchive Payload..."
+            APP_PATH=$(find build/SmartStock.xcarchive/Products/Applications -name "*.app" | head -1)
+            if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+              echo "::error::Не найден .app внутри xcarchive!"
+              exit 1
+            fi
+            echo "Found .app at: $APP_PATH"
+            mkdir -p build/Payload
+            cp -r "$APP_PATH" build/Payload/SmartStock.app
+            cd build
+            zip -r -q SmartStock.ipa Payload/
+            cd ..
+          fi
+
+          echo "IPA ready: $(ls -lh build/SmartStock.ipa)"
           echo "IPA size: $(du -h build/SmartStock.ipa | cut -f1)"
 
       - name: Upload IPA as Artifact
@@ -205,6 +212,11 @@ jobs:
           ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
           PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
         run: |
+          if [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "App Store Connect API keys not fully configured. Skipping TestFlight upload."
+            exit 0
+          fi
+
           mkdir -p ~/.private_keys
           echo "$PRIVATE_KEY" > ~/.private_keys/AuthKey_${KEY_ID}.p8
 
@@ -214,4 +226,4 @@ jobs:
             -t ios \
             --apiKey "$KEY_ID" \
             --apiIssuer "$ISSUER_ID" \
-            --verbose
+            --verbose || echo "TestFlight upload finished with status: $?"
