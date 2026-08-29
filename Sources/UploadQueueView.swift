@@ -1203,9 +1203,10 @@ class QueueViewModel: ObservableObject {
         
         if photoCopy.thumbnailData == nil, let path = photoCopy.localURLPath {
             let fileURL = URL(fileURLWithPath: path)
+            let photoId = photoCopy.id
             Task {
                 if let thumb = await ImageCacheHelper.shared.loadAndDownsample(fileURL: fileURL, maxPixelSize: 300) {
-                    if let idx = self.photos.firstIndex(where: { $0.id == photoCopy.id }) {
+                    if let idx = self.photos.firstIndex(where: { $0.id == photoId }) {
                         self.photos[idx].thumbnailData = thumb.jpegData(compressionQuality: 0.75)
                         self.savePhotosToDisk()
                     }
