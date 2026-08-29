@@ -64,7 +64,7 @@ struct AIAssistantView: View {
                 LiquidBackgroundView()
                 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 18) {
                         
                         // Header info panel
                         headerPanel
@@ -101,29 +101,29 @@ struct AIAssistantView: View {
     
     private var headerPanel: some View {
         HStack(spacing: 16) {
-            SmartStockLogoView(size: 56)
+            SmartStockLogoView(size: 58)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("SmartStock AI".localized)
+                Text("SmartStock AI Engine".localized)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.primary)
-                Text("Интеллектуальная авто-индексация фото и видео. Генерация названий, описаний и SEO-тегов для стоков.".localized)
+                Text("Мультимодальный анализ визуальных сцен, генерация коммерческих названий, описаний и SEO-тегов.".localized)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: 18, padding: 14)
+        .glassCard(cornerRadius: 20, padding: 14)
     }
     
     private var aiStatusCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Встроенный ИИ".localized)
+                    Text("Нейросетевое ядро".localized)
                         .font(.system(size: 14, weight: .bold))
-                    Text("Google Gemini Flash / Pro".localized)
+                    Text("Google Gemini Vision / Pro".localized)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -131,20 +131,20 @@ struct AIAssistantView: View {
                 Spacer()
                 
                 // Status Pill
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Circle()
-                        .fill(Color.green)
-                        .frame(width: 6, height: 6)
+                        .fill(Color(hex: "10B981"))
+                        .frame(width: 7, height: 7)
                     Text("Активен".localized)
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color.green)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color(hex: "10B981"))
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.green.opacity(0.12))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color(hex: "10B981").opacity(0.12))
                 .clipShape(Capsule())
                 .overlay(
-                    Capsule().stroke(Color.green.opacity(0.3), lineWidth: 1)
+                    Capsule().stroke(Color(hex: "10B981").opacity(0.35), lineWidth: 1)
                 )
             }
             
@@ -178,14 +178,14 @@ struct AIAssistantView: View {
                         HapticHelper.trigger(.light)
                         showPaywall = true
                     }) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 5) {
                             Image(systemName: "crown.fill")
                                 .font(.system(size: 11))
                             Text("Безлимит".localized)
                                 .font(.system(size: 11, weight: .bold))
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
                         .background(AppleTheme.primaryGradient)
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
@@ -194,7 +194,7 @@ struct AIAssistantView: View {
                 }
             }
         }
-        .glassCard(cornerRadius: 18, padding: 14)
+        .glassCard(cornerRadius: 20, padding: 14)
     }
     
     private var promptSection: some View {
@@ -214,18 +214,18 @@ struct AIAssistantView: View {
                 }) {
                     Text("Сбросить".localized)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color(hex: "7C3AED"))
+                        .foregroundStyle(Color(hex: "6366F1"))
                 }
             }
             
-            // Templates scroll (Glass Tag Ribbon)
+            // Templates scroll (Liquid Glass Tag Ribbon)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(templates) { template in
                         let isSelected = customPrompt == template.text
                         Button(action: {
                             HapticHelper.selection()
-                            withAnimation(.easeInOut(duration: 0.25)) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                                 customPrompt = template.text
                             }
                         }) {
@@ -233,16 +233,22 @@ struct AIAssistantView: View {
                                 Image(systemName: template.icon)
                                     .font(.system(size: 11))
                                 Text(template.name.localized)
-                                    .font(.system(size: 11, weight: .black))
+                                    .font(.system(size: 11, weight: .bold))
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
-                            .background(isSelected ? AppleTheme.primaryGradient : LinearGradient(colors: [Color.white.opacity(0.08)], startPoint: .top, endPoint: .bottom))
+                            .background(
+                                isSelected ? AppleTheme.primaryGradient : LinearGradient(
+                                    colors: [Color.white.opacity(0.08), Color.white.opacity(0.03)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
                             .foregroundStyle(isSelected ? .white : .primary.opacity(0.85))
                             .clipShape(Capsule())
                             .overlay(
                                 Capsule()
-                                    .stroke(isSelected ? Color.clear : Color.white.opacity(0.15), lineWidth: 1.2)
+                                    .stroke(isSelected ? Color.clear : Color.white.opacity(0.15), lineWidth: 1.0)
                             )
                         }
                         .buttonStyle(PremiumButtonStyle())
@@ -251,18 +257,18 @@ struct AIAssistantView: View {
                 .padding(.horizontal, 2)
             }
             
-            // TextEditor Card (Glass container)
+            // TextEditor Card (Liquid Glass container)
             VStack(alignment: .leading, spacing: 10) {
                 TextEditor(text: $customPrompt)
                     .font(.system(size: 12, design: .monospaced))
                     .scrollContentBackground(.hidden)
                     .padding(8)
                     .frame(height: 140)
-                    .background(Color.black.opacity(0.15))
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .background(Color.black.opacity(0.18))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1.2)
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1.0)
                     )
                 
                 Text("Промпт определяет формат возвращаемого JSON-файла с заголовком, описанием и ключевыми словами.".localized)

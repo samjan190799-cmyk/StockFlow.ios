@@ -1852,12 +1852,16 @@ struct UploadQueueView: View {
                     } label: {
                         ZStack {
                             Circle()
-                                .fill(LinearGradient(colors: [Color(hex: "7C3AED"), Color(hex: "A855F7")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .fill(AppleTheme.primaryGradient)
                                 .frame(width: 56, height: 56)
-                                .neonShadow(color: Color(hex: "7C3AED"), radius: 8)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.35), lineWidth: 1.2)
+                                )
+                                .shadow(color: Color(hex: "007AFF").opacity(0.4), radius: 10, x: 0, y: 5)
                             
                             Image(systemName: "plus")
-                                .font(.system(size: 24, weight: .bold))
+                                .font(.system(size: 22, weight: .bold))
                                 .foregroundStyle(.white)
                         }
                     }
@@ -2045,8 +2049,7 @@ struct UploadQueueView: View {
                     }
                 }
                 .padding(10)
-                .glassCard(cornerRadius: 18, padding: 8)
-                .neonShadow(color: Color(hex: "7C3AED"), radius: 10)
+                .floatingGlassBar(cornerRadius: 24)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
             }
@@ -2292,14 +2295,25 @@ struct PhotoRowView: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(colorScheme == .dark ? Color(hex: "151821") : Color.white)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(colorScheme == .dark ? Color(hex: "141620").opacity(0.95) : Color.white)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06), lineWidth: 1.0)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            colorScheme == .dark ? Color.white.opacity(0.14) : Color.white,
+                            colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.05)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.0
+                )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.25 : 0.04), radius: 8, x: 0, y: 4)
     }
     
     private func photoImage(_ photo: PhotoMetadata) -> some View {
@@ -2308,7 +2322,7 @@ struct PhotoRowView: View {
                 .frame(height: 200)
                 .frame(maxWidth: .infinity)
                 .background(Color.black.opacity(0.25))
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             
             // Статус (слева сверху)
             if photo.status == .ready {
@@ -2316,9 +2330,9 @@ struct PhotoRowView: View {
                     .font(.system(size: 9, weight: .black))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(Color(hex: "223E4A").opacity(0.85))
-                    .foregroundStyle(Color(hex: "81E6D9"))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .background(Color(hex: "10B981").opacity(0.85))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
                     .padding(12)
             } else if photo.status == .inQueue {
                 Text("В ОЧЕРЕДИ".localized)
@@ -2327,7 +2341,7 @@ struct PhotoRowView: View {
                     .padding(.vertical, 4)
                     .background(Color(hex: "007AFF").opacity(0.85))
                     .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(Capsule())
                     .padding(12)
             }
             
@@ -2336,10 +2350,9 @@ struct PhotoRowView: View {
                 HStack {
                     Spacer()
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.system(size: 22))
                         .foregroundStyle(Color(hex: "10B981"))
-                        .background(Color.black.clipShape(Circle()))
-                        .neonShadow(color: Color(hex: "10B981"), radius: 4)
+                        .background(Circle().fill(Color.black.opacity(0.6)))
                         .padding(12)
                 }
             }
@@ -2351,8 +2364,8 @@ struct PhotoRowView: View {
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.white)
-                        .padding(6)
-                        .background(Color.black.opacity(0.6).clipShape(Circle()))
+                        .padding(7)
+                        .background(Circle().fill(Color.black.opacity(0.65)))
                         .padding(12)
                 }
             }
@@ -2385,52 +2398,55 @@ struct PhotoRowView: View {
     }
     
     private func photoButtons(_ photo: PhotoMetadata) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             // Кнопка УДАЛИТЬ
             Button(action: {
                 HapticHelper.trigger(.medium)
                 viewModel.removePhoto(photo.id)
             }) {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: "trash")
+                        .font(.system(size: 10, weight: .semibold))
                     Text("Удалить".localized)
+                        .font(.system(size: 10, weight: .bold))
                 }
-                .font(.system(size: 10, weight: .bold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(Color.red.opacity(0.12))
                 .foregroundStyle(.red)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(Capsule())
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                    Capsule().stroke(Color.red.opacity(0.28), lineWidth: 1)
                 )
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(PremiumButtonStyle())
             
             // Кнопка ИИ АНАЛИЗ
             Button(action: {
                 HapticHelper.trigger(.medium)
                 viewModel.runAIForPhoto(photo.id)
             }) {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(photo.status == .aiAnalyzing ? Color.secondary : Color(hex: "A78BFA"))
+                        .foregroundStyle(photo.status == .aiAnalyzing ? Color.secondary : Color(hex: "818CF8"))
                     Text(photo.status == .aiAnalyzing ? "Анализируем...".localized : "ИИ АНАЛИЗ".localized)
+                        .font(.system(size: 10, weight: .bold))
                 }
-                .font(.system(size: 10, weight: .bold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(photo.status == .aiAnalyzing ? Color.white.opacity(0.04) : Color.white.opacity(0.08))
-                .foregroundStyle(photo.status == .aiAnalyzing ? Color.secondary : Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .background(
+                    photo.status == .aiAnalyzing
+                    ? (colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.04))
+                    : (colorScheme == .dark ? Color.white.opacity(0.09) : Color.black.opacity(0.06))
+                )
+                .foregroundStyle(photo.status == .aiAnalyzing ? Color.secondary : Color.primary)
+                .clipShape(Capsule())
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(photo.status == .aiAnalyzing ? Color.white.opacity(0.04) : Color.white.opacity(0.12), lineWidth: 1)
+                    Capsule().stroke(colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08), lineWidth: 1)
                 )
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(PremiumButtonStyle())
             .disabled(photo.status == .aiAnalyzing)
             
             // Кнопка ОТПРАВИТЬ / ОТПРАВЛЕНО
@@ -2440,22 +2456,31 @@ struct PhotoRowView: View {
                     viewModel.uploadPhoto(photo.id)
                 }
             }) {
-                HStack(spacing: 6) {
-                    Image(systemName: photo.status == .success ? "checkmark" : "paperplane")
+                HStack(spacing: 5) {
+                    Image(systemName: photo.status == .success ? "checkmark" : "paperplane.fill")
+                        .font(.system(size: 10, weight: .semibold))
                     Text(photo.status == .success ? "Отправлено".localized : "Отправить".localized)
+                        .font(.system(size: 10, weight: .bold))
                 }
-                .font(.system(size: 10, weight: .bold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(photo.status == .success ? Color.white.opacity(0.04) : Color.white.opacity(0.08))
-                .foregroundStyle(photo.status == .success ? Color.secondary : Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .background(
+                    photo.status == .success
+                    ? Color(hex: "10B981").opacity(0.12)
+                    : (colorScheme == .dark ? Color.white.opacity(0.09) : Color.black.opacity(0.06))
+                )
+                .foregroundStyle(photo.status == .success ? Color(hex: "10B981") : Color.primary)
+                .clipShape(Capsule())
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    Capsule().stroke(
+                        photo.status == .success
+                        ? Color(hex: "10B981").opacity(0.3)
+                        : (colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)),
+                        lineWidth: 1
+                    )
                 )
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(PremiumButtonStyle())
             .disabled(photo.status == .success)
             
             Spacer()
