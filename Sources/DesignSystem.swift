@@ -401,11 +401,9 @@ public struct PremiumButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
             .opacity(configuration.isPressed ? 0.88 : 1.0)
             .animation(.spring(response: 0.28, dampingFraction: 0.72), value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { oldValue, newValue in
-                if newValue {
-                    Task { @MainActor in
-                        HapticHelper.trigger(.light)
-                    }
+            .onChange(of: configuration.isPressed) { isPressed in
+                if isPressed {
+                    HapticHelper.trigger(.light)
                 }
             }
     }
