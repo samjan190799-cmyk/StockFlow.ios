@@ -51,8 +51,15 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
     var uploadProgress: Double = 0.0
     var errorMessage: String? = nil
     
+    // MARK: - Editorial Metadata (Microstock Standard)
+    var isEditorial: Bool = false
+    var editorialCity: String? = nil
+    var editorialCountry: String? = nil
+    var editorialDate: Date? = nil
+    
     enum CodingKeys: String, CodingKey {
         case id, filename, fileSize, title, keywords, description, categories, status, selectedStocks, localURLPath, localBookmarkData, thumbnailData, isVideo, uploadProgress, errorMessage
+        case isEditorial, editorialCity, editorialCountry, editorialDate
     }
     
     init(
@@ -69,7 +76,11 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         localBookmarkData: Data? = nil,
         thumbnailData: Data? = nil,
         imageData: Data? = nil,
-        isVideo: Bool = false
+        isVideo: Bool = false,
+        isEditorial: Bool = false,
+        editorialCity: String? = nil,
+        editorialCountry: String? = nil,
+        editorialDate: Date? = nil
     ) {
         self.id = id
         self.filename = filename
@@ -85,6 +96,10 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         self.thumbnailData = thumbnailData
         self.imageData = imageData
         self.isVideo = isVideo
+        self.isEditorial = isEditorial
+        self.editorialCity = editorialCity
+        self.editorialCountry = editorialCountry
+        self.editorialDate = editorialDate
     }
     
     init(from decoder: Decoder) throws {
@@ -104,6 +119,10 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         uploadProgress = (try? container.decode(Double.self, forKey: .uploadProgress)) ?? 0.0
         errorMessage = try? container.decode(String.self, forKey: .errorMessage)
         isVideo = (try? container.decode(Bool.self, forKey: .isVideo)) ?? false
+        isEditorial = (try? container.decode(Bool.self, forKey: .isEditorial)) ?? false
+        editorialCity = try? container.decode(String.self, forKey: .editorialCity)
+        editorialCountry = try? container.decode(String.self, forKey: .editorialCountry)
+        editorialDate = try? container.decode(Date.self, forKey: .editorialDate)
     }
 }
 
