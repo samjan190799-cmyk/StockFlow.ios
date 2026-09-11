@@ -74,18 +74,20 @@ public struct StockAgencyDirectory: Sendable {
                 appStoreSearchTerm: "Shutterstock Contributor",
                 stockFlowFeatures: [
                     "Пакетная скоростная выгрузка по FTPS/FTP.".localized,
-                    "Вшивание IPTC метаданных и экспорт официального Shutterstock CSV.".localized,
-                    "Подбор до 2 обязательных категорий Shutterstock.".localized,
+                    "Вшивание IPTC метаданных (Title, Description, Keywords) прямо в файл.".localized,
+                    "Авто-подбор 1-2 обязательных категорий Shutterstock по смыслу изображения.".localized,
+                    "Генерация официального Shutterstock CSV с категориями и статусом Editorial.".localized,
                     "Поддержка стандартного Editorial-формата [ГОРОД, СТРАНА — ДАТА: Описание].".localized
                 ],
                 userActionSteps: [
-                    "Откройте приложение «Shutterstock Contributor» на iPhone или перейдите на submit.shutterstock.com.".localized,
-                    "В разделе «Ожидают отправки» (To Submit) выберите загруженные файлы.".localized,
-                    "Укажите тип: Коммерческий или Редакционный (Editorial).".localized,
-                    "Прикрепите релизы моделей при необходимости и нажмите «Отправить» (Submit).".localized
+                    "ВАЖНО ПРО КАТЕГОРИИ: Протокол FTP не поддерживает передачу категорий внутри файла (Shutterstock читает по FTP только заголовок и ключевые слова).".localized,
+                    "СПОСОБ 1 (Самый быстрый для всех файлов): Нажмите меню «CSV» вверху очереди StockFlow -> скачайте «Shutterstock CSV» и на сайте submit.shutterstock.com нажмите «Upload CSV» — все категории для всех фото заполнятся автоматически!".localized,
+                    "СПОСОБ 2: Откройте приложение «Shutterstock Contributor» на iPhone и подтвердите категорию в 1 клик перед отправкой.".localized,
+                    "Прикрепите релизы моделей при наличии узнаваемых лиц и нажмите «Отправить» (Submit).".localized
                 ],
                 expertTips: [
-                    "Инспекторы Shutterstock проверяют фокус на 100% увеличении — избегайте смазанных кадров и сильного цифрового шума.".localized,
+                    "StockFlow автоматически подбирает наиболее релевантные категории Shutterstock и сохраняет их в CSV для пакетного импорта.".localized,
+                    "Инспекторы Shutterstock проверяют резкость на 100% зуме — избегайте смазанных кадров и сильного цифрового шума.".localized,
                     "Для репортажного контента используйте встроенный в StockFlow переключатель Editorial.".localized
                 ]
             )
