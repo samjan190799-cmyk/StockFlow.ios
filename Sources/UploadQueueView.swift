@@ -1392,11 +1392,6 @@ struct UploadQueueView: View {
                     } else {
                         mainScrollView
                     }
-                    
-                    // Рекламный баннер Meta Audience Network (автоматически скрыт для подписчиков PRO)
-                    MetaBannerAdView {
-                        showPaywall = true
-                    }
                 }
                 
                 plusFloatingButton
@@ -1759,64 +1754,86 @@ struct UploadQueueView: View {
                     .frame(maxWidth: .infinity)
                     .glassCard(cornerRadius: 20, padding: 24)
                     .padding(.top, 20)
+                    
+                    // Органичный баннер Meta при пустой очереди
+                    MetaBannerAdView {
+                        showPaywall = true
+                    }
+                    .padding(.top, 10)
                 } else {
                     LazyVStack(spacing: 16) {
-                        ForEach(filteredPhotos) { photo in
-                            HStack(spacing: 12) {
-                                if isSelectionMode {
-                                    Button(action: {
-                                        HapticHelper.trigger(.light)
-                                        if selectedPhotoIds.contains(photo.id) {
-                                            selectedPhotoIds.remove(photo.id)
-                                        } else {
-                                            selectedPhotoIds.insert(photo.id)
-                                        }
-                                    }) {
-                                        Image(systemName: selectedPhotoIds.contains(photo.id) ? "checkmark.circle.fill" : "circle")
-                                            .font(.system(size: 24, weight: .bold))
-                                            .foregroundStyle(selectedPhotoIds.contains(photo.id) ? Color(hex: "A855F7") : .secondary)
-                                    }
-                                    .transition(.move(edge: .leading).combined(with: .opacity))
-                                }
-                                
-                                PhotoRowView(
-                                    photo: photo,
-                                    viewModel: viewModel,
-                                    onSelect: {
-                                        if isSelectionMode {
+                        ForEach(Array(filteredPhotos.enumerated()), id: \.element.id) { index, photo in
+                            VStack(spacing: 16) {
+                                HStack(spacing: 12) {
+                                    if isSelectionMode {
+                                        Button(action: {
                                             HapticHelper.trigger(.light)
                                             if selectedPhotoIds.contains(photo.id) {
                                                 selectedPhotoIds.remove(photo.id)
                                             } else {
                                                 selectedPhotoIds.insert(photo.id)
                                             }
-                                        } else {
-                                            HapticHelper.selection()
-                                            selectedDetailPhoto = photo
+                                        }) {
+                                            Image(systemName: selectedPhotoIds.contains(photo.id) ? "checkmark.circle.fill" : "circle")
+                                                .font(.system(size: 24, weight: .bold))
+                                                .foregroundStyle(selectedPhotoIds.contains(photo.id) ? Color(hex: "A855F7") : .secondary)
                                         }
+                                        .transition(.move(edge: .leading).combined(with: .opacity))
                                     }
-                                )
-                            }
-                            .contextMenu {
-                                Button {
-                                    viewModel.runAIForPhoto(photo.id)
-                                } label: {
-                                    Label("Запустить ИИ-анализ".localized, systemImage: "sparkles")
+                                    
+                                    PhotoRowView(
+                                        photo: photo,
+                                        viewModel: viewModel,
+                                        onSelect: {
+                                            if isSelectionMode {
+                                                HapticHelper.trigger(.light)
+                                                if selectedPhotoIds.contains(photo.id) {
+                                                    selectedPhotoIds.remove(photo.id)
+                                                } else {
+                                                    selectedPhotoIds.insert(photo.id)
+                                                }
+                                            } else {
+                                                HapticHelper.selection()
+                                                selectedDetailPhoto = photo
+                                            }
+                                        }
+                                    )
                                 }
+                                .contextMenu {
+                                    Button {
+                                        viewModel.runAIForPhoto(photo.id)
+                                    } label: {
+                                        Label("Запустить ИИ-анализ".localized, systemImage: "sparkles")
+                                    }
+                                    
+                                    Button {
+                                        viewModel.uploadPhoto(photo.id)
+                                    } label: {
+                                        Label("Выгрузить на стоки".localized, systemImage: "paperplane")
+                                    }
+                                    
+                                    Button(role: .destructive) {
+                                        viewModel.removePhoto(photo.id)
+                                    } label: {
+                                        Label("Удалить".localized, systemImage: "trash")
+                                    }
+                                }
+                                .applyScrollTransitionIfAvailable()
                                 
-                                Button {
-                                    viewModel.uploadPhoto(photo.id)
-                                } label: {
-                                    Label("Выгрузить на стоки".localized, systemImage: "paperplane")
-                                }
-                                
-                                Button(role: .destructive) {
-                                    viewModel.removePhoto(photo.id)
-                                } label: {
-                                    Label("Удалить".localized, systemImage: "trash")
+                                // Органичный In-Feed баннер Meta Audience Network после 2-го снимка
+                                if index == 1 {
+                                    MetaBannerAdView {
+                                        showPaywall = true
+                                    }
                                 }
                             }
-                            .applyScrollTransitionIfAvailable()
+                        }
+                        
+                        // Если в очереди только 1 фото, показываем баннер под ним
+                        if filteredPhotos.count == 1 {
+                            MetaBannerAdView {
+                                showPaywall = true
+                            }
                         }
                     }
                 }
@@ -2329,26 +2346,37 @@ struct PhotoRowView: View {
                 .background(Color.black.opacity(0.25))
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             
-            // Статус (слева сверху)
-            if photo.status == .ready {
-                Text("ГОТОВ".localized)
-                    .font(.system(size: 9, weight: .black))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color(hex: "10B981").opacity(0.85))
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-                    .padding(12)
-            } else if photo.status == .inQueue {
-                Text("В ОЧЕРЕДИ".localized)
-                    .font(.system(size: 9, weight: .black))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color(hex: "007AFF").opacity(0.85))
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-                    .padding(12)
+            // Статус и метка Editorial (слева сверху)
+            HStack(spacing: 6) {
+                if photo.status == .ready {
+                    Text("ГОТОВ".localized)
+                        .font(.system(size: 9, weight: .black))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color(hex: "10B981").opacity(0.85))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                } else if photo.status == .inQueue {
+                    Text("В ОЧЕРЕДИ".localized)
+                        .font(.system(size: 9, weight: .black))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color(hex: "007AFF").opacity(0.85))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                
+                if photo.isEditorial {
+                    Text("EDITORIAL")
+                        .font(.system(size: 9, weight: .black))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(hex: "8B5CF6").opacity(0.9))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
             }
+            .padding(12)
             
             // Иконка УСПЕШНО (справа сверху)
             if photo.status == .success {
