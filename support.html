@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Центр поддержки и контакты | SmartStock</title>
+    <style>
+        :root {
+            --bg-color: #0d0e14;
+            --card-bg: rgba(255, 255, 255, 0.04);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.65;
+            padding: 24px 16px;
+            margin: 0;
+        }
+        .container {
+            max-width: 820px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 36px 28px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            backdrop-filter: blur(20px);
+        }
+        .lang-switch {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+        .lang-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .lang-btn.active {
+            background: var(--accent-purple);
+            border-color: var(--accent-purple);
+        }
+        h1 {
+            font-size: 26px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #a855f7, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+        .contact-box {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(59, 130, 246, 0.15));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 16px;
+            padding: 24px;
+            margin: 24px 0;
+            text-align: center;
+        }
+        .contact-box h2 {
+            margin-top: 0;
+            font-size: 20px;
+            color: #ffffff;
+            border: none;
+            padding-bottom: 0;
+        }
+        .contact-email {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+            margin: 12px 0;
+        }
+        .btn-email {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+            color: #ffffff;
+            font-weight: 600;
+            padding: 10px 24px;
+            border-radius: 12px;
+            text-decoration: none;
+            box-shadow: 0 4px 14px rgba(139, 92, 246, 0.4);
+            margin-top: 8px;
+            transition: transform 0.15s;
+        }
+        .btn-email:hover {
+            transform: scale(1.02);
+            text-decoration: none;
+        }
+        h2 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-top: 28px;
+            color: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+        .faq-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 14px;
+        }
+        .faq-question {
+            font-size: 15px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 6px;
+        }
+        .faq-answer {
+            font-size: 14px;
+            color: #d1d5db;
+            margin: 0;
+        }
+        a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .footer {
+            margin-top: 36px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="lang-switch">
+            <button class="lang-btn active" onclick="switchLang('ru')">Русский</button>
+            <button class="lang-btn" onclick="switchLang('en')">English</button>
+            <a href="privacy.html" class="lang-btn" style="margin-left: auto;">Политика конфиденциальности →</a>
+        </div>
+
+        <!-- РУССКАЯ ВЕРСИЯ -->
+        <div id="content-ru">
+            <h1>Служба поддержки SmartStock</h1>
+            <div class="subtitle">Официальный центр помощи и контакты разработчика (Apple Guideline 1.5.0)</div>
+
+            <div class="contact-box">
+                <h2>Нужна помощь или есть предложения?</h2>
+                <p style="color: #e5e7eb; font-size: 14px; margin-bottom: 8px;">Мы отвечаем на все обращения пользователей в течение 24 часов.</p>
+                <div class="contact-email">samjan190799@gmail.com</div>
+                <a href="mailto:samjan190799@gmail.com?subject=SmartStock%20Support" class="btn-email">Написать в поддержку</a>
+            </div>
+
+            <h2>Часто задаваемые вопросы (FAQ)</h2>
+
+            <div class="faq-item">
+                <div class="faq-question">1. Как настроить загрузку на Shutterstock, Adobe Stock и другие агентства?</div>
+                <p class="faq-answer">Все стоки используют защищенный протокол FTP/FTPS/SFTP. В кабинете автора соответствующего фотобанка перейдите в раздел <em>Настройки учетной записи &gt; Настройки FTP</em>. Скопируйте ваш логин автора и сгенерированный FTP-пароль, затем вставьте их во вкладке <em>«Агентства»</em> в приложении SmartStock.</p>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">2. Как работает бесплатный пробный период 3 дня?</div>
+                <p class="faq-answer">При оформлении годовой подписки первые 3 дня предоставляются бесплатно. Вы можете протестировать все возможности SmartStock PRO без списания средств. Если вы решите отменить подписку, вы можете сделать это в любое время в настройках Apple ID не менее чем за 24 часа до окончания пробного периода — в таком случае списание средств не произойдет.</p>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">3. Как отменить или изменить подписку?</div>
+                <p class="faq-answer">Управление всеми подписками осуществляется компанией Apple. Чтобы отменить автопродление, откройте <strong>Настройки iOS &gt; Нажмите на ваше имя (Apple ID) &gt; Подписки &gt; SmartStock &gt; Отменить подписку</strong>.</p>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">4. Как восстановить покупки на новом iPhone или iPad?</div>
+                <p class="faq-answer">Откройте экран подписки в приложении и нажмите кнопку <strong>«Восстановить»</strong> в правом верхнем углу. Ваша покупка или активная подписка будет автоматически восстановлена через Apple StoreKit без повторной оплаты.</p>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">5. Безопасны ли мои пароли от стоков?</div>
+                <p class="faq-answer">Да, абсолютно. Все логины и пароли сохраняются исключительно в защищенном системном хранилище Apple Keychain на вашем iPhone/iPad. Приложение соединяется со стоками напрямую без каких-либо промежуточных серверов.</p>
+            </div>
+
+            <div class="footer">
+                &copy; 2026 SmartStock. Разработчик: Samvel. Все права защищены.<br>
+                <a href="privacy.html">Политика конфиденциальности</a> • <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank">Лицензионное соглашение (EULA)</a>
+            </div>
+        </div>
+
+        <!-- ENGLISH VERSION -->
+        <div id="content-en" class="hidden">
+            <h1>SmartStock Customer Support</h1>
+            <div class="subtitle">Official Help Center &amp; Developer Contact (Apple Guideline 1.5.0)</div>
+
+            <div class="contact-box">
+                <h2>Need assistance or have feedback?</h2>
+                <p style="color: #e5e7eb; font-size: 14px; margin-bottom: 8px;">We respond to all user inquiries within 24 hours.</p>
+                <div class="contact-email">samjan190799@gmail.com</div>
+                <a href="mailto:samjan190799@gmail.com?subject=SmartStock%20Support" class="btn-email">Contact Support</a>
+            </div>
+
+            <h2>Frequently Asked Questions (FAQ)</h2>
+
+            <div class="faq-item">
+                <div class="faq-question">1. How do I configure uploads for Shutterstock, Adobe Stock, etc.?</div>
+                <p class="faq-answer">Microstock agencies provide dedicated contributor FTP credentials. Visit your contributor dashboard (e.g. submit.shutterstock.com or contributor.adobestock.com) under <em>Account Settings &gt; FTP Settings</em>. Copy your FTP username and password, then paste them into SmartStock under the <em>Agencies</em> tab.</p>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">2. How does the 3-day free trial work?</div>
+                <p class="faq-answer">The 3-day free trial gives you unrestricted access to SmartStock PRO features. You will not be charged if you cancel at least 24 hours before the trial ends via your Apple ID subscription settings.</p>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">3. How do I cancel or manage my subscription?</div>
+                <p class="faq-answer">All subscriptions are managed directly by Apple. Go to <strong>iOS Settings &gt; [Your Apple ID Name] &gt; Subscriptions &gt; SmartStock &gt; Cancel Subscription</strong>.</p>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">4. How do I restore purchases on a new device?</div>
+                <p class="faq-answer">Open the Paywall screen in the app and tap <strong>"Restore"</strong> in the top right corner. Your purchase will be verified with Apple StoreKit and restored automatically without any extra charges.</p>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">5. Are my FTP credentials secure?</div>
+                <p class="faq-answer">Yes. All passwords are encrypted in the local Apple Keychain on your device. Uploads connect directly to agency FTP/FTPS servers without passing through third-party intermediaries.</p>
+            </div>
+
+            <div class="footer">
+                &copy; 2026 SmartStock. Developer: Samvel. All rights reserved.<br>
+                <a href="privacy.html">Privacy Policy</a> • <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank">Terms of Use (EULA)</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchLang(lang) {
+            document.getElementById('content-ru').classList.toggle('hidden', lang !== 'ru');
+            document.getElementById('content-en').classList.toggle('hidden', lang !== 'en');
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.toLowerCase().includes(lang === 'ru' ? 'рус' : 'eng'));
+            });
+        }
+    </script>
+</body>
+</html>
