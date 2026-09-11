@@ -13,7 +13,8 @@ public final class StoreManager: ObservableObject {
         public static let yearly = "com.samvel.smartstock.yearly"
         public static let lifetime = "com.samvel.smartstock.lifetime"
         
-        public static let all: [String] = [yearly, monthly, lifetime]
+        // Актуальные тарифы для продажи (только автопродлеваемые подписки)
+        public static let all: [String] = [yearly, monthly]
     }
     
     @Published public private(set) var products: [Product] = []
@@ -46,11 +47,9 @@ public final class StoreManager: ObservableObject {
         
         do {
             let storeProducts = try await Product.products(for: ProductID.all)
-            // Сортируем: Годовой (рекомендуемый), Месячный, Пожизненный
+            // Сортируем: Годовой (рекомендуемый), Месячный
             self.products = storeProducts.sorted { p1, p2 in
                 if p1.id == ProductID.yearly { return true }
-                if p2.id == ProductID.yearly { return false }
-                if p1.id == ProductID.monthly { return true }
                 return false
             }
             self.isLoading = false
