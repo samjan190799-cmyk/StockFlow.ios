@@ -46,6 +46,12 @@ struct SystemSettingsView: View {
     @State private var savedToastMessage = ""
     @State private var showGoogleHelpSheet = false
     
+    // Секретный жест для тестировщиков (5 быстрых тапов по версии)
+    @State private var versionTapCount: Int = 0
+    @State private var lastTapTime: Date = Date.distantPast
+    @State private var showTesterPanel: Bool = StoreManager.shared.isTesterOverrideActive
+    @State private var testerProEnabled: Bool = UserDefaults.standard.bool(forKey: "debug_tester_pro_mock_value")
+    
     var body: some View {
         NavigationStack {
             mainContent
@@ -114,6 +120,9 @@ struct SystemSettingsView: View {
                     supportSection
                     disclaimerSection
                     saveButtonSection
+                    if showTesterPanel {
+                        testerDebugSection
+                    }
                     versionFooterSection
                 }
                 .padding()
@@ -596,9 +605,123 @@ struct SystemSettingsView: View {
             Text("SmartStock v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7") (Сборка \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "8"))")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    handleVersionTap()
+                }
             Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+    }
+
+    private func handleVersionTap() {
+        let now = Date()
+        if now.timeIntervalSince(lastTapTime) > 1.5 {
+            versionTapCount = 1
+        } else {
+            versionTapCount += 1
+        }
+        lastTapTime = now
+
+        if versionTapCount >= 5 {
+            versionTapCount = 0
+            HapticHelper.notification(.warning)
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                showTesterPanel.toggle()
+                testerProEnabled = storeManager.isProUser
+            }
+            if showTesterPanel {
+                showToast("Режим тестирования активирован".localized)
+            } else {
+                showToast("Режим тестирования скрыт".localized)
+            }
+        } else {
+            HapticHelper.trigger(.light)
+        }
+    }
+
+    @ViewBuilder
+    private var testerDebugSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "ladybug.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.orange)
+                Text("Режим тестирования (QA)".localized)
+                    .font(.system(size: 13, weight: .black))
+                    .foregroundStyle(.orange)
+                
+                Spacer()
+                
+                Text("TESTER OVERRIDE")
+                    .font(.system(size: 8, weight: .black))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.15))
+                    .foregroundStyle(.orange)
+                    .clipShape(Capsule())
+            }
+            
+            Text("Скрытая панель для тестировщиков. Позволяет проверять функции без реальной покупки в Sandbox.".localized)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            
+            Toggle(isOn: Binding(
+                get: { self.testerProEnabled },
+                set: { newValue in
+                    self.testerProEnabled = newValue
+                    storeManager.setTesterProOverride(active: true, isPro: newValue)
+                    HapticHelper.trigger(.medium)
+                    showToast(newValue ? "SmartStock PRO активирован (Тест)".localized : "SmartStock PRO выключен (Тест)".localized)
+                }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Эмуляция SmartStock PRO".localized)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.primary)
+                    Text(testerProEnabled ? "Статус: PRO активен (безлимитные стоки, нет рекламы)".localized : "Статус: Базовый тариф (лимит 2 стока, реклама)".localized)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .tint(AppleTheme.accent)
+            
+            Divider().background(Color.white.opacity(0.1))
+            
+            Button(action: {
+                HapticHelper.trigger(.medium)
+                storeManager.setTesterProOverride(active: false, isPro: false)
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    showTesterPanel = false
+                    testerProEnabled = storeManager.isProUser
+                }
+                showToast("Тестовый режим отключён, восстановлен реальный StoreKit".localized)
+            }) {
+                HStack {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 11, weight: .bold))
+                    Text("Сбросить на реальный StoreKit".localized)
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(hex: "1F1A24").opacity(0.85))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.orange.opacity(0.4), lineWidth: 1)
+        )
+        .transition(.asymmetric(insertion: .scale(scale: 0.95).combined(with: .opacity), removal: .opacity))
     }
 
     @ViewBuilder
