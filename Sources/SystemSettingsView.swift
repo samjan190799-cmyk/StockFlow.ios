@@ -685,7 +685,7 @@ struct SystemSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .tint(AppleTheme.accent)
+            .tint(.orange)
             
             Divider().background(Color.white.opacity(0.1))
             
