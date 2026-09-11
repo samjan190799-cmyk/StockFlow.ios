@@ -183,6 +183,8 @@ struct AIMetadataView: View {
             .disabled(currentIndex == photos.count - 1)
             .opacity(currentIndex == photos.count - 1 ? 0.3 : 1.0)
         }
+    }
+
     // MARK: - Content Type Selector (Commercial vs Editorial)
     private var contentTypeSelector: some View {
         VStack(alignment: .leading, spacing: 10) {
