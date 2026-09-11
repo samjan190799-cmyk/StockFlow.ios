@@ -23,9 +23,15 @@ public final class StoreManager: ObservableObject {
     @Published public var isLoading: Bool = false
     @Published public var errorMessage: String? = nil
     
+    // Режим эмуляции PRO для тестировщиков (активируется только секретным жестом)
+    @Published public private(set) var isTesterOverrideActive: Bool = UserDefaults.standard.bool(forKey: "debug_tester_pro_override_active")
+    
     private var updateListenerTask: Task<Void, Error>? = nil
     
     private init() {
+        self.isTesterOverrideActive = UserDefaults.standard.bool(forKey: "debug_tester_pro_override_active")
+        updateEffectiveProStatus()
+        
         // Начинаем слушать обновления транзакций Apple в реальном времени
         updateListenerTask = listenForTransactions()
         
@@ -142,7 +148,25 @@ public final class StoreManager: ObservableObject {
         }
         
         self.purchasedProductIDs = activePurchases
-        self.isProUser = !activePurchases.isEmpty
+        updateEffectiveProStatus()
+    }
+    
+    // MARK: - Управление режимом тестирования (QA / Dev)
+    
+    /// Установка эмуляции статуса PRO для тестировщиков (включается только секретным жестом)
+    public func setTesterProOverride(active: Bool, isPro: Bool) {
+        UserDefaults.standard.set(active, forKey: "debug_tester_pro_override_active")
+        UserDefaults.standard.set(isPro, forKey: "debug_tester_pro_mock_value")
+        self.isTesterOverrideActive = active
+        updateEffectiveProStatus()
+    }
+    
+    private func updateEffectiveProStatus() {
+        if UserDefaults.standard.bool(forKey: "debug_tester_pro_override_active") {
+            self.isProUser = UserDefaults.standard.bool(forKey: "debug_tester_pro_mock_value")
+        } else {
+            self.isProUser = !purchasedProductIDs.isEmpty
+        }
     }
     
     // MARK: - Слушатель транзакций
