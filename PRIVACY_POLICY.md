@@ -31,7 +31,10 @@ SmartStock does not knowingly collect or solicit any personal information from c
 
 ---
 
-## 4. Contact Us & Support
-If you have any questions or suggestions about our Privacy Policy or need support with SmartStock, please reach out to us at:
-- **Repository & Support:** [https://github.com/samjan190799-cmyk/StockFlow.ios](https://github.com/samjan190799-cmyk/StockFlow.ios)
-- **Issues:** [https://github.com/samjan190799-cmyk/StockFlow.ios/issues](https://github.com/samjan190799-cmyk/StockFlow.ios/issues)
+## 4. Contact Us & Support (Guideline 1.5.0)
+If you have any questions, feedback, or need assistance with SmartStock, please contact us directly:
+- **Developer & Support Email:** [samjan190799@gmail.com](mailto:samjan190799@gmail.com)
+- **Support & Knowledge Base URL:** [https://samjan190799-cmyk.github.io/StockFlow.ios/support.html](https://samjan190799-cmyk.github.io/StockFlow.ios/support.html)
+- **Privacy Policy Web URL:** [https://samjan190799-cmyk.github.io/StockFlow.ios/privacy.html](https://samjan190799-cmyk.github.io/StockFlow.ios/privacy.html)
+- **Standard Apple EULA:** [https://www.apple.com/legal/internet-services/itunes/dev/stdeula/](https://www.apple.com/legal/internet-services/itunes/dev/stdeula/)
+- **Repository:** [https://github.com/samjan190799-cmyk/StockFlow.ios](https://github.com/samjan190799-cmyk/StockFlow.ios)
