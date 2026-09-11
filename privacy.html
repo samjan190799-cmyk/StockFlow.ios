@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Политика конфиденциальности | SmartStock</title>
+    <style>
+        :root {
+            --bg-color: #0d0e14;
+            --card-bg: rgba(255, 255, 255, 0.04);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.65;
+            padding: 24px 16px;
+            margin: 0;
+        }
+        .container {
+            max-width: 820px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 36px 28px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            backdrop-filter: blur(20px);
+        }
+        .lang-switch {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+        .lang-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .lang-btn.active {
+            background: var(--accent-purple);
+            border-color: var(--accent-purple);
+        }
+        h1 {
+            font-size: 26px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #a855f7, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .updated {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+        h2 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-top: 28px;
+            color: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+        p, li {
+            color: #d1d5db;
+            font-size: 14.5px;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+        .footer {
+            margin-top: 36px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="lang-switch">
+            <button class="lang-btn active" onclick="switchLang('ru')">Русский</button>
+            <button class="lang-btn" onclick="switchLang('en')">English</button>
+            <a href="support.html" class="lang-btn" style="margin-left: auto;">Поддержка / Support →</a>
+        </div>
+
+        <!-- РУССКАЯ ВЕРСИЯ -->
+        <div id="content-ru">
+            <h1>Политика конфиденциальности SmartStock</h1>
+            <div class="updated">Дата вступления в силу: 11 сентября 2026 г.</div>
+
+            <p>SmartStock («мы», «наш» или «Приложение») создано как независимый профессиональный инструмент для микростоковых авторов, фотографов и видеографов. Настоящая Политика конфиденциальности объясняет, как мы обрабатываем данные при использовании нашего приложения для iOS.</p>
+
+            <h2>1. Локальная обработка данных и отсутствие внешних серверов</h2>
+            <p>Мы придерживаемся принципа максимальной конфиденциальности и локальной безопасности:</p>
+            <ul>
+                <li><strong>Медиафайлы:</strong> Ваши исходные фото и видео обрабатываются локально на вашем устройстве iOS. У нас нет собственных серверов, на которые загружались бы ваши файлы.</li>
+                <li><strong>Учетные данные фотобанков (FTP/FTPS/SFTP):</strong> Ваши логины и пароли от микростоков (Shutterstock, Adobe Stock, Getty Images и др.) сохраняются исключительно в зашифрованном системном хранилище <strong>Apple Keychain</strong>. Соединение устанавливается напрямую между вашим устройством и серверами стоков по защищенным протоколам.</li>
+                <li><strong>Метаданные (названия, описания, ключевые слова):</strong> Генерируются и сохраняются локально на вашем устройстве.</li>
+            </ul>
+
+            <h2>2. Доступ к галерее фото и Google Photos / Drive</h2>
+            <ul>
+                <li><strong>Фотопленка iOS:</strong> Приложение запрашивает разрешение на доступ к фотопленке только для того, чтобы вы могли выбирать файлы для загрузки на стоки или локального экспорта.</li>
+                <li><strong>Google Photos и Google Диск:</strong> Интеграция с сервисами Google работает через официальный защищенный OAuth 2.0. Токены сохраняются в Apple Keychain. Приложение использует доступ исключительно для чтения выбранных вами медиафайлов и не передает данные третьим лицам.</li>
+            </ul>
+
+            <h2>3. Интеграции искусственного интеллекта (AI)</h2>
+            <p>При использовании функции генерации метаданных с помощью ИИ (Google Gemini API, OpenAI, Claude) запрос передается напрямую с вашего устройства в API провайдера. Ваши персональные данные (Apple ID, email, геопозиция) никогда не включаются в эти запросы.</p>
+
+            <h2>4. Встроенные покупки и подписки (Apple StoreKit 2)</h2>
+            <p>Все финансовые транзакции, оформление подписки SmartStock PRO и обработка платежей выполняются непосредственно корпорацией <strong>Apple</strong> через защищенную систему StoreKit 2. Мы не имеем доступа к номерам ваших банковских карт или платежным реквизитам.</p>
+            <p>Управление подпиской, ее отмена и изменение тарифа производятся пользователем в любое время в стандартных системных настройках Apple ID.</p>
+
+            <h2>5. Контакты и поддержка разработчика (Guideline 1.5.0)</h2>
+            <div class="card">
+                <p>По любым вопросам, связанным с конфиденциальностью данных, работой приложения или настройкой стоков, вы можете связаться напрямую с разработчиком:</p>
+                <p><strong>Email службы поддержки:</strong> <a href="mailto:samjan190799@gmail.com?subject=SmartStock%20Support">samjan190799@gmail.com</a></p>
+                <p><strong>Страница поддержки:</strong> <a href="support.html">https://samjan190799-cmyk.github.io/StockFlow.ios/support.html</a></p>
+                <p><strong>Лицензионное соглашение (EULA):</strong> <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank">Стандартные условия использования Apple EULA</a></p>
+            </div>
+
+            <div class="footer">
+                &copy; 2026 SmartStock. Все права защищены.
+            </div>
+        </div>
+
+        <!-- ENGLISH VERSION -->
+        <div id="content-en" class="hidden">
+            <h1>SmartStock Privacy Policy</h1>
+            <div class="updated">Effective Date: September 11, 2026</div>
+
+            <p>SmartStock ("we", "our", or "the App") is an independent utility application designed for microstock contributors, photographers, and videographers. This Privacy Policy explains how your information is handled when using our iOS application.</p>
+
+            <h2>1. Local Data Processing &amp; No Intermediate Servers</h2>
+            <ul>
+                <li><strong>Media Files:</strong> Photos and videos are processed locally on your iOS device. We do not operate proprietary intermediate servers to store or relay your content.</li>
+                <li><strong>Stock Agency Credentials:</strong> Your FTP/FTPS/SFTP usernames and passwords for agencies like Shutterstock, Adobe Stock, and Getty Images are stored securely in the device's hardware-encrypted <strong>Apple Keychain</strong>. Transmissions occur directly between your device and the agency servers.</li>
+                <li><strong>Metadata:</strong> Generated titles, descriptions, and keywords remain strictly on your local device.</li>
+            </ul>
+
+            <h2>2. Photo Library &amp; Google Photos / Drive Access</h2>
+            <ul>
+                <li><strong>iOS Photo Library:</strong> Accessed exclusively to allow you to select media files for stock upload or export.</li>
+                <li><strong>Google Photos &amp; Drive:</strong> Integrated via official Google OAuth 2.0 protocols. Access is strictly scoped to allow importing media files you choose.</li>
+            </ul>
+
+            <h2>3. AI Processing Integrations</h2>
+            <p>When using AI keywording (Gemini, OpenAI, Claude), media thumbnails and prompt queries are dispatched directly from your iOS device to the AI provider's API. No personally identifiable information (Apple ID, email, location) is transmitted.</p>
+
+            <h2>4. In-App Purchases &amp; Subscriptions (Apple StoreKit 2)</h2>
+            <p>All subscription and payment transactions are processed entirely by <strong>Apple Inc.</strong> via StoreKit 2. We never access your payment cards or financial billing records. Subscriptions may be cancelled anytime in your Apple ID account settings.</p>
+
+            <h2>5. Developer Information &amp; Support Contact (Guideline 1.5.0)</h2>
+            <div class="card">
+                <p>If you have questions regarding this Privacy Policy or require assistance, contact us directly:</p>
+                <p><strong>Support Email:</strong> <a href="mailto:samjan190799@gmail.com?subject=SmartStock%20Support">samjan190799@gmail.com</a></p>
+                <p><strong>Support Website:</strong> <a href="support.html">https://samjan190799-cmyk.github.io/StockFlow.ios/support.html</a></p>
+                <p><strong>Terms of Use (EULA):</strong> <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank">Apple Standard EULA</a></p>
+            </div>
+
+            <div class="footer">
+                &copy; 2026 SmartStock. All rights reserved.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchLang(lang) {
+            document.getElementById('content-ru').classList.toggle('hidden', lang !== 'ru');
+            document.getElementById('content-en').classList.toggle('hidden', lang !== 'en');
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.toLowerCase().includes(lang === 'ru' ? 'рус' : 'eng'));
+            });
+        }
+    </script>
+</body>
+</html>
