@@ -13,7 +13,7 @@ public struct PaywallView: View {
     @State private var isRestoring = false
     
     // Privacy & Terms URLs (Apple Guidelines requirement)
-    private let privacyPolicyURL = URL(string: "https://github.com/samjan190799-cmyk/StockFlow.ios/blob/main/PRIVACY_POLICY.md") ?? URL(fileURLWithPath: "/")
+    private let privacyPolicyURL = URL(string: "https://samjan190799-cmyk.github.io/StockFlow.ios/privacy.html") ?? URL(fileURLWithPath: "/")
     private let termsOfUseURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/") ?? URL(fileURLWithPath: "/")
     
     public init() {}
@@ -39,14 +39,17 @@ public struct PaywallView: View {
                     // Карточки выбора тарифов
                     pricingSection
                     
-                    // Большая кнопка действия
+                    // Большая кнопка действия с прозрачными условиями списания
                     actionButton
                     
-                    // Ссылки на Privacy, Terms, и условия автопродления
+                    // Ссылки на Privacy, Terms, и полный юридический дисклеймер автопродления
                     footerLegalSection
                 }
                 .padding(.horizontal, 18)
-                .padding(.bottom, 32)
+                .padding(.bottom, 64)
+            }
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: 24)
             }
             
             // Фиксированная верхняя панель (Закрыть и Восстановить покупки)
@@ -271,7 +274,7 @@ public struct PaywallView: View {
                 productID: StoreManager.ProductID.yearly,
                 badge: "ВЫГОДА 50% • 3 ДНЯ БЕСПЛАТНО".localized,
                 title: "Годовая подписка".localized,
-                price: getPriceString(for: StoreManager.ProductID.yearly, fallback: "2 990 ₽ ($19.99)"),
+                price: getFormattedPriceWithPeriod(for: StoreManager.ProductID.yearly),
                 subtitle: yearlySubtitle,
                 isPopular: true
             )
@@ -281,7 +284,7 @@ public struct PaywallView: View {
                 productID: StoreManager.ProductID.monthly,
                 badge: nil,
                 title: "Месячная подписка".localized,
-                price: getPriceString(for: StoreManager.ProductID.monthly, fallback: "399 ₽ ($3.99)"),
+                price: getFormattedPriceWithPeriod(for: StoreManager.ProductID.monthly),
                 subtitle: "Ежемесячный доступ со всеми обновлениями.".localized,
                 isPopular: false
             )
@@ -291,7 +294,7 @@ public struct PaywallView: View {
                 productID: StoreManager.ProductID.lifetime,
                 badge: "НАВСЕГДА".localized,
                 title: "Пожизненный PRO".localized,
-                price: getPriceString(for: StoreManager.ProductID.lifetime, fallback: "5 990 ₽ ($59.99)"),
+                price: getFormattedPriceWithPeriod(for: StoreManager.ProductID.lifetime),
                 subtitle: "Один платёж раз и навсегда. Без подписок.".localized,
                 isPopular: false
             )
@@ -357,8 +360,9 @@ public struct PaywallView: View {
                     
                     VStack(alignment: .trailing, spacing: 3) {
                         Text(price)
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .font(.system(size: 13.5, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
+                            .multilineTextAlignment(.trailing)
                         
                         ZStack {
                             Circle()
@@ -389,76 +393,173 @@ public struct PaywallView: View {
     }
     
     private var actionButton: some View {
-        Button(action: {
-            HapticHelper.trigger(.medium)
-            makePurchase()
-        }) {
-            HStack(spacing: 8) {
-                if storeManager.isLoading {
-                    ProgressView()
-                        .tint(.white)
-                    Text("Загрузка...".localized)
-                        .font(.system(size: 15, weight: .bold))
-                } else {
-                    if #available(iOS 17.0, *) {
-                        Image(systemName: "sparkles")
+        VStack(spacing: 8) {
+            Button(action: {
+                HapticHelper.trigger(.medium)
+                makePurchase()
+            }) {
+                HStack(spacing: 8) {
+                    if storeManager.isLoading {
+                        ProgressView()
+                            .tint(.white)
+                        Text("Загрузка...".localized)
                             .font(.system(size: 15, weight: .bold))
-                            .symbolEffect(.bounce, value: selectedProductID)
                     } else {
-                        Image(systemName: "sparkles")
+                        if #available(iOS 17.0, *) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 15, weight: .bold))
+                                .symbolEffect(.bounce, value: selectedProductID)
+                        } else {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 15, weight: .bold))
+                        }
+                        
+                        Text(actionButtonTitle)
                             .font(.system(size: 15, weight: .bold))
                     }
-                    
-                    Text(selectedProductID == StoreManager.ProductID.yearly ? "Попробовать 3 дня бесплатно".localized : "Продолжить с SmartStock PRO".localized)
-                        .font(.system(size: 15, weight: .bold))
                 }
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(
-                LinearGradient(
-                    colors: [Color(hex: "8B5CF6"), Color(hex: "3B82F6")],
-                    startPoint: .leading,
-                    endPoint: .trailing
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(
+                    LinearGradient(
+                        colors: [Color(hex: "8B5CF6"), Color(hex: "3B82F6")],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .stroke(Color.white.opacity(0.25), lineWidth: 1)
-            )
-            .shadow(color: Color.purple.opacity(0.4), radius: 10, y: 4)
+                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                )
+                .shadow(color: Color.purple.opacity(0.4), radius: 10, y: 4)
+            }
+            .buttonStyle(PremiumButtonStyle())
+            .disabled(storeManager.isLoading)
+            
+            // Прозрачные условия списания по требованиям Apple Guideline 3.1.2
+            Text(trialTermsClarification)
+                .font(.system(size: 11, weight: .medium))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.82))
+                .padding(.horizontal, 10)
         }
-        .buttonStyle(PremiumButtonStyle())
-        .disabled(storeManager.isLoading)
         .padding(.top, 4)
     }
     
+    private var actionButtonTitle: String {
+        switch selectedProductID {
+        case StoreManager.ProductID.yearly:
+            return "Попробовать 3 дня бесплатно".localized
+        case StoreManager.ProductID.monthly:
+            let price = getPriceString(for: StoreManager.ProductID.monthly, fallback: "$3.99")
+            return "\("Подписаться за".localized) \(price) / \("мес.".localized)"
+        case StoreManager.ProductID.lifetime:
+            let price = getPriceString(for: StoreManager.ProductID.lifetime, fallback: "$59.99")
+            return "\("Купить навсегда за".localized) \(price)"
+        default:
+            return "Продолжить с SmartStock PRO".localized
+        }
+    }
+    
+    private var trialTermsClarification: String {
+        let yearlyPrice = getPriceString(for: StoreManager.ProductID.yearly, fallback: "$19.99")
+        let monthlyPrice = getPriceString(for: StoreManager.ProductID.monthly, fallback: "$3.99")
+        let lifetimePrice = getPriceString(for: StoreManager.ProductID.lifetime, fallback: "$59.99")
+        
+        switch selectedProductID {
+        case StoreManager.ProductID.yearly:
+            return "\("3 дня бесплатно, затем".localized) \(yearlyPrice) \("в год. Отмена в любой момент в настройках Apple ID.".localized)"
+        case StoreManager.ProductID.monthly:
+            return "\("Списание".localized) \(monthlyPrice) \("каждый месяц. Отмена в любое время в настройках Apple ID.".localized)"
+        case StoreManager.ProductID.lifetime:
+            return "\("Единоразовый платёж".localized) \(lifetimePrice) \("раз и навсегда. Без подписок и автопродлений.".localized)"
+        default:
+            return ""
+        }
+    }
+    
+    /// Полный официальный блок условий подписки и автопродления (Apple Guideline 3.1.2)
     private var footerLegalSection: some View {
-        VStack(spacing: 8) {
-            Text("Подписка продлевается автоматически, пока не будет отменена в настройках Apple ID не менее чем за 24 часа до окончания текущего периода.".localized)
-                .font(.system(size: 10))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.55))
+        VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Условия автопродления подписки:".localized)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.85))
+                
+                Text("• Оплата будет списана с учетной записи Apple ID при подтверждении покупки.".localized)
+                Text("• Подписка продлевается автоматически, если автопродление не отключено не менее чем за 24 часа до окончания текущего периода.".localized)
+                Text("• Плата за продление будет взиматься в течение 24 часов до окончания текущего расчетного периода с указанием стоимости.".localized)
+                Text("• Управлять подпиской и отключить автопродление можно в настройках учетной записи Apple ID в любое время после покупки.".localized)
+                Text("• Любая неиспользованная часть бесплатного пробного периода аннулируется при приобретении подписки.".localized)
+            }
+            .font(.system(size: 9.5))
+            .foregroundStyle(.white.opacity(0.6))
+            .lineSpacing(2.5)
+            .padding(12)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
             
-            HStack(spacing: 16) {
+            // Крупные, высококонтрастные и доступные ссылки
+            HStack(spacing: 18) {
                 Link("Условия использования (EULA)".localized, destination: termsOfUseURL)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color(hex: "60A5FA"))
+                    .frame(minHeight: 32)
                 
                 Text("•")
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.white.opacity(0.3))
                 
                 Link("Политика конфиденциальности".localized, destination: privacyPolicyURL)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color(hex: "60A5FA"))
+                    .frame(minHeight: 32)
             }
+            .padding(.top, 2)
+            
+            Button(action: {
+                restorePurchases()
+            }) {
+                Text("Восстановить покупки".localized)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .underline()
+                    .frame(minHeight: 32)
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.top, 2)
+        .padding(.top, 4)
     }
     
     // MARK: - Actions
+    
+    private func getFormattedPriceWithPeriod(for productID: String) -> String {
+        let rawPrice = getPriceString(for: productID, fallback: fallbackPrice(for: productID))
+        switch productID {
+        case StoreManager.ProductID.yearly:
+            return "\(rawPrice) / \("год".localized)"
+        case StoreManager.ProductID.monthly:
+            return "\(rawPrice) / \("мес.".localized)"
+        case StoreManager.ProductID.lifetime:
+            return "\(rawPrice) \("разово".localized)"
+        default:
+            return rawPrice
+        }
+    }
+    
+    private func fallbackPrice(for productID: String) -> String {
+        switch productID {
+        case StoreManager.ProductID.yearly: return "$19.99"
+        case StoreManager.ProductID.monthly: return "$3.99"
+        case StoreManager.ProductID.lifetime: return "$59.99"
+        default: return ""
+        }
+    }
     
     private func getPriceString(for productID: String, fallback: String) -> String {
         if let product = storeManager.products.first(where: { $0.id == productID }) {
