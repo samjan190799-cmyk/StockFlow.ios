@@ -387,7 +387,10 @@ class QueueViewModel: ObservableObject {
                     self.photos[index].title = metadata.title
                     self.photos[index].keywords = metadata.keywords
                     self.photos[index].description = metadata.description
-                    self.photos[index].categories = metadata.categories ?? []
+                    let aiCats = metadata.categories ?? []
+                    self.photos[index].categories = aiCats.isEmpty
+                        ? ShutterstockCategoryMatcher.match(title: metadata.title, description: metadata.description, keywords: metadata.keywords)
+                        : aiCats
                     self.photos[index].status = .ready
                     self.savePhotosToDisk()
                     self.triggerToast("ИИ успешно заполнил метаданные для".localized + " \(photo.filename)!")
@@ -450,7 +453,10 @@ class QueueViewModel: ObservableObject {
                         self.photos[index].title = metadata.title
                         self.photos[index].keywords = metadata.keywords
                         self.photos[index].description = metadata.description
-                        self.photos[index].categories = metadata.categories ?? []
+                        let aiCats = metadata.categories ?? []
+                        self.photos[index].categories = aiCats.isEmpty
+                            ? ShutterstockCategoryMatcher.match(title: metadata.title, description: metadata.description, keywords: metadata.keywords)
+                            : aiCats
                         self.photos[index].status = .ready
                         self.savePhotosToDisk()
                         processedCount += 1
@@ -728,7 +734,10 @@ class QueueViewModel: ObservableObject {
                             self.photos[index].title = metadata.title
                             self.photos[index].keywords = metadata.keywords
                             self.photos[index].description = metadata.description
-                            self.photos[index].categories = metadata.categories ?? []
+                            let aiCats = metadata.categories ?? []
+                            self.photos[index].categories = aiCats.isEmpty
+                                ? ShutterstockCategoryMatcher.match(title: metadata.title, description: metadata.description, keywords: metadata.keywords)
+                                : aiCats
                             self.photos[index].status = .ready
                             self.savePhotosToDisk()
                         }
@@ -1284,10 +1293,14 @@ class QueueViewModel: ObservableObject {
         var csv = "Filename,Description,Keywords,Categories,Illustration,Mature Content,Editorial\n"
         for photo in photosForExport(forIds: forIds) {
             let fn = escape(photo.filename)
-            let desc = escape(photo.description)
+            let desc = escape(photo.description.isEmpty ? photo.title : photo.description)
             let kw = escape(photo.keywords.prefix(50).joined(separator: ", "))
-            let cats = escape(photo.categories.prefix(2).joined(separator: ", "))
-            csv += "\(fn),\(desc),\(kw),\(cats),No,No,No\n"
+            let catsList = photo.categories.isEmpty
+                ? ShutterstockCategoryMatcher.match(title: photo.title, description: photo.description, keywords: photo.keywords)
+                : photo.categories
+            let cats = escape(catsList.prefix(2).joined(separator: ", "))
+            let editorialFlag = photo.isEditorial ? "Yes" : "No"
+            csv += "\(fn),\(desc),\(kw),\(cats),No,No,\(editorialFlag)\n"
         }
         return csv
     }
