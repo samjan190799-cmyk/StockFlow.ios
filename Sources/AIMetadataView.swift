@@ -723,7 +723,10 @@ struct AIMetadataView: View {
                 self.photos[curIdx].title = result.title
                 self.photos[curIdx].description = result.description
                 self.photos[curIdx].keywords = result.keywords
-                self.photos[curIdx].categories = result.categories ?? []
+                let cats = result.categories ?? []
+                self.photos[curIdx].categories = cats.isEmpty
+                    ? ShutterstockCategoryMatcher.match(title: result.title, description: result.description, keywords: result.keywords)
+                    : cats
                 self.isRegenerating = false
             } catch {
                 self.photos[curIdx].description = "Ошибка: \(error.localizedDescription)"
