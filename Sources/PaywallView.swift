@@ -288,16 +288,6 @@ public struct PaywallView: View {
                 subtitle: "Ежемесячный доступ со всеми обновлениями.".localized,
                 isPopular: false
             )
-            
-            // Пожизненный тариф (Lifetime)
-            pricingCard(
-                productID: StoreManager.ProductID.lifetime,
-                badge: "НАВСЕГДА".localized,
-                title: "Пожизненный PRO".localized,
-                price: getFormattedPriceWithPeriod(for: StoreManager.ProductID.lifetime),
-                subtitle: "Один платёж раз и навсегда. Без подписок.".localized,
-                isPopular: false
-            )
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.78), value: selectedProductID)
     }
@@ -455,9 +445,6 @@ public struct PaywallView: View {
         case StoreManager.ProductID.monthly:
             let price = getPriceString(for: StoreManager.ProductID.monthly, fallback: "$3.99")
             return "\("Подписаться за".localized) \(price) / \("мес.".localized)"
-        case StoreManager.ProductID.lifetime:
-            let price = getPriceString(for: StoreManager.ProductID.lifetime, fallback: "$59.99")
-            return "\("Купить навсегда за".localized) \(price)"
         default:
             return "Продолжить с SmartStock PRO".localized
         }
@@ -466,15 +453,12 @@ public struct PaywallView: View {
     private var trialTermsClarification: String {
         let yearlyPrice = getPriceString(for: StoreManager.ProductID.yearly, fallback: "$19.99")
         let monthlyPrice = getPriceString(for: StoreManager.ProductID.monthly, fallback: "$3.99")
-        let lifetimePrice = getPriceString(for: StoreManager.ProductID.lifetime, fallback: "$59.99")
         
         switch selectedProductID {
         case StoreManager.ProductID.yearly:
             return "\("3 дня бесплатно, затем".localized) \(yearlyPrice) \("в год. Отмена в любой момент в настройках Apple ID.".localized)"
         case StoreManager.ProductID.monthly:
             return "\("Списание".localized) \(monthlyPrice) \("каждый месяц. Отмена в любое время в настройках Apple ID.".localized)"
-        case StoreManager.ProductID.lifetime:
-            return "\("Единоразовый платёж".localized) \(lifetimePrice) \("раз и навсегда. Без подписок и автопродлений.".localized)"
         default:
             return ""
         }
@@ -545,8 +529,6 @@ public struct PaywallView: View {
             return "\(rawPrice) / \("год".localized)"
         case StoreManager.ProductID.monthly:
             return "\(rawPrice) / \("мес.".localized)"
-        case StoreManager.ProductID.lifetime:
-            return "\(rawPrice) \("разово".localized)"
         default:
             return rawPrice
         }
@@ -556,7 +538,6 @@ public struct PaywallView: View {
         switch productID {
         case StoreManager.ProductID.yearly: return "$19.99"
         case StoreManager.ProductID.monthly: return "$3.99"
-        case StoreManager.ProductID.lifetime: return "$59.99"
         default: return ""
         }
     }
