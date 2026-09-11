@@ -1392,6 +1392,11 @@ struct UploadQueueView: View {
                     } else {
                         mainScrollView
                     }
+                    
+                    // Рекламный баннер Meta Audience Network (автоматически скрыт для подписчиков PRO)
+                    MetaBannerAdView {
+                        showPaywall = true
+                    }
                 }
                 
                 plusFloatingButton
