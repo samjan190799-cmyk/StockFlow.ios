@@ -14,6 +14,17 @@ extension String {
 
 struct Localizer {
     private static let enTranslations: [String: String] = [
+        "Режим тестирования (QA)": "Testing Mode (QA)",
+        "Скрытая панель для тестировщиков. Позволяет проверять функции без реальной покупки в Sandbox.": "Hidden panel for testers. Allows testing features without a real Sandbox purchase.",
+        "Эмуляция SmartStock PRO": "Emulate SmartStock PRO",
+        "Статус: PRO активен (безлимитные стоки, нет рекламы)": "Status: PRO active (unlimited stocks, no ads)",
+        "Статус: Базовый тариф (лимит 2 стока, реклама)": "Status: Basic tier (2 stocks limit, ads)",
+        "SmartStock PRO активирован (Тест)": "SmartStock PRO activated (Test)",
+        "SmartStock PRO выключен (Тест)": "SmartStock PRO disabled (Test)",
+        "Сбросить на реальный StoreKit": "Reset to real StoreKit",
+        "Режим тестирования активирован": "Testing mode activated",
+        "Режим тестирования скрыт": "Testing mode hidden",
+        "Тестовый режим отключён, восстановлен реальный StoreKit": "Testing mode disabled, restored real StoreKit",
         "год": "year",
         "мес.": "mo",
         "разово": "one-time",
