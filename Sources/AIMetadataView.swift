@@ -11,6 +11,12 @@ struct AIMetadataView: View {
     @State private var isRegenerating = false
     @State private var showingAlert = false
     @State private var alertMessage = ""
+    @State private var showPaywall = false
+    
+    // Editorial Formatter States
+    @State private var editorialCity: String = ""
+    @State private var editorialCountry: String = ""
+    @State private var editorialDate: Date = Date()
 
     private let shutterstockCategories = [
         "Abstract", "Animals/Wildlife", "Arts", "Backgrounds/Textures", "Beauty/Fashion",
@@ -42,6 +48,20 @@ struct AIMetadataView: View {
                     // Large Premium Image Preview Header
                     imagePreviewHeader
                     
+                    // Content Type Switcher (Commercial vs Editorial)
+                    contentTypeSelector
+                        .glassCard(cornerRadius: 18, padding: 14)
+                    
+                    // Editorial Details (if enabled)
+                    if photos[currentIndex].isEditorial {
+                        editorialDetailsPanel
+                            .glassCard(cornerRadius: 18, padding: 14)
+                    }
+                    
+                    // Trademark & Rejection Shield
+                    trademarkShieldCard
+                        .glassCard(cornerRadius: 18, padding: 14)
+                    
                     // Title Panel
                     titleField
                         .glassCard(cornerRadius: 18, padding: 14)
@@ -58,6 +78,11 @@ struct AIMetadataView: View {
                     descriptionField
                         .glassCard(cornerRadius: 18, padding: 14)
                     
+                    // Рекламный баннер Meta Audience Network (скрыт для PRO)
+                    MetaBannerAdView {
+                        showPaywall = true
+                    }
+                    
                     // Continue Button
                     continueButton
                         .padding(.top, 4)
@@ -67,6 +92,15 @@ struct AIMetadataView: View {
         }
         .navigationTitle("Метаданные".localized)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            syncEditorialFields()
+        }
+        .onChange(of: currentIndex) { _ in
+            syncEditorialFields()
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+        }
         .alert("ИИ-Ассистент".localized, isPresented: $showingAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -148,6 +182,278 @@ struct AIMetadataView: View {
             .buttonStyle(PremiumButtonStyle())
             .disabled(currentIndex == photos.count - 1)
             .opacity(currentIndex == photos.count - 1 ? 0.3 : 1.0)
+        }
+    // MARK: - Content Type Selector (Commercial vs Editorial)
+    private var contentTypeSelector: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Тип лицензии контента".localized)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            
+            HStack(spacing: 8) {
+                // Кнопка Commercial
+                Button(action: {
+                    HapticHelper.selection()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        photos[currentIndex].isEditorial = false
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bag.fill")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("Коммерческий".localized)
+                            .font(.system(size: 12.5, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(!photos[currentIndex].isEditorial ? Color(hex: "007AFF") : Color.white.opacity(0.06))
+                    .foregroundStyle(!photos[currentIndex].isEditorial ? .white : .secondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(PremiumButtonStyle())
+                
+                // Кнопка Editorial
+                Button(action: {
+                    HapticHelper.selection()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        photos[currentIndex].isEditorial = true
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "newspaper.fill")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("Editorial".localized)
+                            .font(.system(size: 12.5, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(photos[currentIndex].isEditorial ? Color(hex: "8B5CF6") : Color.white.opacity(0.06))
+                    .foregroundStyle(photos[currentIndex].isEditorial ? .white : .secondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(PremiumButtonStyle())
+            }
+        }
+    }
+
+    // MARK: - Editorial Details Panel
+    private var editorialDetailsPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "newspaper.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color(hex: "A855F7"))
+                Text("Форматтер Editorial (Стандарт стоков)".localized)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color(hex: "A855F7"))
+                    .textCase(.uppercase)
+            }
+            
+            HStack(spacing: 8) {
+                // Город
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Город (латиницей)".localized)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    TextField("LONDON", text: $editorialCity)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .padding(10)
+                        .background(Color.primary.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .onChange(of: editorialCity) { newVal in
+                            photos[currentIndex].editorialCity = newVal
+                        }
+                }
+                
+                // Страна
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Страна (латиницей)".localized)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    TextField("UK", text: $editorialCountry)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .padding(10)
+                        .background(Color.primary.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .onChange(of: editorialCountry) { newVal in
+                            photos[currentIndex].editorialCountry = newVal
+                        }
+                }
+            }
+            
+            // Дата события
+            HStack {
+                Text("Дата события:".localized)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                DatePicker("", selection: $editorialDate, displayedComponents: [.date])
+                    .labelsHidden()
+                    .onChange(of: editorialDate) { newVal in
+                        photos[currentIndex].editorialDate = newVal
+                    }
+            }
+            
+            // Кнопка автоформатирования заголовка
+            Button(action: {
+                HapticHelper.notification(.success)
+                applyEditorialFormat()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 12, weight: .bold))
+                    Text("Сформировать заголовок Editorial".localized)
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(
+                    LinearGradient(colors: [Color(hex: "8B5CF6"), Color(hex: "6D28D9")], startPoint: .leading, endPoint: .trailing)
+                )
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(PremiumButtonStyle())
+            
+            Text("Для Editorial не требуются релизы моделей и собственности, а бренды в кадре разрешены.".localized)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Trademark Shield Card
+    private var trademarkShieldCard: some View {
+        let inspection = TrademarkShield.shared.inspect(
+            title: photos[currentIndex].title,
+            keywords: photos[currentIndex].keywords
+        )
+        
+        return Group {
+            if !photos[currentIndex].isEditorial && inspection.hasViolations {
+                // Предупреждение о реджектах
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color.orange)
+                        
+                        Text("Trademark Shield • Найдены бренды".localized)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.orange)
+                        
+                        Spacer()
+                    }
+                    
+                    Text("Микростоки (Shutterstock, Adobe Stock) отклонят коммерческое фото за использование торговых марок:".localized)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.primary)
+                    
+                    // Чипы обнаруженных брендов
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(inspection.matches) { match in
+                                HStack(spacing: 4) {
+                                    Text(match.brand)
+                                        .font(.system(size: 11, weight: .bold))
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 8))
+                                    Text(match.replacement)
+                                        .font(.system(size: 10))
+                                        .opacity(0.8)
+                                }
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(Color.orange.opacity(0.2))
+                                .foregroundStyle(Color.orange)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(Color.orange.opacity(0.4), lineWidth: 0.8))
+                            }
+                        }
+                    }
+                    
+                    HStack(spacing: 8) {
+                        // Кнопка автозамены
+                        Button(action: {
+                            HapticHelper.notification(.success)
+                            sanitizeTrademarks(inspection: inspection)
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.shield.fill")
+                                    .font(.system(size: 11))
+                                Text("Заменить на безопасные".localized)
+                                    .font(.system(size: 11.5, weight: .bold))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.orange)
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(PremiumButtonStyle())
+                        
+                        // Кнопка в Editorial
+                        Button(action: {
+                            HapticHelper.trigger(.medium)
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                photos[currentIndex].isEditorial = true
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "newspaper")
+                                    .font(.system(size: 11))
+                                Text("В Editorial".localized)
+                                    .font(.system(size: 11.5, weight: .bold))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.primary.opacity(0.08))
+                            .foregroundStyle(.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(PremiumButtonStyle())
+                    }
+                }
+                .padding(12)
+                .background(Color.orange.opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+            } else if photos[currentIndex].isEditorial && inspection.hasViolations {
+                // Editorial бейдж: бренды разрешены
+                HStack(spacing: 8) {
+                    Image(systemName: "shield.checkerboard")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color(hex: "10B981"))
+                    
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Editorial Shield: Бренды разрешены".localized)
+                            .font(.system(size: 11.5, weight: .bold))
+                            .foregroundStyle(Color(hex: "10B981"))
+                        Text("Для репортажного контента торговые марки и логотипы допустимы.".localized)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(10)
+                .background(Color(hex: "10B981").opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "10B981").opacity(0.2), lineWidth: 1))
+            } else {
+                // Все чисто
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color(hex: "10B981"))
+                    Text("Trademark Shield: Запрещенных брендов не найдено ✓".localized)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color(hex: "10B981"))
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+            }
         }
     }
 
@@ -424,6 +730,37 @@ struct AIMetadataView: View {
                 self.isRegenerating = false
             }
         }
+    }
+    
+    // MARK: - Editorial & Trademark Helpers
+    private func syncEditorialFields() {
+        editorialCity = photos[currentIndex].editorialCity ?? ""
+        editorialCountry = photos[currentIndex].editorialCountry ?? ""
+        editorialDate = photos[currentIndex].editorialDate ?? Date()
+    }
+    
+    private func applyEditorialFormat() {
+        let city = editorialCity.isEmpty ? (photos[currentIndex].editorialCity ?? "") : editorialCity
+        let country = editorialCountry.isEmpty ? (photos[currentIndex].editorialCountry ?? "") : editorialCountry
+        let date = photos[currentIndex].editorialDate ?? editorialDate
+        let desc = photos[currentIndex].description.isEmpty ? photos[currentIndex].title : photos[currentIndex].description
+        
+        let formatted = EditorialFormatter.formatTitle(
+            city: city,
+            country: country,
+            date: date,
+            description: desc
+        )
+        photos[currentIndex].title = formatted
+        photos[currentIndex].isEditorial = true
+        photos[currentIndex].editorialCity = city
+        photos[currentIndex].editorialCountry = country
+        photos[currentIndex].editorialDate = date
+    }
+    
+    private func sanitizeTrademarks(inspection: TrademarkShieldResult) {
+        photos[currentIndex].title = inspection.suggestedTitle
+        photos[currentIndex].keywords = inspection.suggestedKeywords
     }
 }
 
