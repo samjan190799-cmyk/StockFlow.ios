@@ -111,6 +111,7 @@ struct SystemSettingsView: View {
                     uploadSection
                     pcServerSection
                     cacheSection
+                    supportSection
                     disclaimerSection
                     saveButtonSection
                     versionFooterSection
@@ -600,6 +601,88 @@ struct SystemSettingsView: View {
         .padding(.vertical, 4)
     }
 
+    @ViewBuilder
+    private var supportSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader("Поддержка и связь с разработчиком".localized, icon: "questionmark.circle.fill")
+            
+            Text("Если у вас возникли вопросы, предложения или требуется помощь в настройке стоков, свяжитесь с нами напрямую:".localized)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(2)
+            
+            Divider().background(Color.primary.opacity(0.08))
+            
+            // Кнопка обращения на Email
+            Link(destination: URL(string: "mailto:samjan190799@gmail.com?subject=SmartStock%20Support")!) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color(hex: "007AFF").opacity(0.15))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color(hex: "007AFF"))
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Написать в службу поддержки".localized)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        Text("samjan190799@gmail.com")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(10)
+                .background(Color.primary.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            
+            // Кнопка официального сайта поддержки
+            Link(destination: URL(string: "https://samjan190799-cmyk.github.io/StockFlow.ios/support.html")!) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.purple.opacity(0.15))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "globe")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color.purple)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Сайт поддержки и база знаний (FAQ)".localized)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        Text("Руководства по FTP и ответы на частые вопросы".localized)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(10)
+                .background(Color.primary.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+        }
+        .glassCard(cornerRadius: 16, padding: 16)
+    }
+
     private var disclaimerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -621,7 +704,7 @@ struct SystemSettingsView: View {
             Divider().background(Color.primary.opacity(0.08))
             
             HStack(spacing: 16) {
-                Link("Политика конфиденциальности".localized, destination: URL(string: "https://github.com/samjan190799-cmyk/StockFlow.ios/blob/main/PRIVACY_POLICY.md")!)
+                Link("Политика конфиденциальности".localized, destination: URL(string: "https://samjan190799-cmyk.github.io/StockFlow.ios/privacy.html")!)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color(hex: "007AFF"))
                 
