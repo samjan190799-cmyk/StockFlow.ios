@@ -6,11 +6,13 @@ public struct RewardedAdView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var rewardManager = RewardAdManager.shared
     
-    @State private var timeRemaining: Int = 15
+    @State private var timeRemaining: Int = 30
+    private let totalDuration: Double = 30.0
     @State private var isFinished: Bool = false
     @State private var timer: Timer? = nil
     @State private var progress: Double = 0.0
     @State private var isClaimed: Bool = false
+    @State private var adCreativeIndex: Int = Int.random(in: 0...2)
     
     public init() {}
     
@@ -19,16 +21,16 @@ public struct RewardedAdView: View {
             Color.black.ignoresSafeArea()
             
             VStack(spacing: 20) {
-                // Верхний бар с таймером и кнопкой закрытия
+                // Верхний бар с брендингом Meta и таймером
                 topBar
                 
                 Spacer()
                 
                 if !isFinished {
-                    // Видео-плеер рекламы
+                    // Видео-плеер рекламы Meta
                     adPlayerCard
                 } else {
-                    // Экран получения награды
+                    // Экран получения супер-награды (+15 слотов)
                     rewardEarnedCard
                 }
                 
@@ -52,15 +54,15 @@ public struct RewardedAdView: View {
     private var topBar: some View {
         HStack {
             HStack(spacing: 6) {
-                Image(systemName: "play.tv.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.yellow)
-                Text("Спонсорский ролик".localized)
+                Image(systemName: "infinity")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color(hex: "0081FB"))
+                Text("Реклама от Meta".localized)
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(.white.opacity(0.9))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
             .background(Color.white.opacity(0.12))
             .clipShape(Capsule())
             
@@ -68,25 +70,26 @@ public struct RewardedAdView: View {
             
             if !isFinished {
                 HStack(spacing: 6) {
-                    Text("Награда через:".localized)
+                    Text("Награда (+15):".localized)
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(.white.opacity(0.7))
                     
                     Text("\(timeRemaining)с")
                         .font(.system(size: 13, weight: .heavy))
                         .foregroundStyle(.yellow)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Color.black.opacity(0.4))
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background(Color.black.opacity(0.5))
                 .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.yellow.opacity(0.4), lineWidth: 1))
             } else {
                 Button(action: {
                     claimRewardAndDismiss()
                 }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 26))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .font(.system(size: 28))
+                        .foregroundStyle(.white.opacity(0.85))
                 }
             }
         }
@@ -99,53 +102,80 @@ public struct RewardedAdView: View {
                 RoundedRectangle(cornerRadius: 24)
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "4F46E5"), Color(hex: "7C3AED"), Color(hex: "DB2777")],
+                            colors: [Color(hex: "0064E0"), Color(hex: "7C3AED"), Color(hex: "D946EF")],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(height: 320)
+                    .frame(height: 330)
                     .overlay(
                         VStack(spacing: 16) {
+                            HStack {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "infinity")
+                                        .font(.system(size: 11, weight: .bold))
+                                    Text("Meta Audience Network")
+                                        .font(.system(size: 10, weight: .bold))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.35))
+                                .clipShape(Capsule())
+                                .foregroundStyle(.white)
+                                
+                                Spacer()
+                                
+                                Text("HD • 60 FPS")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.6))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 14)
+                            
+                            Spacer()
+                            
                             ZStack {
                                 Circle()
-                                    .fill(Color.white.opacity(0.2))
-                                    .frame(width: 80, height: 80)
+                                    .fill(Color.white.opacity(0.22))
+                                    .frame(width: 76, height: 76)
                                 
-                                Image(systemName: "sparkles.tv.fill")
-                                    .font(.system(size: 40))
+                                Image(systemName: adIconName)
+                                    .font(.system(size: 36))
                                     .foregroundStyle(.white)
                             }
                             
-                            VStack(spacing: 4) {
-                                Text("SmartStock AI Studio")
-                                    .font(.system(size: 20, weight: .heavy))
+                            VStack(spacing: 5) {
+                                Text(adTitle)
+                                    .font(.system(size: 19, weight: .heavy))
                                     .foregroundStyle(.white)
-                                
-                                Text("Автоматическая выгрузка на 10+ стоков и безлимитные теги ИИ".localized)
-                                    .font(.system(size: 13))
                                     .multilineTextAlignment(.center)
-                                    .foregroundStyle(.white.opacity(0.85))
+                                
+                                Text(adSubtitle)
+                                    .font(.system(size: 12.5))
+                                    .multilineTextAlignment(.center)
+                                    .foregroundStyle(.white.opacity(0.88))
                                     .padding(.horizontal, 20)
                             }
                             
                             HStack(spacing: 12) {
                                 Text("★★★★★ 4.9")
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(.yellow)
                                 
                                 Text("•")
                                     .foregroundStyle(.white.opacity(0.4))
                                 
-                                Text("100K+ Загрузок".localized)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.8))
+                                Text("Спонсировано Meta".localized)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.85))
                             }
+                            
+                            Spacer()
                         }
                     )
             }
             
-            // Прогресс-бар видео
+            // Прогресс-бар видео 30 секунд
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
@@ -153,11 +183,35 @@ public struct RewardedAdView: View {
                         .frame(height: 6)
                     
                     Capsule()
-                        .fill(LinearGradient(colors: [.yellow, .orange], startPoint: .leading, endPoint: .trailing))
+                        .fill(LinearGradient(colors: [Color(hex: "0081FB"), Color.yellow], startPoint: .leading, endPoint: .trailing))
                         .frame(width: geo.size.width * CGFloat(progress), height: 6)
                 }
             }
             .frame(height: 6)
+        }
+    }
+    
+    private var adTitle: String {
+        switch adCreativeIndex {
+        case 0: return "Sony Alpha & Canon R Series"
+        case 1: return "Adobe Creative Cloud Pro"
+        default: return "SmartStock AI Max"
+        }
+    }
+    
+    private var adSubtitle: String {
+        switch adCreativeIndex {
+        case 0: return "Премиальная оптика для микростоковых фотографов со скидкой до 30%.".localized
+        case 1: return "Нейросетевая ретушь и автоматическая пакетная цветокоррекция фото.".localized
+        default: return "Автоматическая выгрузка на 10+ стоков и безлимитные SEO-теги в 1 клик.".localized
+        }
+    }
+    
+    private var adIconName: String {
+        switch adCreativeIndex {
+        case 0: return "camera.aperture"
+        case 1: return "paintpalette.fill"
+        default: return "sparkles.tv.fill"
         }
     }
     
@@ -176,13 +230,13 @@ public struct RewardedAdView: View {
             }
             
             VStack(spacing: 6) {
-                Text("Награда получена! 🎉".localized)
-                    .font(.system(size: 24, weight: .bold))
+                Text("Супер-награда получена! 🎉".localized)
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
                 
-                Text("+5 бонусных фото начислены в вашу очередь".localized)
+                Text("+15 бонусных слотов начислены в вашу очередь".localized)
                     .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(.white.opacity(0.85))
             }
             
             Button(action: {
@@ -191,13 +245,15 @@ public struct RewardedAdView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16, weight: .bold))
-                    Text("Забрать +5 фото".localized)
+                    Text("Забрать +15 фото".localized)
                         .font(.system(size: 16, weight: .bold))
                 }
                 .foregroundStyle(.black)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color.yellow)
+                .background(
+                    LinearGradient(colors: [.yellow, Color(hex: "F59E0B")], startPoint: .leading, endPoint: .trailing)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .shadow(color: Color.yellow.opacity(0.4), radius: 10, y: 4)
             }
@@ -215,14 +271,14 @@ public struct RewardedAdView: View {
     }
     
     private var bottomInfoBar: some View {
-        HStack {
-            Image(systemName: "info.circle")
-                .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.4))
+        HStack(spacing: 6) {
+            Image(systemName: "infinity")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color(hex: "0081FB"))
             
-            Text("Google AdMob Rewarded • Смотрите видео для бесплатных слотов".localized)
+            Text("Meta Audience Network • Спонсорское видео (+15 слотов)".localized)
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.6))
         }
     }
     
@@ -233,7 +289,7 @@ public struct RewardedAdView: View {
             if timeRemaining > 1 {
                 timeRemaining -= 1
                 withAnimation(.linear(duration: 1.0)) {
-                    progress = Double(15 - timeRemaining) / 15.0
+                    progress = Double(30 - timeRemaining) / totalDuration
                 }
             } else {
                 timeRemaining = 0
@@ -248,7 +304,7 @@ public struct RewardedAdView: View {
     private func claimRewardAndDismiss() {
         guard !isClaimed else { return }
         isClaimed = true
-        rewardManager.rewardUser(with: 5)
+        rewardManager.rewardUser(with: RewardAdManager.superRewardAmount)
         dismiss()
     }
 }
