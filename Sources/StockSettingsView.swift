@@ -6,6 +6,7 @@ struct StockSettingsView: View {
     @State private var platforms: [StockPlatform] = []
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @State private var selectedPlatformId: String? = nil
+    @State private var selectedGuidePlatformId: String? = nil
     
     // For connection verification and Paywall
     @State private var showingAlert = false
@@ -35,6 +36,9 @@ struct StockSettingsView: View {
                                     },
                                     onTap: {
                                         selectedPlatformId = platform.id
+                                    },
+                                    onInfoTap: {
+                                        selectedGuidePlatformId = platform.id
                                     },
                                     color: colorForPlatform(platform.id)
                                 )
@@ -75,6 +79,19 @@ struct StockSettingsView: View {
                         }
                     )
                 }
+            }
+            .sheet(item: Binding(
+                get: {
+                    if let id = selectedGuidePlatformId {
+                        return ActiveSheetPlatformId(id: id)
+                    }
+                    return nil
+                },
+                set: { value in
+                    selectedGuidePlatformId = value?.id
+                }
+            )) { wrapper in
+                StockAgencyGuideSheet(platformId: wrapper.id)
             }
             .sheet(isPresented: $showingPaywall) {
                 PaywallView()
@@ -244,6 +261,7 @@ struct PlatformRowView: View {
     let platform: StockPlatform
     let onToggle: (Bool) -> Void
     let onTap: () -> Void
+    let onInfoTap: () -> Void
     let color: Color
     
     @State private var isPulsing = false
@@ -290,6 +308,19 @@ struct PlatformRowView: View {
                             .foregroundStyle(Color(hex: "6366F1"))
                             .clipShape(Capsule())
                     }
+                    
+                    // Кнопка со знаком вопроса о возможностях и советах по стоку
+                    Button(action: {
+                        HapticHelper.trigger(.light)
+                        onInfoTap()
+                    }) {
+                        Image(systemName: "questionmark.circle")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color(hex: "007AFF"))
+                            .padding(4)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(BorderlessButtonStyle())
                 }
                 
                 Text(platform.host)
@@ -377,6 +408,7 @@ struct PlatformDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingOAuthHelp = false
     @State private var showingStockHelper = false
+    @State private var showingGuideSheet = false
     
     var body: some View {
         NavigationStack {
@@ -553,6 +585,21 @@ struct PlatformDetailSheet: View {
             .navigationTitle(platform.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        HapticHelper.trigger(.light)
+                        showingGuideSheet = true
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "questionmark.circle.fill")
+                                .font(.system(size: 15))
+                            Text("Инструкция".localized)
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .foregroundStyle(Color(hex: "007AFF"))
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Готово".localized) {
                         HapticHelper.trigger(.light)
@@ -561,6 +608,9 @@ struct PlatformDetailSheet: View {
                     }
                     .font(.system(size: 14, weight: .bold))
                 }
+            }
+            .sheet(isPresented: $showingGuideSheet) {
+                StockAgencyGuideSheet(platformId: platform.id)
             }
         }
         .onDisappear {
