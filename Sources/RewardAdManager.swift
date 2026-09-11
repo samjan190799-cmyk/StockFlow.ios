@@ -7,9 +7,12 @@ import Combine
 public final class RewardAdManager: ObservableObject {
     public static let shared = RewardAdManager()
     
-    // Идентификаторы Google AdMob пользователя
-    public static let adMobAppID = "ca-app-pub-1230774710816122~9425524877"
-    public static let rewardedAdUnitID = "ca-app-pub-1230774710816122/7729299826"
+    // Идентификаторы Meta Audience Network (Facebook Audience Network)
+    public static let metaPlacementID = "VID_HD_16_9_30S_APP_INSTALL#YOUR_PLACEMENT_ID"
+    public static let metaBannerPlacementID = "IMG_16_9_APP_INSTALL#YOUR_BANNER_PLACEMENT_ID"
+    
+    // Супер-награда за 30-секундное видео от Meta (+15 слотов)
+    public static let superRewardAmount: Int = 15
     
     // Базовый дневной лимит (15 ИИ-анализов и 15 отправок в день)
     public static let baseDailyLimit: Int = 15
