@@ -23,6 +23,46 @@ struct StockStats: Identifiable, Sendable {
     }
 }
 
+// MARK: - Точка данных для графиков
+public struct EarningPoint: Identifiable, Sendable {
+    public let id = UUID()
+    public let date: String
+    public let value: Double
+    
+    public init(date: String, value: Double) {
+        self.date = date
+        self.value = value
+    }
+}
+
+// MARK: - Типы метрик аналитики
+public enum MetricType: String, CaseIterable, Identifiable, Sendable {
+    case uploads  = "Загрузки"
+    case success  = "Успешно"
+    case failed   = "Ошибки"
+    case sales    = "Продажи"
+
+    public var id: String { self.rawValue }
+
+    public var icon: String {
+        switch self {
+        case .uploads: return "arrow.up.circle.fill"
+        case .success: return "checkmark.circle.fill"
+        case .failed:  return "xmark.circle.fill"
+        case .sales:   return "bag.circle.fill"
+        }
+    }
+
+    public var color: Color {
+        switch self {
+        case .uploads: return Color(hex: "7C3AED")
+        case .success: return Color(hex: "10B981")
+        case .failed:  return Color(hex: "EF4444")
+        case .sales:   return Color(hex: "F59E0B")
+        }
+    }
+}
+
 // MARK: - Запись истории загрузки (хранится в UserDefaults)
 struct UploadHistoryRecord: Codable, Sendable {
     let platformId: String
