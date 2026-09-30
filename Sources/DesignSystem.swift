@@ -5,7 +5,7 @@ import UIKit
 public struct AppleTheme {
     // Primary Vibrant Gradients
     public static let primaryGradient = LinearGradient(
-        colors: [Color(hex: "007AFF"), Color(hex: "6366F1")],
+        colors: [Color(hex: "0A6CFF"), Color(hex: "5B5BFF")],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )

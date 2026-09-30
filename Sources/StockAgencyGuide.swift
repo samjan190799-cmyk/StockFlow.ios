@@ -385,18 +385,18 @@ public struct StockAgencyGuideSheet: View {
                     .shadow(color: guide.badgeColor.opacity(0.35), radius: 8, x: 0, y: 4)
                 
                 Text(String(guide.name.prefix(2)).uppercased())
-                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .font(Font.system(.body, design: .rounded).weight(.black))
                     .foregroundStyle(.white)
             }
             
             VStack(alignment: .leading, spacing: 3) {
                 Text(guide.name)
-                    .font(.system(size: 18, weight: .black))
+                    .font(.body.weight(.black))
                     .foregroundStyle(.primary)
                 
                 HStack(spacing: 6) {
                     Text(guide.protocolType)
-                        .font(.system(size: 10, weight: .heavy))
+                        .font(.caption2.weight(.heavy))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(guide.badgeColor.opacity(0.18))
@@ -404,7 +404,7 @@ public struct StockAgencyGuideSheet: View {
                         .clipShape(Capsule())
                     
                     Text(guide.host)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(Font.system(.caption2, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -419,9 +419,9 @@ public struct StockAgencyGuideSheet: View {
                 }) {
                     Image(systemName: "safari.fill")
                         .font(.system(size: 20))
-                        .foregroundStyle(Color(hex: "007AFF"))
+                        .foregroundStyle(AppPalette.accentLight)
                         .padding(8)
-                        .background(Color(hex: "007AFF").opacity(0.12))
+                        .background(AppPalette.accent.opacity(0.12))
                         .clipShape(Circle())
                 }
                 .buttonStyle(PremiumButtonStyle())
@@ -437,7 +437,7 @@ public struct StockAgencyGuideSheet: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Color(hex: "10B981"))
                 Text("Что делает StockFlow".localized)
-                    .font(.system(size: 11.5, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(Color(hex: "10B981"))
                     .textCase(.uppercase)
             }
@@ -449,7 +449,7 @@ public struct StockAgencyGuideSheet: View {
                         .foregroundStyle(Color(hex: "10B981"))
                         .padding(.top, 1)
                     Text(feature)
-                        .font(.system(size: 12.5))
+                        .font(.footnote)
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -465,7 +465,7 @@ public struct StockAgencyGuideSheet: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Color(hex: "3B82F6"))
                 Text("Что вам останется сделать на сайте".localized)
-                    .font(.system(size: 11.5, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(Color(hex: "3B82F6"))
                     .textCase(.uppercase)
             }
@@ -477,13 +477,13 @@ public struct StockAgencyGuideSheet: View {
                             .fill(Color(hex: "3B82F6").opacity(0.2))
                             .frame(width: 18, height: 18)
                         Text("\(index + 1)")
-                            .font(.system(size: 10, weight: .heavy))
+                            .font(.caption2.weight(.heavy))
                             .foregroundStyle(Color(hex: "3B82F6"))
                     }
                     .padding(.top, 1)
                     
                     Text(step)
-                        .font(.system(size: 12.5))
+                        .font(.footnote)
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -499,7 +499,7 @@ public struct StockAgencyGuideSheet: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Color(hex: "A855F7"))
                 Text("Официальное приложение в App Store".localized)
-                    .font(.system(size: 11.5, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(Color(hex: "A855F7"))
                     .textCase(.uppercase)
             }
@@ -517,10 +517,10 @@ public struct StockAgencyGuideSheet: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(appName)
-                            .font(.system(size: 14, weight: .black))
+                            .font(.subheadline.weight(.black))
                             .foregroundStyle(.primary)
                         Text(guide.officialAppNote)
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -538,7 +538,7 @@ public struct StockAgencyGuideSheet: View {
                             Image(systemName: "arrow.down.app.fill")
                                 .font(.system(size: 12))
                             Text("Найти «\(appName)» в App Store".localized)
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.caption.weight(.bold))
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
@@ -556,7 +556,7 @@ public struct StockAgencyGuideSheet: View {
                         .foregroundStyle(.secondary)
                         .padding(.top, 1)
                     Text(guide.officialAppNote)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -572,7 +572,7 @@ public struct StockAgencyGuideSheet: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Color.orange)
                 Text("Советы и секреты стока".localized)
-                    .font(.system(size: 11.5, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(Color.orange)
                     .textCase(.uppercase)
             }
@@ -584,7 +584,7 @@ public struct StockAgencyGuideSheet: View {
                         .foregroundStyle(Color.orange)
                         .padding(.top, 2)
                     Text(tip)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundStyle(.primary.opacity(0.9))
                         .fixedSize(horizontal: false, vertical: true)
                 }

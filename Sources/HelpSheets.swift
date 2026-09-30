@@ -26,10 +26,10 @@ struct GoogleOAuthHelpSheet: View {
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Настройка Google Фото".localized)
-                                    .font(.system(size: 18, weight: .bold))
+                                    .font(.body.weight(.bold))
                                     .foregroundStyle(.primary)
                                 Text("Пошаговое руководство по получению Client ID".localized)
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -91,7 +91,7 @@ struct GoogleOAuthHelpSheet: View {
                                 Image(systemName: "safari.fill")
                                     .font(.system(size: 16))
                                 Text("Открыть Google Cloud Console".localized)
-                                    .font(.system(size: 15, weight: .bold))
+                                    .font(.subheadline.weight(.bold))
                                 Spacer()
                                 Image(systemName: "arrow.up.right")
                                     .font(.system(size: 13, weight: .bold))
@@ -130,7 +130,7 @@ struct GoogleOAuthHelpSheet: View {
                     .fill(color.opacity(0.15))
                     .frame(width: 36, height: 36)
                 Text(number)
-                    .font(.system(size: 15, weight: .black))
+                    .font(.subheadline.weight(.black))
                     .foregroundStyle(color)
             }
 
@@ -140,12 +140,12 @@ struct GoogleOAuthHelpSheet: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(color)
                     Text(title)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.subheadline.weight(.bold))
                         .foregroundStyle(.primary)
                 }
 
                 Text(description)
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -222,9 +222,9 @@ struct AIKeyHelpSheet: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text("Google Gemini AI")
-                            .font(.system(size: 17, weight: .bold))
+                            .font(.body.weight(.bold))
                         Text("Бесплатно".localized)
-                            .font(.system(size: 9, weight: .black))
+                            .font(.caption2.weight(.black))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color.green.opacity(0.2))
@@ -232,7 +232,7 @@ struct AIKeyHelpSheet: View {
                             .clipShape(Capsule())
                     }
                     Text("Рекомендуемый провайдер: самый быстрый и бесплатный доступ.".localized)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -279,7 +279,7 @@ struct AIKeyHelpSheet: View {
                 HStack {
                     Image(systemName: "sparkles")
                     Text("Получить ключ в Google AI Studio".localized)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.subheadline.weight(.bold))
                     Spacer()
                     Image(systemName: "arrow.up.right")
                         .font(.system(size: 12, weight: .bold))
@@ -309,9 +309,9 @@ struct AIKeyHelpSheet: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("OpenAI (ChatGPT)")
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.body.weight(.bold))
                     Text("Высокое качество индексации через модели GPT-4o и GPT-4o-mini.".localized)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -350,7 +350,7 @@ struct AIKeyHelpSheet: View {
                 HStack {
                     Image(systemName: "key.fill")
                     Text("Открыть OpenAI API Keys".localized)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.subheadline.weight(.bold))
                     Spacer()
                     Image(systemName: "arrow.up.right")
                         .font(.system(size: 12, weight: .bold))
@@ -380,9 +380,9 @@ struct AIKeyHelpSheet: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Anthropic Claude")
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.body.weight(.bold))
                     Text("Глубокое понимание коммерческой эстетики через Claude 3.5 Sonnet.".localized)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -421,7 +421,7 @@ struct AIKeyHelpSheet: View {
                 HStack {
                     Image(systemName: "key.fill")
                     Text("Открыть Anthropic Console".localized)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.subheadline.weight(.bold))
                     Spacer()
                     Image(systemName: "arrow.up.right")
                         .font(.system(size: 12, weight: .bold))
@@ -443,7 +443,7 @@ struct AIKeyHelpSheet: View {
                     .fill(color.opacity(0.15))
                     .frame(width: 34, height: 34)
                 Text(number)
-                    .font(.system(size: 14, weight: .black))
+                    .font(.subheadline.weight(.black))
                     .foregroundStyle(color)
             }
 
@@ -453,12 +453,12 @@ struct AIKeyHelpSheet: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(color)
                     Text(title)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.footnote.weight(.bold))
                         .foregroundStyle(.primary)
                 }
 
                 Text(description)
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

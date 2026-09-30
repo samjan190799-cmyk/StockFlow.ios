@@ -151,9 +151,9 @@ struct AIMetadataView: View {
 
             VStack(spacing: 2) {
                 Text("Файл".localized + " \(currentIndex + 1) " + "из".localized + " \(photos.count)")
-                    .font(.system(size: 13, weight: .black))
+                    .font(.footnote.weight(.black))
                 Text(photos[currentIndex].filename)
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -184,7 +184,7 @@ struct AIMetadataView: View {
     private var contentTypeSelector: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Тип лицензии контента".localized)
-                .font(.system(size: 11, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
             
@@ -200,11 +200,11 @@ struct AIMetadataView: View {
                         Image(systemName: "bag.fill")
                             .font(.system(size: 13, weight: .bold))
                         Text("Коммерческий".localized)
-                            .font(.system(size: 12.5, weight: .semibold))
+                            .font(.footnote.weight(.semibold))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(!photos[currentIndex].isEditorial ? Color(hex: "007AFF") : Color.white.opacity(0.06))
+                    .background(!photos[currentIndex].isEditorial ? AppPalette.accent : Color.white.opacity(0.06))
                     .foregroundStyle(!photos[currentIndex].isEditorial ? .white : .secondary)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
@@ -221,7 +221,7 @@ struct AIMetadataView: View {
                         Image(systemName: "newspaper.fill")
                             .font(.system(size: 13, weight: .bold))
                         Text("Editorial".localized)
-                            .font(.system(size: 12.5, weight: .semibold))
+                            .font(.footnote.weight(.semibold))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
@@ -242,7 +242,7 @@ struct AIMetadataView: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(Color(hex: "A855F7"))
                 Text("Форматтер Editorial (Стандарт стоков)".localized)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .foregroundStyle(Color(hex: "A855F7"))
                     .textCase(.uppercase)
             }
@@ -251,11 +251,11 @@ struct AIMetadataView: View {
                 // Город
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Город (латиницей)".localized)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                     TextField("LONDON", text: $editorialCity)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .padding(10)
                         .background(Color.primary.opacity(0.05))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -267,11 +267,11 @@ struct AIMetadataView: View {
                 // Страна
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Страна (латиницей)".localized)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                     TextField("UK", text: $editorialCountry)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .padding(10)
                         .background(Color.primary.opacity(0.05))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -284,7 +284,7 @@ struct AIMetadataView: View {
             // Дата события
             HStack {
                 Text("Дата события:".localized)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
                 DatePicker("", selection: $editorialDate, displayedComponents: [.date])
@@ -303,7 +303,7 @@ struct AIMetadataView: View {
                     Image(systemName: "wand.and.stars")
                         .font(.system(size: 12, weight: .bold))
                     Text("Сформировать заголовок Editorial".localized)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.caption.weight(.bold))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
@@ -316,7 +316,7 @@ struct AIMetadataView: View {
             .buttonStyle(PremiumButtonStyle())
             
             Text("Для Editorial не требуются релизы моделей и собственности, а бренды в кадре разрешены.".localized)
-                .font(.system(size: 10.5))
+                .font(.caption2)
                 .foregroundStyle(.secondary)
         }
     }
@@ -338,14 +338,14 @@ struct AIMetadataView: View {
                             .foregroundStyle(Color.orange)
                         
                         Text("Trademark Shield • Найдены бренды".localized)
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.caption.weight(.bold))
                             .foregroundStyle(Color.orange)
                         
                         Spacer()
                     }
                     
                     Text("Микростоки (Shutterstock, Adobe Stock) отклонят коммерческое фото за использование торговых марок:".localized)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundStyle(.primary)
                     
                     // Чипы обнаруженных брендов
@@ -354,11 +354,11 @@ struct AIMetadataView: View {
                             ForEach(inspection.matches) { match in
                                 HStack(spacing: 4) {
                                     Text(match.brand)
-                                        .font(.system(size: 11, weight: .bold))
+                                        .font(.caption2.weight(.bold))
                                     Image(systemName: "arrow.right")
                                         .font(.system(size: 8))
                                     Text(match.replacement)
-                                        .font(.system(size: 10))
+                                        .font(.caption2)
                                         .opacity(0.8)
                                 }
                                 .padding(.horizontal, 9)
@@ -381,7 +381,7 @@ struct AIMetadataView: View {
                                 Image(systemName: "checkmark.shield.fill")
                                     .font(.system(size: 11))
                                 Text("Заменить на безопасные".localized)
-                                    .font(.system(size: 11.5, weight: .bold))
+                                    .font(.caption.weight(.bold))
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
@@ -402,7 +402,7 @@ struct AIMetadataView: View {
                                 Image(systemName: "newspaper")
                                     .font(.system(size: 11))
                                 Text("В Editorial".localized)
-                                    .font(.system(size: 11.5, weight: .bold))
+                                    .font(.caption.weight(.bold))
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
@@ -426,10 +426,10 @@ struct AIMetadataView: View {
                     
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Editorial Shield: Бренды разрешены".localized)
-                            .font(.system(size: 11.5, weight: .bold))
+                            .font(.caption.weight(.bold))
                             .foregroundStyle(Color(hex: "10B981"))
                         Text("Для репортажного контента торговые марки и логотипы допустимы.".localized)
-                            .font(.system(size: 10))
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -445,7 +445,7 @@ struct AIMetadataView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(Color(hex: "10B981"))
                     Text("Trademark Shield: Запрещенных брендов не найдено ✓".localized)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(Color(hex: "10B981"))
                     Spacer()
                 }
@@ -458,7 +458,7 @@ struct AIMetadataView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Заголовок".localized)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                 Spacer()
@@ -475,9 +475,9 @@ struct AIMetadataView: View {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 11))
                         }
-                        Text("Заново".localized).font(.system(size: 12, weight: .bold))
+                        Text("Заново".localized).font(.caption.weight(.bold))
                     }
-                    .foregroundStyle(Color(hex: "007AFF"))
+                    .foregroundStyle(AppPalette.accentLight)
                 }
                 .buttonStyle(PremiumButtonStyle())
                 .disabled(isRegenerating)
@@ -485,7 +485,7 @@ struct AIMetadataView: View {
             
             TextField("Заголовок фото".localized, text: binding(\.title))
                 .textFieldStyle(.plain)
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .padding(12)
                 .background(Color.primary.opacity(0.05))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -499,7 +499,7 @@ struct AIMetadataView: View {
     private var keywordsField: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Ключевые слова".localized)
-                .font(.system(size: 11, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
 
@@ -512,7 +512,7 @@ struct AIMetadataView: View {
             HStack(spacing: 8) {
                 TextField("Добавить слово".localized, text: $newKeyword)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .padding(10)
                     .background(Color.primary.opacity(0.05))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -534,7 +534,7 @@ struct AIMetadataView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .buttonStyle(PremiumButtonStyle())
                 .disabled(newKeyword.trimmingCharacters(in: .whitespaces).isEmpty)
-                .neonShadow(color: Color(hex: "7C3AED"), radius: 4)
+                .neonShadow(color: AppPalette.accent, radius: 4)
             }
         }
     }
@@ -542,7 +542,7 @@ struct AIMetadataView: View {
     private var descriptionField: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Описание".localized)
-                .font(.system(size: 11, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
             
@@ -565,7 +565,7 @@ struct AIMetadataView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Категории (Макс. 2)".localized)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                 
@@ -584,20 +584,20 @@ struct AIMetadataView: View {
                             Image(systemName: "plus")
                                 .font(.system(size: 11, weight: .bold))
                             Text("Добавить".localized)
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.caption.weight(.bold))
                         }
                         .foregroundStyle(Color(hex: "7C3AED"))
                     }
                 } else {
                     Text("Лимит достигнут".localized)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
 
             if photos[currentIndex].categories.isEmpty {
                 Text("Категории не выбраны. Выберите до 2 категорий.".localized)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
             } else {
@@ -616,13 +616,13 @@ struct AIMetadataView: View {
             onContinue?(photos)
         }) {
             Text("Сохранить изменения".localized)
-                .font(.system(size: 14, weight: .black))
+                .font(.subheadline.weight(.black))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(AppleTheme.primaryGradient)
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
-                .neonShadow(color: Color(hex: "7C3AED"), radius: 6)
+                .neonShadow(color: AppPalette.accent, radius: 6)
         }
         .buttonStyle(PremiumButtonStyle())
     }
@@ -772,7 +772,7 @@ private struct KeywordChip: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(text)
-                .font(.system(size: 11, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(.primary)
             Button(action: {
                 HapticHelper.trigger(.light)

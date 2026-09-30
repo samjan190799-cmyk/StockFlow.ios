@@ -163,13 +163,13 @@ struct GooglePhotosPickerView: View {
                                             .tint(.white)
                                     } else {
                                         Text("Импорт (\(selectedItems.count))".localized)
-                                            .font(.system(size: 14, weight: .bold))
+                                            .font(.subheadline.weight(.bold))
                                     }
                                 }
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(Color.purple)
+                                .background(AppPalette.accent)
                                 .clipShape(Capsule())
                             }
                             .disabled(isDownloading)
@@ -204,11 +204,11 @@ struct GooglePhotosPickerView: View {
 
             VStack(spacing: 6) {
                 Text("Подключение Google Фото".localized)
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.body.weight(.bold))
                     .foregroundStyle(.primary)
 
                 Text("Выбирайте исходные видео и фото прямо из вашего облачного архива для публикации на стоках.".localized)
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 16)
@@ -216,12 +216,12 @@ struct GooglePhotosPickerView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Google OAuth Client ID".localized)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .foregroundStyle(.secondary)
                 
                 TextField("Вставьте Client ID из Google Cloud Console...".localized, text: $customGoogleClientId)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(Font.system(.caption2, design: .monospaced))
                     .padding(10)
                     .background(Color.black.opacity(0.2))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -236,7 +236,7 @@ struct GooglePhotosPickerView: View {
 
             if !manager.statusMessage.isEmpty {
                 Text(manager.statusMessage)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.orange)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 12)
@@ -256,7 +256,7 @@ struct GooglePhotosPickerView: View {
                         Image(systemName: "g.circle.fill")
                             .font(.system(size: 18))
                         Text("Войти через Google".localized)
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.subheadline.weight(.bold))
                     }
                 }
                 .foregroundStyle(.white)
@@ -282,14 +282,14 @@ struct GooglePhotosPickerView: View {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(.green)
                 Text(manager.userEmail.isEmpty ? "Google Фото подключено".localized : manager.userEmail)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Spacer()
                 // Счётчик файлов
                 if !manager.mediaItems.isEmpty {
                     Text("\(manager.mediaItems.count) файлов".localized)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 Button(action: {
@@ -297,7 +297,7 @@ struct GooglePhotosPickerView: View {
                     manager.signOut()
                 }) {
                     Text("Выйти".localized)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.caption.weight(.bold))
                         .foregroundStyle(.red)
                 }
             }
@@ -313,7 +313,7 @@ struct GooglePhotosPickerView: View {
                         .foregroundStyle(.secondary)
                     TextField("Поиск по файлам...".localized, text: $searchQuery)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                 }
                 .padding(10)
                 .background(Color.white.opacity(0.08))
@@ -336,9 +336,9 @@ struct GooglePhotosPickerView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: selectedFilter.iconName)
-                            .foregroundStyle(Color.purple)
+                            .foregroundStyle(AppPalette.accentLight)
                         Text(selectedFilter.rawValue.localized)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(.primary)
                         Image(systemName: "chevron.down")
                             .font(.system(size: 9, weight: .bold))
@@ -359,7 +359,7 @@ struct GooglePhotosPickerView: View {
                         .tint(.purple)
                         .scaleEffect(1.3)
                     Text(manager.statusMessage.isEmpty ? "Загрузка медиафайлов...".localized : manager.statusMessage)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                     Spacer()
@@ -371,7 +371,7 @@ struct GooglePhotosPickerView: View {
                         .font(.system(size: 44))
                         .foregroundStyle(.tertiary)
                     Text("Файлы не найдены".localized)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
@@ -404,7 +404,7 @@ struct GooglePhotosPickerView: View {
                     if item.isVideo {
                         Image(systemName: "video.fill")
                             .font(.system(size: 9))
-                            .foregroundStyle(Color.purple)
+                            .foregroundStyle(AppPalette.accentLight)
                     } else {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 9))
@@ -412,7 +412,7 @@ struct GooglePhotosPickerView: View {
                     }
 
                     Text(item.filename)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -426,7 +426,7 @@ struct GooglePhotosPickerView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? Color.purple : Color.white.opacity(0.12), lineWidth: isSelected ? 3 : 1)
+                    .stroke(isSelected ? AppPalette.accent : Color.white.opacity(0.12), lineWidth: isSelected ? 3 : 1)
             )
 
             // Заголовок карточки: Глаз (Предпросмотр) слева и Чекбокс справа
@@ -457,7 +457,7 @@ struct GooglePhotosPickerView: View {
                 }) {
                     ZStack {
                         Circle()
-                            .fill(isSelected ? Color.purple : Color.black.opacity(0.5))
+                            .fill(isSelected ? AppPalette.accent : Color.black.opacity(0.5))
                             .frame(width: 24, height: 24)
 
                         if isSelected {
@@ -641,11 +641,11 @@ struct GoogleMediaPreviewModal: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.filename)
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.subheadline.weight(.bold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                         Text(item.isVideo ? "Видеозапись Google Фото".localized : "Фотография Google Фото".localized)
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -673,7 +673,7 @@ struct GoogleMediaPreviewModal: View {
                         VStack(spacing: 12) {
                             ProgressView().tint(.purple).scaleEffect(1.2)
                             Text("Подготовка воспроизведения видео...".localized)
-                                .font(.system(size: 12))
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -714,7 +714,7 @@ struct GoogleMediaPreviewModal: View {
                                 Image(systemName: "arrow.down.circle.fill")
                                     .font(.system(size: 16, weight: .bold))
                                 Text("Импортировать в очередь".localized)
-                                    .font(.system(size: 14, weight: .bold))
+                                    .font(.subheadline.weight(.bold))
                             }
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)

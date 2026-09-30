@@ -30,11 +30,11 @@ struct StockSignInHelperView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Image(systemName: "info.circle.fill")
-                    .foregroundStyle(Color(hex: "007AFF"))
+                    .foregroundStyle(AppPalette.accentLight)
                     .font(.system(size: 14))
                 
                 Text("Инструкция по настройке FTP для ".localized + "\(config.name):")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(.primary)
                 
                 Spacer()
@@ -46,7 +46,7 @@ struct StockSignInHelperView: View {
             }
             
             Text(statusMessage)
-                .font(.system(size: 11))
+                .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
         }
@@ -137,7 +137,7 @@ struct StockSignInHelperView: View {
                     .font(.system(size: 13, weight: .bold))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(Color(hex: "007AFF"))
+                    .background(AppPalette.accent)
                     .foregroundStyle(.white)
                     .clipShape(Capsule())
                     .ambientShadow(radius: 4)

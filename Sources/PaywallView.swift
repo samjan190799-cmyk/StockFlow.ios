@@ -45,6 +45,8 @@ public struct PaywallView: View {
                     // Ссылки на Privacy, Terms, и полный юридический дисклеймер автопродления
                     footerLegalSection
                 }
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 18)
                 .padding(.bottom, 64)
             }
@@ -72,10 +74,10 @@ public struct PaywallView: View {
                     .overlay(
                         VStack(spacing: 14) {
                             ProgressView()
-                                .tint(.purple)
+                                .tint(AppPalette.accentLight)
                                 .scaleEffect(1.3)
                             Text("Связь с App Store...".localized)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.white)
                         }
                         .padding(24)
@@ -124,7 +126,7 @@ public struct PaywallView: View {
                 restorePurchases()
             }) {
                 Text("Восстановить".localized)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.9))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
@@ -161,7 +163,7 @@ public struct PaywallView: View {
                         .foregroundStyle(.yellow)
                 }
                 Text("SMARTSTOCK PRO")
-                    .font(.system(size: 11, weight: .heavy))
+                    .font(.caption.weight(.heavy))
                     .tracking(2.0)
                     .foregroundStyle(
                         LinearGradient(
@@ -173,22 +175,22 @@ public struct PaywallView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
-            .background(Color.purple.opacity(0.22))
+            .background(AppPalette.accent.opacity(0.22))
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(LinearGradient(colors: [.yellow.opacity(0.6), .purple.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+                    .stroke(LinearGradient(colors: [.yellow.opacity(0.6), AppPalette.accentLight.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
             )
             
             Text("Максимум продаж на стоках".localized)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(Font.system(.title2, design: .rounded).weight(.bold))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white)
             
             Text("Автоматизируйте рутину и отправляйте сотни фото и видео на 10+ стоков в один клик.".localized)
-                .font(.system(size: 12, weight: .regular))
+                .font(.footnote)
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.72))
+                .foregroundStyle(.white.opacity(0.78))
                 .padding(.horizontal, 10)
         }
         .padding(.top, 2)
@@ -231,13 +233,7 @@ public struct PaywallView: View {
                 subtitle: "Мгновенное создание таблиц метаданных для любых агентств".localized
             )
         }
-        .padding(14)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
+        .appCard(cornerRadius: 20, padding: 14)
     }
     
     private func featureRow(icon: String, color: Color, title: String, subtitle: String) -> some View {
@@ -255,11 +251,11 @@ public struct PaywallView: View {
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                 Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.68))
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.72))
                     .fixedSize(horizontal: false, vertical: true)
             }
             
@@ -326,12 +322,12 @@ public struct PaywallView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 8) {
                             Text(title)
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.subheadline.weight(.bold))
                                 .foregroundStyle(.white)
                             
                             if let badge = badge {
                                 Text(badge)
-                                    .font(.system(size: 8.5, weight: .heavy))
+                                    .font(.caption2.weight(.heavy))
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 7)
                                     .padding(.vertical, 3)
@@ -341,8 +337,8 @@ public struct PaywallView: View {
                         }
                         
                         Text(subtitle)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.65))
+                            .font(.footnote)
+                            .foregroundStyle(.white.opacity(0.70))
                             .multilineTextAlignment(.leading)
                     }
                     
@@ -350,18 +346,18 @@ public struct PaywallView: View {
                     
                     VStack(alignment: .trailing, spacing: 3) {
                         Text(price)
-                            .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                            .font(Font.system(.subheadline, design: .rounded).weight(.bold))
                             .foregroundStyle(.white)
                             .multilineTextAlignment(.trailing)
                         
                         ZStack {
                             Circle()
-                                .stroke(isSelected ? Color(hex: "A855F7") : Color.white.opacity(0.3), lineWidth: 2)
+                                .stroke(isSelected ? AppPalette.accentLight : Color.white.opacity(0.3), lineWidth: 2)
                                 .frame(width: 20, height: 20)
                             
                             if isSelected {
                                 Circle()
-                                    .fill(Color(hex: "A855F7"))
+                                    .fill(AppPalette.accentLight)
                                     .frame(width: 12, height: 12)
                                     .transition(.scale.combined(with: .opacity))
                             }
@@ -371,11 +367,11 @@ public struct PaywallView: View {
                 .padding(14)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(isSelected ? Color.purple.opacity(0.24) : Color.white.opacity(0.06))
+                        .fill(isSelected ? AppPalette.accent.opacity(0.24) : Color.white.opacity(0.06))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(isSelected ? Color(hex: "A855F7") : Color.white.opacity(0.12), lineWidth: isSelected ? 2 : 1)
+                        .stroke(isSelected ? AppPalette.accentLight : Color.white.opacity(0.12), lineWidth: isSelected ? 2 : 1)
                 )
             }
         }
@@ -393,46 +389,39 @@ public struct PaywallView: View {
                         ProgressView()
                             .tint(.white)
                         Text("Загрузка...".localized)
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.body.weight(.bold))
                     } else {
                         if #available(iOS 17.0, *) {
                             Image(systemName: "sparkles")
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.body.weight(.bold))
                                 .symbolEffect(.bounce, value: selectedProductID)
                         } else {
                             Image(systemName: "sparkles")
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.body.weight(.bold))
                         }
                         
                         Text(actionButtonTitle)
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.body.weight(.bold))
                     }
                 }
                 .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(
-                    LinearGradient(
-                        colors: [Color(hex: "8B5CF6"), Color(hex: "3B82F6")],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(AppPalette.primaryGradient)
                 .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 15, style: .continuous)
                         .stroke(Color.white.opacity(0.25), lineWidth: 1)
                 )
-                .shadow(color: Color.purple.opacity(0.4), radius: 10, y: 4)
+                .shadow(color: AppPalette.accent.opacity(0.4), radius: 10, y: 4)
             }
             .buttonStyle(PremiumButtonStyle())
             .disabled(storeManager.isLoading)
             
             // Прозрачные условия списания по требованиям Apple Guideline 3.1.2
             Text(trialTermsClarification)
-                .font(.system(size: 11, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.82))
+                .foregroundStyle(.white.opacity(0.85))
                 .padding(.horizontal, 10)
         }
         .padding(.top, 4)
@@ -469,7 +458,7 @@ public struct PaywallView: View {
         VStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Условия автопродления подписки:".localized)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(.white.opacity(0.85))
                 
                 Text("• Оплата будет списана с учетной записи Apple ID при подтверждении покупки.".localized)
@@ -478,8 +467,8 @@ public struct PaywallView: View {
                 Text("• Управлять подпиской и отключить автопродление можно в настройках учетной записи Apple ID в любое время после покупки.".localized)
                 Text("• Любая неиспользованная часть бесплатного пробного периода аннулируется при приобретении подписки.".localized)
             }
-            .font(.system(size: 9.5))
-            .foregroundStyle(.white.opacity(0.6))
+            .font(.caption2)
+            .foregroundStyle(.white.opacity(0.68))
             .lineSpacing(2.5)
             .padding(12)
             .background(Color.white.opacity(0.04))
@@ -492,16 +481,16 @@ public struct PaywallView: View {
             // Крупные, высококонтрастные и доступные ссылки
             HStack(spacing: 18) {
                 Link("Условия использования (EULA)".localized, destination: termsOfUseURL)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(hex: "60A5FA"))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(AppPalette.accentLight)
                     .frame(minHeight: 32)
                 
                 Text("•")
                     .foregroundStyle(.white.opacity(0.3))
                 
                 Link("Политика конфиденциальности".localized, destination: privacyPolicyURL)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(hex: "60A5FA"))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(AppPalette.accentLight)
                     .frame(minHeight: 32)
             }
             .padding(.top, 2)
@@ -510,8 +499,8 @@ public struct PaywallView: View {
                 restorePurchases()
             }) {
                 Text("Восстановить покупки".localized)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.75))
                     .underline()
                     .frame(minHeight: 32)
             }

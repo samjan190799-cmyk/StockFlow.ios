@@ -35,7 +35,7 @@ struct PhotoDetailSheet: View {
                             dismiss()
                         }) {
                             Text("Закрыть".localized)
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.subheadline.weight(.bold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                                 .background(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.06))
@@ -114,12 +114,12 @@ struct DetailCardView: View {
                 // Ключевые слова
                 VStack(alignment: .leading, spacing: 8) {
                     Text("КЛЮЧЕВЫЕ СЛОВА (Генерация ИИ)".localized)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(.secondary)
                     
                     if photo.keywords.isEmpty {
                         Text("Ключевые слова отсутствуют. Запустите ИИ-анализ.".localized)
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                             .italic()
                             .padding(.top, 4)
@@ -145,7 +145,7 @@ struct DetailCardView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("МЕТАДАННЫЕ".localized)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button(action: {
@@ -161,11 +161,11 @@ struct DetailCardView: View {
                 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Title")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                     
                     Text(photo.title.isEmpty ? "Без названия".localized : photo.title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(.primary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
@@ -174,11 +174,11 @@ struct DetailCardView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     
                     Text("Description")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                     
                     Text(photo.description.isEmpty ? "Описание отсутствует".localized : photo.description)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundStyle(.primary.opacity(0.85))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
@@ -194,7 +194,7 @@ struct DetailCardView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("ПРОГНОЗ ПОПУЛЯРНОСТИ (Рыночный анализ ИИ)".localized)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(.secondary)
                     Spacer()
                     Image(systemName: "chart.bar.fill")
@@ -208,15 +208,15 @@ struct DetailCardView: View {
                         Spacer()
                         HStack(spacing: 12) {
                             Text("Shutterstock")
-                                .font(.system(size: 8, weight: .semibold))
+                                .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.secondary)
                                 .frame(width: 60, alignment: .center)
                             Text("Adobe Stock")
-                                .font(.system(size: 8, weight: .semibold))
+                                .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.secondary)
                                 .frame(width: 60, alignment: .center)
                             Text("Getty")
-                                .font(.system(size: 8, weight: .semibold))
+                                .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.secondary)
                                 .frame(width: 40, alignment: .center)
                         }
@@ -237,22 +237,22 @@ struct DetailCardView: View {
             // Нижняя строка статуса и кнопки вызова контекстного меню
             HStack(spacing: 8) {
                 Text(photo.fileSize)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                 
                 Text("•")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                 
                 Text("Статус:".localized + " \(photo.status.rawValue)")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                 
                 Spacer()
                 
                 // Status Badge Capsule (Glassmorphic)
                 Text(photo.status.rawValue)
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(photo.status.color.opacity(0.12))
@@ -323,7 +323,7 @@ struct DetailCardView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(.red)
                     Text(errorMsg)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(.red)
                         .lineLimit(2)
                     Spacer()
@@ -333,7 +333,7 @@ struct DetailCardView: View {
                         showingErrorAlert = true
                     }) {
                         Text("Подробнее".localized)
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.caption2.weight(.bold))
                             .foregroundStyle(Color(hex: "7C3AED"))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -411,7 +411,7 @@ struct QueueKeywordChip: View {
     var body: some View {
         HStack(spacing: 4) {
             Text(text)
-                .font(.system(size: 11, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(.primary)
             Button(action: {
                 HapticHelper.trigger(.light)
@@ -442,7 +442,7 @@ struct PopularityRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(keyword)
-                .font(.system(size: 11, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(.primary.opacity(0.85))
                 .frame(width: 80, alignment: .leading)
                 .lineLimit(1)
@@ -472,7 +472,7 @@ struct PopularityRow: View {
             }
             
             Text("Высокий".localized)
-                .font(.system(size: 9, weight: .black))
+                .font(.caption2.weight(.black))
                 .foregroundStyle(.secondary)
                 .frame(width: 44, alignment: .trailing)
         }

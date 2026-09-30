@@ -8,13 +8,14 @@ struct LogViewer: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
+                Color(hex: "0B0D14").ignoresSafeArea()
                 
                 ScrollView {
                     ScrollViewReader { proxy in
                         Text(logger.getTranscript())
                             .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.green)
+                            .foregroundStyle(AppPalette.green)
+                            .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding()
                             .id("Bottom")
@@ -47,7 +48,7 @@ struct LogViewer: View {
                     }) {
                         Text(isCopied ? "Скопировано!".localized : "Копировать".localized)
                             .bold()
-                            .foregroundColor(isCopied ? .green : Color(hex: "7C3AED"))
+                            .foregroundStyle(isCopied ? AppPalette.green : AppPalette.accentLight)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -55,8 +56,9 @@ struct LogViewer: View {
                         logger.clear()
                     }) {
                         Image(systemName: "trash")
-                            .foregroundColor(.red)
+                            .foregroundStyle(AppPalette.coral)
                     }
+                    .accessibilityLabel("Очистить".localized)
                 }
             }
         }
