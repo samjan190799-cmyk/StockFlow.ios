@@ -794,6 +794,14 @@ class QueueViewModel: ObservableObject {
         }
     }
     
+    /// Имя файла на стоке: у фото расширение .jpg (содержимое всегда JPEG), у видео — прежнее
+    private func uploadFilename(for photo: PhotoMetadata) -> String {
+        if photo.isVideo { return photo.filename }
+        let ext = (photo.filename as NSString).pathExtension.lowercased()
+        if ext == "jpg" || ext == "jpeg" { return photo.filename }
+        return (photo.filename as NSString).deletingPathExtension + ".jpg"
+    }
+    
     private func performRealUpload(for photo: PhotoMetadata, progress: (@Sendable (Double) -> Void)? = nil) async throws {
         guard let resolved = resolveSourceURL(for: photo) else {
             throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Исходный файл \(photo.filename) не найден на устройстве"])
@@ -825,29 +833,42 @@ class QueueViewModel: ObservableObject {
                 fileURLToUpload = sourceFileURL
             }
         } else {
-            // Обработка метаданных фото и сжатие
-            guard let data = try? Data(contentsOf: sourceFileURL) else {
-                throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Не удалось прочитать файл изображения"])
-            }
-            
+            // Обработка метаданных фото и сжатие. Файл читается с диска, а не целиком в память:
+            // RAW/ProRAW (DNG) при полном декодировании занимает гигабайты, и система закрывает приложение.
             let compress = UserDefaults.standard.bool(forKey: "sys_compress_jpeg")
-            let finalImageData = await ImageProcessor.shared.prepareImageForUpload(
-                imageData: data,
-                photo: photo,
-                compress: compress
-            )
+            let sourceBytes = ((try? FileManager.default.attributesOfItem(atPath: sourceFileURL.path))?[.size] as? Int64) ?? 0
+            let needsUpscale = UserDefaults.standard.bool(forKey: "sys_auto_upscale") && sourceBytes < 8 * 1024 * 1024
             
-            // Сохраняем обработанное фото во временный файл
-            let tempImageURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).jpg")
-            do {
-                try finalImageData.write(to: tempImageURL)
-                fileURLToUpload = tempImageURL
-                tempURLsToDelete.append(tempImageURL)
-            } catch {
-                throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Не удалось сохранить обработанное изображение: \(error.localizedDescription)"])
+            if needsUpscale, let data = try? Data(contentsOf: sourceFileURL) {
+                // Небольшой файл при включённом авто-апскейле: прежний путь через данные в памяти
+                let finalImageData = await ImageProcessor.shared.prepareImageForUpload(
+                    imageData: data,
+                    photo: photo,
+                    compress: compress
+                )
+                let tempImageURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).jpg")
+                do {
+                    try finalImageData.write(to: tempImageURL)
+                    fileURLToUpload = tempImageURL
+                    tempURLsToDelete.append(tempImageURL)
+                } catch {
+                    throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Не удалось сохранить обработанное изображение: \(error.localizedDescription)"])
+                }
+            } else {
+                guard let preparedURL = await ImageProcessor.shared.prepareImageFileForUpload(
+                    sourceURL: sourceFileURL,
+                    photo: photo,
+                    compress: compress
+                ) else {
+                    throw NSError(domain: "Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Не удалось подготовить изображение к отправке"])
+                }
+                fileURLToUpload = preparedURL
+                tempURLsToDelete.append(preparedURL)
             }
         }
         
+        // Фото всегда отправляется как JPEG — имя должно соответствовать содержимому (раньше уходил JPEG с именем .DNG)
+        let uploadName = uploadFilename(for: photo)
         let preparedBytes = ((try? FileManager.default.attributesOfItem(atPath: fileURLToUpload.path))?[.size] as? Int64) ?? 0
         FTPTranscriptLogger.shared.logStep("Файл \(photo.filename) подготовлен к отправке: \(preparedBytes / 1_048_576) МБ")
         
@@ -873,7 +894,7 @@ class QueueViewModel: ObservableObject {
             let pcAddress = UserDefaults.standard.string(forKey: "sys_pc_server_address") ?? "192.168.1.50:5000"
             try await uploadViaPCServer(
                 fileURL: fileURLToUpload,
-                filename: photo.filename,
+                filename: uploadName,
                 pcAddress: pcAddress,
                 activePlatforms: activePlatforms,
                 isVideo: photo.isVideo,
@@ -907,7 +928,7 @@ class QueueViewModel: ObservableObject {
                     // Используем потоковую отправку по URL
                     try await FTPSecureClient.upload(
                         fileURL: fileURLToUpload,
-                        filename: photo.filename,
+                        filename: uploadName,
                         host: parsed.host,
                         port: parsed.port,
                         username: platform.username,

@@ -2,6 +2,7 @@ import UIKit
 import ImageIO
 import Foundation
 import AVFoundation
+import UniformTypeIdentifiers
 
 /// Помощник для работы с кэшем изображений и их даунсемплингом в фоновом потоке
 @MainActor
@@ -82,12 +83,17 @@ final class ImageCacheHelper {
                 return nil
             }
             
-            let downsampleOptions = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
+            // RAW (DNG/ProRAW): полное декодирование 48-Мп кадра занимает 1–2 ГБ памяти, поэтому берём встроенное превью
+            let typeIdentifier = (CGImageSourceGetType(imageSource) as String?) ?? ""
+            let isRAW = (UTType(typeIdentifier)?.conforms(to: .rawImage) ?? false)
+                || ["dng", "cr2", "cr3", "nef", "arw", "raf", "orf", "rw2", "raw"].contains(fileURL.pathExtension.lowercased())
+            
+            let downsampleOptions: CFDictionary = [
+                (isRAW ? kCGImageSourceCreateThumbnailFromImageIfAbsent : kCGImageSourceCreateThumbnailFromImageAlways): true,
                 kCGImageSourceShouldCacheImmediately: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-            ] as CFDictionary
+            ] as [CFString: Any] as CFDictionary
             
             if let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions) {
                 return UIImage(cgImage: cgImage)

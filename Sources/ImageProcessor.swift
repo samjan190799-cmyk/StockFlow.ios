@@ -143,6 +143,120 @@ actor ImageProcessor {
         return nil
     }
     
+    private static let rawExtensions: Set<String> = ["dng", "cr2", "cr3", "nef", "arw", "raf", "orf", "rw2", "raw"]
+    
+    /// Готовит фото к отправке, читая исходный файл с диска (а не целиком в память).
+    /// Результат — JPEG с IPTC/EXIF во временном файле. Вызывающий обязан удалить файл.
+    /// RAW (DNG/ProRAW и др.) уменьшается до 6000 px по длинной стороне: полное декодирование 48-Мп RAW
+    /// занимало 1–2 ГБ памяти, и система закрывала приложение.
+    func prepareImageFileForUpload(sourceURL: URL, photo: PhotoMetadata, compress: Bool) -> URL? {
+        return autoreleasepool { () -> URL? in
+            let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+            guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, sourceOptions) else { return nil }
+            
+            let typeIdentifier = (CGImageSourceGetType(source) as String?) ?? ""
+            let sourceType = UTType(typeIdentifier)
+            let isJPEG = sourceType?.conforms(to: .jpeg) ?? false
+            let isRAW = (sourceType?.conforms(to: .rawImage) ?? false)
+                || Self.rawExtensions.contains(sourceURL.pathExtension.lowercased())
+            
+            let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).jpg")
+            guard let destination = CGImageDestinationCreateWithURL(outputURL as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else {
+                return nil
+            }
+            
+            let baseProperties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]) ?? [:]
+            var properties = Self.metadataProperties(
+                base: baseProperties,
+                title: photo.title,
+                description: photo.description,
+                keywords: photo.keywords,
+                categories: photo.categories
+            )
+            
+            if isJPEG {
+                if compress {
+                    properties[kCGImageDestinationLossyCompressionQuality as String] = 0.85
+                }
+                CGImageDestinationAddImageFromSource(destination, source, 0, properties as CFDictionary)
+            } else {
+                // HEIC, PNG, TIFF, RAW: читаем картинку с ограничением размера, чтобы не раздувать память
+                let maxSide = isRAW ? 6000 : 8192
+                let thumbnailOptions: [CFString: Any] = [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceShouldCacheImmediately: false,
+                    kCGImageSourceThumbnailMaxPixelSize: maxSide
+                ]
+                guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else {
+                    try? FileManager.default.removeItem(at: outputURL)
+                    return nil
+                }
+                
+                // Поворот уже применён к пикселям, служебные блоки RAW в JPEG не нужны
+                properties[kCGImagePropertyOrientation as String] = 1
+                properties.removeValue(forKey: kCGImagePropertyDNGDictionary as String)
+                properties.removeValue(forKey: "{Raw}")
+                if var tiff = properties[kCGImagePropertyTIFFDictionary as String] as? [String: Any] {
+                    tiff[kCGImagePropertyTIFFOrientation as String] = 1
+                    properties[kCGImagePropertyTIFFDictionary as String] = tiff
+                }
+                properties[kCGImageDestinationLossyCompressionQuality as String] = compress ? 0.85 : 0.92
+                CGImageDestinationAddImage(destination, cgImage, properties as CFDictionary)
+            }
+            
+            guard CGImageDestinationFinalize(destination) else {
+                try? FileManager.default.removeItem(at: outputURL)
+                return nil
+            }
+            return outputURL
+        }
+    }
+    
+    /// Свойства изображения с подставленными IPTC / TIFF / EXIF (заголовок, описание, ключевые слова, категории)
+    private static func metadataProperties(
+        base: [String: Any],
+        title: String,
+        description: String,
+        keywords: [String],
+        categories: [String]
+    ) -> [String: Any] {
+        var properties = base
+        
+        let iptcKey = kCGImagePropertyIPTCDictionary as String
+        var iptc = (properties[iptcKey] as? [String: Any]) ?? [:]
+        iptc[kCGImagePropertyIPTCObjectName as String] = title
+        iptc[kCGImagePropertyIPTCCaptionAbstract as String] = description
+        
+        var mergedKeywords = keywords
+        for category in categories {
+            if !mergedKeywords.contains(category) {
+                mergedKeywords.append(category)
+            }
+        }
+        iptc[kCGImagePropertyIPTCKeywords as String] = mergedKeywords
+        
+        if !categories.isEmpty {
+            iptc[kCGImagePropertyIPTCCategory as String] = categories[0]
+            if categories.count > 1 {
+                iptc[kCGImagePropertyIPTCSupplementalCategory as String] = Array(categories.dropFirst())
+            }
+        }
+        properties[iptcKey] = iptc
+        
+        let tiffKey = kCGImagePropertyTIFFDictionary as String
+        var tiff = (properties[tiffKey] as? [String: Any]) ?? [:]
+        tiff[kCGImagePropertyTIFFImageDescription as String] = description
+        properties[tiffKey] = tiff
+        
+        let exifKey = kCGImagePropertyExifDictionary as String
+        var exif = (properties[exifKey] as? [String: Any]) ?? [:]
+        exif[kCGImagePropertyExifUserComment as String] = description
+        properties[exifKey] = exif
+        
+        return properties
+    }
+    
     /// Внедряет метаданные (Title, Description, Keywords) в MP4/QuickTime видеофайл без перекодирования.
     func prepareVideoForUpload(
         videoURL: URL,
