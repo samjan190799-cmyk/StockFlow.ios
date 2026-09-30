@@ -7,54 +7,26 @@ struct StockSettingsView: View {
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @State private var selectedPlatformId: String? = nil
     @State private var selectedGuidePlatformId: String? = nil
-    
+
     // For connection verification and Paywall
     @State private var showingAlert = false
     @State private var alertMessage = ""
     @State private var isVerifying = false
     @State private var showingPaywall = false
-    
+
+    private let freeStockLimit = 2
+
     var body: some View {
         NavigationStack {
-            ZStack {
-                LiquidBackgroundView()
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Интегрированные фотостоки".localized)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                            .padding(.leading, 4)
-                        
-                        LazyVStack(spacing: 12) {
-                            ForEach(platforms) { platform in
-                                PlatformRowView(
-                                    platform: platform,
-                                    onToggle: { value in
-                                        togglePlatform(platform.id, isEnabled: value)
-                                    },
-                                    onTap: {
-                                        selectedPlatformId = platform.id
-                                    },
-                                    onInfoTap: {
-                                        selectedGuidePlatformId = platform.id
-                                    },
-                                    color: colorForPlatform(platform.id)
-                                )
-                            }
-                        }
-                        
-                        disclaimerSection
-                    }
-                    .padding()
-                }
+            AppScreen(maxWidth: 960) {
+                platformsSection
+                disclaimerSection
             }
             .navigationTitle("Настройки стоков".localized)
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .onAppear(perform: loadPlatforms)
             .sheet(item: Binding(
-                get: { 
+                get: {
                     if let id = selectedPlatformId {
                         return ActiveSheetPlatformId(id: id)
                     }
@@ -108,40 +80,87 @@ struct StockSettingsView: View {
                         .overlay(
                             VStack(spacing: 12) {
                                 ProgressView()
-                                    .tint(.primary)
                                 Text("Проверка соединения...".localized)
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.subheadline.weight(.medium))
                             }
-                            .glassCard(cornerRadius: 16, padding: 24)
+                            .appCard(cornerRadius: 16, padding: 24)
                         )
                 }
             }
         }
     }
 
-    
-    // MARK: - Brand Colors Mock
-    private var disclaimerSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(Color(hex: "007AFF"))
-                    .font(.system(size: 14))
-                Text("Правовая информация и товарные знаки".localized)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-            }
-            
-            Text("SmartStock является независимым инструментом и не связан, не авторизован и не спонсируется Shutterstock, Adobe Stock, Getty Images, Depositphotos, Freepik, Alamy, Dreamstime, 123RF, Pond5 или Google. Все товарные знаки и названия брендов принадлежат их правообладателям.".localized)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .lineSpacing(2)
-        }
-        .glassCard(cornerRadius: 16, padding: 16)
+    // MARK: - Sections
+
+    private var enabledCount: Int {
+        platforms.filter { $0.isEnabled }.count
     }
 
+    private var platformsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Интегрированные фотостоки".localized)
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .accessibilityAddTraits(.isHeader)
+
+                Spacer()
+
+                if !storeManager.isProUser {
+                    Button {
+                        HapticHelper.trigger(.light)
+                        showingPaywall = true
+                    } label: {
+                        AppChip(text: "\(min(enabledCount, freeStockLimit))/\(freeStockLimit)", symbol: "crown.fill", tone: .warning)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 4)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 12)], spacing: 12) {
+                ForEach(platforms) { platform in
+                    PlatformRowView(
+                        platform: platform,
+                        onToggle: { value in
+                            togglePlatform(platform.id, isEnabled: value)
+                        },
+                        onTap: {
+                            selectedPlatformId = platform.id
+                        },
+                        onInfoTap: {
+                            selectedGuidePlatformId = platform.id
+                        },
+                        color: colorForPlatform(platform.id)
+                    )
+                }
+            }
+        }
+    }
+
+    private var disclaimerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label {
+                Text("Правовая информация и товарные знаки".localized)
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+            } icon: {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(AppPalette.accentLight)
+            }
+
+            Text("SmartStock является независимым инструментом и не связан, не авторизован и не спонсируется Shutterstock, Adobe Stock, Getty Images, Depositphotos, Freepik, Alamy, Dreamstime, 123RF, Pond5 или Google. Все товарные знаки и названия брендов принадлежат их правообладателям.".localized)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
+    }
+
+    // MARK: - Brand Colors
     private func colorForPlatform(_ id: String) -> Color {
         switch id {
         case "adobe": return Color(hex: "FF0000") // Adobe Red
@@ -156,16 +175,7 @@ struct StockSettingsView: View {
         default: return .blue
         }
     }
-    
-    private func gradientForPlatform(_ id: String) -> LinearGradient {
-        let color = colorForPlatform(id)
-        return LinearGradient(
-            colors: [color.opacity(0.08), color.opacity(0.01)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-    
+
     // MARK: - Data Storage
     private func loadPlatforms() {
         guard platforms.isEmpty else { return }
@@ -255,101 +265,77 @@ struct StockSettingsView: View {
         }
     }
 }
+
+// MARK: - Карточка платформы
 @MainActor
 struct PlatformRowView: View {
-    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.colorScheme) private var colorScheme
     let platform: StockPlatform
     let onToggle: (Bool) -> Void
     let onTap: () -> Void
     let onInfoTap: () -> Void
     let color: Color
-    
-    @State private var isPulsing = false
-    
+
+    private var isConfigured: Bool {
+        !platform.username.isEmpty && !platform.passwordHash.isEmpty
+    }
+
+    private var needsSFTP: Bool {
+        platform.id == "adobe" || platform.id == "freepik"
+    }
+
     var body: some View {
-        let isConfigured = !platform.username.isEmpty && !platform.passwordHash.isEmpty
-        let isDark = colorScheme == .dark
-        
-        HStack(spacing: 14) {
-            // 3D Brand Avatar with Glass Overlay
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [color, color.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+        HStack(spacing: 8) {
+            Button {
+                HapticHelper.selection()
+                onTap()
+            } label: {
+                HStack(spacing: 12) {
+                    brandTile
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(platform.name)
+                                .font(.headline)
+                                .foregroundStyle(platform.isEnabled ? Color.primary : Color.secondary)
+                            if needsSFTP {
+                                AppChip(text: "SFTP", tone: .info)
+                            }
+                        }
+
+                        Text(platform.host)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+
+                        AppChip(
+                            text: isConfigured ? "Подключено".localized : "Нужна настройка".localized,
+                            symbol: isConfigured ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                            tone: isConfigured ? .success : .warning
                         )
-                    )
-                    .frame(width: 50, height: 50)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.35), lineWidth: 1.0)
-                    )
-                    .shadow(color: color.opacity(platform.isEnabled ? 0.4 : 0.1), radius: 8, x: 0, y: 4)
-                
-                Text(String(platform.name.prefix(2)).uppercased())
-                    .font(.system(size: 17, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(platform.name)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(platform.isEnabled ? Color.primary : Color.primary.opacity(0.55))
-                    
-                    if platform.id == "adobe" || platform.id == "freepik" {
-                        Text("SFTP")
-                            .font(.system(size: 8, weight: .bold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color(hex: "6366F1").opacity(0.18))
-                            .foregroundStyle(Color(hex: "6366F1"))
-                            .clipShape(Capsule())
                     }
-                    
-                    // Кнопка со знаком вопроса о возможностях и советах по стоку
-                    Button(action: {
-                        HapticHelper.trigger(.light)
-                        onInfoTap()
-                    }) {
-                        Image(systemName: "questionmark.circle")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color(hex: "007AFF"))
-                            .padding(4)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(BorderlessButtonStyle())
+
+                    Spacer(minLength: 0)
                 }
-                
-                Text(platform.host)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                
-                HStack(spacing: 5) {
-                    ZStack {
-                        Circle()
-                            .fill(isConfigured ? Color.green.opacity(0.3) : Color.orange.opacity(0.3))
-                            .frame(width: 10, height: 10)
-                            .scaleEffect(isPulsing && isConfigured ? 1.6 : 1.0)
-                            .opacity(isPulsing && isConfigured ? 0.0 : 0.8)
-                        
-                        Circle()
-                            .fill(isConfigured ? Color.green : Color.orange)
-                            .frame(width: 6, height: 6)
-                    }
-                    
-                    Text(isConfigured ? "Подключено".localized : "Нужна настройка".localized)
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(isConfigured ? Color.green : Color.orange)
-                }
-                .padding(.top, 1)
+                .contentShape(Rectangle())
             }
-            
-            Spacer()
-            
+            .buttonStyle(.plain)
+
+            // Инструкция по стоку
+            Button {
+                HapticHelper.trigger(.light)
+                onInfoTap()
+            } label: {
+                Image(systemName: "questionmark.circle")
+                    .font(.title3)
+                    .foregroundStyle(AppPalette.accentLight)
+                    .frame(width: 40, height: 40)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Инструкция".localized)
+
             Toggle("", isOn: Binding(
                 get: { platform.isEnabled },
                 set: { value in
@@ -358,37 +344,33 @@ struct PlatformRowView: View {
                 }
             ))
             .labelsHidden()
-            .tint(Color(hex: "007AFF"))
+            .tint(AppPalette.accent)
+            .accessibilityLabel(platform.name)
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(
-                    platform.isEnabled
-                    ? (isDark ? color.opacity(0.12) : color.opacity(0.06))
-                    : (isDark ? Color(hex: "141620") : Color.white)
-                )
-        )
+        .appCard(cornerRadius: 16, padding: 14)
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(
-                    platform.isEnabled
-                    ? color.opacity(isDark ? 0.40 : 0.25)
-                    : Color.white.opacity(isDark ? 0.08 : 0.25),
-                    lineWidth: 1.0
-                )
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(color.opacity(platform.isEnabled ? (colorScheme == .dark ? 0.50 : 0.35) : 0), lineWidth: 1.5)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .contentShape(Rectangle())
-        .onTapGesture {
-            HapticHelper.selection()
-            onTap()
+    }
+
+    private var brandTile: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [color, color.opacity(0.75)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            Text(String(platform.name.prefix(2)).uppercased())
+                .font(Font.system(.body, design: .rounded).weight(.black))
+                .foregroundStyle(platform.id == "123rf" ? Color.black.opacity(0.75) : Color.white)
         }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false)) {
-                isPulsing = true
-            }
-        }
+        .frame(width: 48, height: 48)
+        .opacity(platform.isEnabled ? 1 : 0.55)
+        .accessibilityHidden(true)
     }
 }
 
@@ -399,358 +381,237 @@ struct ActiveSheetPlatformId: Identifiable, Sendable {
 
 // MARK: - Platform Detail Sheet
 struct PlatformDetailSheet: View {
-    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
     @Binding var platform: StockPlatform
     var isVerifying: Bool
     var onSave: () -> Void
     var testConnection: (StockPlatform) -> Void
     var onRequirePro: () -> Void
-    @Environment(\.dismiss) private var dismiss
     @State private var showingOAuthHelp = false
     @State private var showingStockHelper = false
     @State private var showingGuideSheet = false
-    
+    @State private var showingAdvanced = false
+
+    private var needsSFTP: Bool {
+        platform.id == "adobe" || platform.id == "freepik"
+    }
+
+    private var activeBinding: Binding<Bool> {
+        Binding(
+            get: { platform.isEnabled },
+            set: { value in
+                if value && !StoreManager.shared.isProUser && !platform.isEnabled {
+                    if let data = UserDefaults.standard.data(forKey: "stock_platforms"),
+                       let saved = try? JSONDecoder().decode([StockPlatform].self, from: data) {
+                        let activeCount = saved.filter { $0.isEnabled && $0.id != platform.id }.count
+                        if activeCount >= 2 {
+                            HapticHelper.notification(.warning)
+                            onRequirePro()
+                            return
+                        }
+                    }
+                }
+                platform.isEnabled = value
+                onSave()
+            }
+        )
+    }
+
     var body: some View {
         NavigationStack {
-            ZStack {
-                LiquidBackgroundView()
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Параметры SFTP / FTP для".localized + " \(platform.name)")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-                            
-                            HStack {
-                                Text("Активен".localized)
-                                    .font(.system(size: 14, weight: .medium))
-                                Spacer()
-                                Toggle("", isOn: Binding(
-                                    get: { platform.isEnabled },
-                                    set: { value in
-                                        if value && !StoreManager.shared.isProUser && !platform.isEnabled {
-                                            if let data = UserDefaults.standard.data(forKey: "stock_platforms"),
-                                               let saved = try? JSONDecoder().decode([StockPlatform].self, from: data) {
-                                                let activeCount = saved.filter { $0.isEnabled && $0.id != platform.id }.count
-                                                if activeCount >= 2 {
-                                                    HapticHelper.notification(.warning)
-                                                    onRequirePro()
-                                                    return
-                                                }
-                                            }
-                                        }
-                                        platform.isEnabled = value
-                                        onSave()
-                                    }
-                                ))
-                                    .labelsHidden()
-                                    .tint(Color(hex: "007AFF"))
-                            }
-                            
-                            Divider().background(Color.primary.opacity(0.08))
-                            
-                            customInputField(title: "Имя пользователя (логин)".localized, placeholder: "Username", text: $platform.username, isSecure: false)
-                            
-                            customInputField(title: "Пароль".localized, placeholder: "••••••••", text: $platform.passwordHash, isSecure: true)
-                            
-                            Button(action: {
-                                HapticHelper.trigger(.light)
-                                showingStockHelper = true
-                            }) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "safari.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(.white)
-                                    
-                                    Text("Войти через Помощник (авто-настройка)".localized)
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(.white)
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "sparkles")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(.white)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(
-                                    LinearGradient(
-                                        colors: [Color(hex: "007AFF"), Color(hex: "0051A8")],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .ambientShadow(radius: 4)
-                            }
-                            .buttonStyle(PremiumButtonStyle())
-                            .padding(.top, 2)
-                            .sheet(isPresented: $showingStockHelper) {
-                                StockSignInHelperView(platformId: platform.id) { username, password in
-                                    platform.username = username
-                                    platform.passwordHash = password
-                                }
-                            }
-                            
-                            // Кнопка помощи для входа через Google / Apple
-                            Button(action: {
-                                HapticHelper.trigger(.light)
-                                showingOAuthHelp = true
-                            }) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "questionmark.circle.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(Color(hex: "007AFF"))
-                                    
-                                    Text("Вошли через Google или Apple?".localized)
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(Color(hex: "007AFF"))
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Color(hex: "007AFF").opacity(0.08))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                            }
-                            .buttonStyle(PremiumButtonStyle())
-                            .padding(.top, 2)
-                            .sheet(isPresented: $showingOAuthHelp) {
-                                OAuthHelpSheet()
-                            }
-                            
-                            HStack {
-                                Text("Сервер выгрузки:".localized + " \(platform.host)")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                            
-                            DisclosureGroup("Дополнительные параметры сервера".localized) {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    customInputField(title: "Имя хоста (сервер)".localized, placeholder: "ftp.example.com", text: $platform.host, isSecure: false)
-                                    
-                                    if platform.id == "adobe" || platform.id == "freepik" {
-                                        Text("Внимание: Данный сток требует SFTP. Plain FTP-соединение для него может быть недоступно.".localized)
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(.orange)
-                                            .lineLimit(nil)
-                                    }
-                                }
-                                .padding(.top, 4)
-                            }
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .tint(.secondary)
-                        }
-                        .glassCard(cornerRadius: 24, padding: 20)
-                        
-                        Button(action: {
-                            HapticHelper.trigger(.medium)
-                            testConnection(platform)
-                        }) {
-                            HStack(spacing: 8) {
-                                if isVerifying {
-                                    ProgressView()
-                                        .tint(.primary)
-                                    Text("Проверка...".localized)
-                                } else {
-                                    Text("Проверить соединение".localized)
-                                }
-                            }
-                            .font(.system(size: 14, weight: .bold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.06))
-                            .foregroundStyle(.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(Color.primary.opacity(0.12), lineWidth: 1.2)
-                            )
-                        }
-                        .buttonStyle(PremiumButtonStyle())
-                        .disabled(isVerifying)
-                    }
-                    .padding()
-                }
+            AppScreen(maxWidth: 560) {
+                credentialsSection
+                helpersSection
+                serverSection
+                testButton
             }
             .navigationTitle(platform.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
+                    Button {
                         HapticHelper.trigger(.light)
                         showingGuideSheet = true
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "questionmark.circle.fill")
-                                .font(.system(size: 15))
-                            Text("Инструкция".localized)
-                                .font(.system(size: 12, weight: .bold))
-                        }
-                        .foregroundStyle(Color(hex: "007AFF"))
+                    } label: {
+                        Label("Инструкция".localized, systemImage: "questionmark.circle.fill")
                     }
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Готово".localized) {
                         HapticHelper.trigger(.light)
                         onSave()
                         dismiss()
                     }
-                    .font(.system(size: 14, weight: .bold))
+                    .fontWeight(.semibold)
                 }
             }
             .sheet(isPresented: $showingGuideSheet) {
                 StockAgencyGuideSheet(platformId: platform.id)
+            }
+            .sheet(isPresented: $showingStockHelper) {
+                StockSignInHelperView(platformId: platform.id) { username, password in
+                    platform.username = username
+                    platform.passwordHash = password
+                }
+            }
+            .sheet(isPresented: $showingOAuthHelp) {
+                OAuthHelpSheet()
             }
         }
         .onDisappear {
             onSave()
         }
     }
-    
-    // MARK: - Custom Input Field
-    private func customInputField(title: String, placeholder: String, text: Binding<String>, isSecure: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.secondary)
-            
-            Group {
-                if isSecure {
-                    SecureField(placeholder, text: text)
-                        .textContentType(.password)
+
+    // MARK: - Sections
+
+    private var credentialsSection: some View {
+        AppSection("Параметры SFTP / FTP для".localized + " \(platform.name)") {
+            AppToggleRow(title: "Активен".localized, isOn: activeBinding)
+
+            AppDivider()
+
+            AppRow {
+                AppTextField(
+                    title: "Имя пользователя (логин)".localized,
+                    placeholder: "Username",
+                    text: $platform.username,
+                    contentType: .username
+                )
+            }
+
+            AppDivider()
+
+            AppRow {
+                AppTextField(
+                    title: "Пароль".localized,
+                    placeholder: "••••••••",
+                    text: $platform.passwordHash,
+                    isSecure: true,
+                    contentType: .password
+                )
+            }
+        }
+    }
+
+    private var helpersSection: some View {
+        AppSection {
+            Button {
+                HapticHelper.trigger(.light)
+                showingStockHelper = true
+            } label: {
+                AppNavRowLabel(
+                    symbol: "safari.fill",
+                    tint: AppPalette.accent,
+                    title: "Войти через Помощник (авто-настройка)".localized,
+                    trailingSymbol: "sparkles"
+                )
+            }
+            .buttonStyle(.plain)
+
+            AppDivider()
+
+            Button {
+                HapticHelper.trigger(.light)
+                showingOAuthHelp = true
+            } label: {
+                AppNavRowLabel(
+                    symbol: "questionmark.circle.fill",
+                    tint: AppPalette.amber,
+                    title: "Вошли через Google или Apple?".localized
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var serverSection: some View {
+        AppSection(footer: "Сервер выгрузки:".localized + " \(platform.host)") {
+            DisclosureGroup("Дополнительные параметры сервера".localized, isExpanded: $showingAdvanced) {
+                VStack(alignment: .leading, spacing: 10) {
+                    AppTextField(
+                        title: "Имя хоста (сервер)".localized,
+                        placeholder: "ftp.example.com",
+                        text: $platform.host,
+                        monospaced: true
+                    )
+
+                    if needsSFTP {
+                        Label {
+                            Text("Внимание: Данный сток требует SFTP. Plain FTP-соединение для него может быть недоступно.".localized)
+                                .font(.footnote)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        }
+                        .foregroundStyle(AppTone.warning.foreground(colorScheme))
+                    }
+                }
+                .padding(.top, 8)
+            }
+            .font(.subheadline.weight(.semibold))
+            .tint(.secondary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    private var testButton: some View {
+        Button {
+            HapticHelper.trigger(.medium)
+            testConnection(platform)
+        } label: {
+            HStack(spacing: 8) {
+                if isVerifying {
+                    ProgressView()
+                    Text("Проверка...".localized)
                 } else {
-                    TextField(placeholder, text: text)
-                        .textContentType(.username)
+                    Image(systemName: "bolt.horizontal.fill")
+                    Text("Проверить соединение".localized)
                 }
             }
-            .textFieldStyle(.plain)
-            .font(.system(size: 13))
-            .padding(12)
-            .background(Color.primary.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.primary.opacity(0.12), lineWidth: 1.2)
-            )
-            .textInputAutocapitalization(.never)
         }
+        .buttonStyle(.appPrimary)
+        .disabled(isVerifying)
     }
 }
 
 // MARK: - OAuthHelpSheet (Инструкции для входа через Google / Apple)
 struct OAuthHelpSheet: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationStack {
-            ZStack {
-                LiquidBackgroundView()
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Важное предупреждение
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(.orange)
-                                Text("Важно для Google / Apple".localized)
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(.white)
-                            }
-                            
-                            Text("Если вы регистрировались на фотостоках через аккаунт Google или Apple, прямой вход по паролю этих сервисов не поддерживается для FTP/SFTP загрузки (это техническое ограничение самих стоков).".localized)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .lineSpacing(4)
-                            
-                            Text("Для выгрузки из приложения вам необходимо использовать специальный FTP-пароль, сгенерированный в личном кабинете автора.".localized)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.primary)
-                                .lineSpacing(4)
-                        }
-                        .glassCard(cornerRadius: 18, padding: 16)
-                        
-                        // Раздел Adobe Stock
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Инструкция для Adobe Stock".localized)
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("1. Войдите в личный кабинет автора на contributor.adobestock.com.".localized)
-                                Text("2. Перейдите в 'Настройки учетной записи' (нажав на свой профиль в правом верхнем углу).".localized)
-                                Text("3. В подразделе 'Настройки FTP' вы увидите ваш персональный логин (ID) и сгенерированный FTP-пароль.".localized)
-                                Text("4. Вставьте эти данные в настройки Adobe Stock в приложении.".localized)
-                            }
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .lineSpacing(3)
-                            
-                            if let adobeURL = URL(string: "https://contributor.adobestock.com/") {
-                                Link(destination: adobeURL) {
-                                    HStack {
-                                        Image(systemName: "safari")
-                                        Text("Открыть Adobe Stock Contributor".localized)
-                                    }
-                                    .font(.system(size: 13, weight: .bold))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(Color(hex: "FF0000"))
-                                    .foregroundStyle(.white)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                }
-                                .buttonStyle(PremiumButtonStyle())
-                            }
-                        }
-                        .glassCard(cornerRadius: 18, padding: 16)
-                        
-                        // Раздел Shutterstock
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Инструкция для Shutterstock".localized)
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("1. Войдите в кабинет автора на submit.shutterstock.com.".localized)
-                                Text("2. Перейдите в настройки аккаунта 'Account Settings'.".localized)
-                                Text("3. Найдите раздел FTP и скопируйте предоставленные учетные данные (обычно логином является ваш email).".localized)
-                                Text("4. Введите их в настройки Shutterstock в приложении.".localized)
-                            }
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .lineSpacing(3)
-                            
-                            if let shutterURL = URL(string: "https://submit.shutterstock.com/") {
-                                Link(destination: shutterURL) {
-                                    HStack {
-                                        Image(systemName: "safari")
-                                        Text("Открыть submit.shutterstock.com".localized)
-                                    }
-                                    .font(.system(size: 13, weight: .bold))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(Color(hex: "FF6600"))
-                                    .foregroundStyle(.white)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                }
-                                .buttonStyle(PremiumButtonStyle())
-                            }
-                        }
-                        .glassCard(cornerRadius: 18, padding: 16)
-                    }
-                    .padding()
-                }
+            AppScreen(maxWidth: 560) {
+                warningCard
+
+                instructionCard(
+                    title: "Инструкция для Adobe Stock",
+                    steps: [
+                        "1. Войдите в личный кабинет автора на contributor.adobestock.com.",
+                        "2. Перейдите в 'Настройки учетной записи' (нажав на свой профиль в правом верхнем углу).",
+                        "3. В подразделе 'Настройки FTP' вы увидите ваш персональный логин (ID) и сгенерированный FTP-пароль.",
+                        "4. Вставьте эти данные в настройки Adobe Stock в приложении."
+                    ],
+                    linkTitle: "Открыть Adobe Stock Contributor",
+                    urlString: "https://contributor.adobestock.com/",
+                    brand: Color(hex: "E11D1D")
+                )
+
+                instructionCard(
+                    title: "Инструкция для Shutterstock",
+                    steps: [
+                        "1. Войдите в кабинет автора на submit.shutterstock.com.",
+                        "2. Перейдите в настройки аккаунта 'Account Settings'.",
+                        "3. Найдите раздел FTP и скопируйте предоставленные учетные данные (обычно логином является ваш email).",
+                        "4. Введите их в настройки Shutterstock в приложении."
+                    ],
+                    linkTitle: "Открыть submit.shutterstock.com",
+                    urlString: "https://submit.shutterstock.com/",
+                    brand: Color(hex: "D95700")
+                )
             }
             .navigationTitle("Вход через Google / Apple".localized)
             .navigationBarTitleDisplayMode(.inline)
@@ -759,9 +620,61 @@ struct OAuthHelpSheet: View {
                     Button("Готово".localized) {
                         dismiss()
                     }
-                    .font(.system(size: 14, weight: .bold))
+                    .fontWeight(.semibold)
                 }
             }
         }
+    }
+
+    // Важное предупреждение
+    private var warningCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label {
+                Text("Важно для Google / Apple".localized)
+                    .font(.subheadline.weight(.bold))
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(AppTone.warning.foreground(colorScheme))
+            }
+
+            Text("Если вы регистрировались на фотостоках через аккаунт Google или Apple, прямой вход по паролю этих сервисов не поддерживается для FTP/SFTP загрузки (это техническое ограничение самих стоков).".localized)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Для выгрузки из приложения вам необходимо использовать специальный FTP-пароль, сгенерированный в личном кабинете автора.".localized)
+                .font(.footnote.weight(.medium))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
+    }
+
+    private func instructionCard(title: String, steps: [String], linkTitle: String, urlString: String, brand: Color) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title.localized)
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(steps, id: \.self) { step in
+                    Text(step.localized)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if let url = URL(string: urlString) {
+                Link(destination: url) {
+                    Label(linkTitle.localized, systemImage: "safari")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(brand))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
     }
 }

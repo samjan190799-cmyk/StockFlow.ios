@@ -56,7 +56,7 @@ struct SystemSettingsView: View {
         NavigationStack {
             mainContent
                 .navigationTitle("Параметры системы".localized)
-                .navigationBarTitleDisplayMode(.inline)
+                .navigationBarTitleDisplayMode(.large)
                 .overlay(alignment: .bottom) { toastOverlay }
                 .modifier(SettingsObservers1(
                     sysLanguage: $sysLanguage,
@@ -101,517 +101,559 @@ struct SystemSettingsView: View {
         }
     }
 
-    // MARK: - Выделенный контент (избегаем перегрузки компилятора в body)
+    // MARK: - Контент (разбит на группы, чтобы не упираться в лимит ViewBuilder)
 
-    @ViewBuilder
     private var mainContent: some View {
-        ZStack {
-            LiquidBackgroundView()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    subscriptionSection
-                    interfaceSection
-                    googlePhotosSection
-                    schedulerSection
-                    upscaleSection
-                    uploadSection
-                    pcServerSection
-                    cacheSection
-                    supportSection
-                    disclaimerSection
-                    saveButtonSection
-                    if showTesterPanel {
-                        testerDebugSection
-                    }
-                    versionFooterSection
-                }
-                .padding()
+        AppScreen {
+            primarySections
+            secondarySections
+            if showTesterPanel {
+                testerDebugSection
             }
+            versionFooterSection
         }
     }
+
+    @ViewBuilder
+    private var primarySections: some View {
+        subscriptionSection
+        interfaceSection
+        googlePhotosSection
+        schedulerSection
+        upscaleSection
+    }
+
+    @ViewBuilder
+    private var secondarySections: some View {
+        uploadSection
+        pcServerSection
+        cacheSection
+        supportSection
+        disclaimerSection
+    }
+
+    // MARK: - Подписка
 
     @ViewBuilder
     private var subscriptionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if storeManager.isProUser {
+        if storeManager.isProUser {
+            Button {
+                HapticHelper.trigger(.light)
+                showPaywall = true
+            } label: {
                 HStack(spacing: 12) {
                     ZStack {
-                        Circle()
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .fill(LinearGradient(colors: [.yellow, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 38, height: 38)
                         Image(systemName: "crown.fill")
-                            .font(.system(size: 18))
-                            .foregroundStyle(.white)
+                            .font(.headline)
+                            .foregroundStyle(Color.white)
                     }
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
+                    .frame(width: 44, height: 44)
+                    .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
                             Text("SmartStock PRO")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(.white)
-                            
-                            Text("АКТИВЕН".localized)
-                                .font(.system(size: 9, weight: .heavy))
-                                .foregroundStyle(.black)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.yellow)
-                                .clipShape(Capsule())
+                                .font(.headline)
+                                .foregroundStyle(Color.primary)
+                            AppChip(text: "АКТИВЕН".localized, symbol: "checkmark.circle.fill", tone: .success)
                         }
-                        
                         Text("Все премиум-функции и безлимитный ИИ активны".localized)
-                            .font(.system(size: 11))
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
                     }
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        HapticHelper.trigger(.light)
-                        showPaywall = true
-                    }) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
                 }
-            } else {
-                Button(action: {
-                    HapticHelper.trigger(.medium)
-                    showPaywall = true
-                }) {
-                    HStack(spacing: 12) {
-                        ZStack {
-                            Circle()
-                                .fill(LinearGradient(colors: [Color(hex: "8B5CF6"), Color(hex: "3B82F6")], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 42, height: 42)
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.white)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 6) {
-                                Text("Перейти на SmartStock PRO".localized)
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(.white)
-                                
-                                Text("PRO")
-                                    .font(.system(size: 10, weight: .heavy))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(LinearGradient(colors: [.orange, .red], startPoint: .leading, endPoint: .trailing))
-                                    .clipShape(Capsule())
-                            }
-                            
-                            Text("Безлимитный ИИ, 10+ стоков и автозагрузка".localized)
-                                .font(.system(size: 11))
-                                .foregroundStyle(.white.opacity(0.75))
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-                    .padding(4)
-                }
-                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .appCard()
             }
+            .buttonStyle(.plain)
+        } else {
+            Button {
+                HapticHelper.trigger(.medium)
+                showPaywall = true
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.white.opacity(0.20))
+                        Image(systemName: "sparkles")
+                            .font(.headline)
+                            .foregroundStyle(Color.white)
+                    }
+                    .frame(width: 44, height: 44)
+                    .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Перейти на SmartStock PRO".localized)
+                            .font(.headline)
+                            .foregroundStyle(Color.white)
+                            .multilineTextAlignment(.leading)
+                        Text("Безлимитный ИИ, 10+ стоков и автозагрузка".localized)
+                            .font(.footnote)
+                            .foregroundStyle(Color.white.opacity(0.85))
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.bold))
+                        .foregroundStyle(Color.white.opacity(0.85))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppPalette.primaryGradient)
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .glassCard()
     }
+
+    // MARK: - Уведомление об изменении настроек
 
     @ViewBuilder
     private var toastOverlay: some View {
         if showingSavedToast {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.green)
+            Label {
                 Text(savedToastMessage.localized)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(AppTone.success.foreground(colorScheme))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(colorScheme == .dark ? Color(hex: "2C2C2E") : Color(hex: "E5E5EA"))
-            .foregroundStyle(.primary)
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 1))
             .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
             .padding(.bottom, 20)
             .transition(.move(edge: .bottom).combined(with: .opacity))
+            .accessibilityElement(children: .combine)
         }
     }
 
-    
-    // MARK: - Sections
-    
-    @ViewBuilder
+    // MARK: - Интерфейс
+
     private var interfaceSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Интерфейс и Оформление".localized, icon: "paintbrush.fill")
-            pickerRow("Язык приложения".localized, selection: $sysLanguage, options: ["Русский", "English", "Հայերեն"])
-            Divider().background(Color.primary.opacity(0.08))
-            pickerRow("Тема оформления".localized, selection: $sysTheme, options: ["Темная", "Светлая", "Системная"])
+        AppSection("Интерфейс и Оформление".localized, symbol: "paintbrush.fill") {
+            AppPickerRow(
+                title: "Язык приложения".localized,
+                selection: $sysLanguage,
+                options: ["Русский", "English", "Հայերեն"],
+                label: { $0.localized }
+            )
+
+            AppDivider()
+
+            AppPickerRow(
+                title: "Тема оформления".localized,
+                selection: $sysTheme,
+                options: ["Темная", "Светлая", "Системная"],
+                label: { $0.localized }
+            )
         }
-        .glassCard()
     }
-    
-    @ViewBuilder
+
+    // MARK: - Google Фото
+
     private var googlePhotosSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Text("ОБЛАКО GOOGLE ФОТО".localized)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                
-                Button(action: {
-                    HapticHelper.trigger(.light)
-                    showGoogleHelpSheet = true
-                }) {
-                    Image(systemName: "questionmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color(hex: "4285F4"))
-                }
-                
-                Spacer()
-                Image(systemName: "photo.stack.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color(hex: "4285F4"))
-            }
-            
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(googlePhotosManager.isAuthenticated ? "Подключено к Google Фото".localized : "Не подключено".localized)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(googlePhotosManager.isAuthenticated ? .green : .primary)
-                    
-                    Text(googlePhotosManager.isAuthenticated ? googlePhotosManager.userEmail : "Импорт видео и фото из архива Google Фото".localized)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                
-                if googlePhotosManager.isAuthenticated {
-                    Button(action: {
-                        HapticHelper.trigger(.medium)
-                        googlePhotosManager.signOut()
-                        showToast("Выход из Google Фото выполнен".localized)
-                    }) {
-                        Text("Выйти".localized)
-                            .font(.system(size: 12, weight: .bold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Color.red.opacity(0.15))
-                            .foregroundStyle(.red)
-                            .clipShape(Capsule())
-                    }
-                } else {
-                    Button(action: {
-                        HapticHelper.trigger(.medium)
-                        Task {
-                            await googlePhotosManager.signInWithGoogle()
-                            if googlePhotosManager.isAuthenticated {
-                                showToast("Успешно подключено к Google Фото!".localized)
-                            }
+        AppSection("ОБЛАКО GOOGLE ФОТО".localized, symbol: "photo.stack.fill", tint: Color(hex: "4285F4")) {
+            AppRow {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if googlePhotosManager.isAuthenticated {
+                            Label("Подключено к Google Фото".localized, systemImage: "checkmark.circle.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(AppTone.success.foreground(colorScheme))
+                        } else {
+                            Text("Не подключено".localized)
+                                .font(.subheadline.weight(.semibold))
                         }
-                    }) {
-                        Text("Подключить".localized)
-                            .font(.system(size: 12, weight: .bold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Color(hex: "4285F4"))
-                            .foregroundStyle(.white)
-                            .clipShape(Capsule())
+
+                        Text(googlePhotosManager.isAuthenticated ? googlePhotosManager.userEmail : "Импорт видео и фото из архива Google Фото".localized)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    if googlePhotosManager.isAuthenticated {
+                        Button {
+                            HapticHelper.trigger(.medium)
+                            googlePhotosManager.signOut()
+                            showToast("Выход из Google Фото выполнен".localized)
+                        } label: {
+                            Text("Выйти".localized)
+                        }
+                        .buttonStyle(.appDestructive)
+                    } else {
+                        Button {
+                            HapticHelper.trigger(.medium)
+                            Task {
+                                await googlePhotosManager.signInWithGoogle()
+                                if googlePhotosManager.isAuthenticated {
+                                    showToast("Успешно подключено к Google Фото!".localized)
+                                }
+                            }
+                        } label: {
+                            Text("Подключить".localized)
+                        }
+                        .buttonStyle(.appCapsule(tint: Color(hex: "4285F4")))
                     }
                 }
             }
-            
-            Divider().background(Color.primary.opacity(0.08))
-            
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Google OAuth Client ID (необязательно)".localized)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
-                
-                TextField("Ваш Client ID из Google Cloud Console...".localized, text: $customGoogleClientId)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12, design: .monospaced))
-                    .padding(10)
-                    .background(colorScheme == .dark ? Color.black.opacity(0.25) : Color.black.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+
+            AppDivider()
+
+            AppRow {
+                VStack(alignment: .leading, spacing: 8) {
+                    AppTextField(
+                        title: "Google OAuth Client ID (необязательно)".localized,
+                        placeholder: "Ваш Client ID из Google Cloud Console...".localized,
+                        text: $customGoogleClientId,
+                        monospaced: true
                     )
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled(true)
-                
-                Text("Используется для прямого доступа к API Google Фото и Drive.".localized)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+
+                    Text("Используется для прямого доступа к API Google Фото и Drive.".localized)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            AppDivider()
+
+            Button {
+                HapticHelper.trigger(.light)
+                showGoogleHelpSheet = true
+            } label: {
+                AppNavRowLabel(
+                    symbol: "questionmark.circle.fill",
+                    tint: Color(hex: "4285F4"),
+                    title: "Инструкция".localized
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Планировщик
+
+    private var schedulerSection: some View {
+        AppSection("Автозагрузка папки (Планировщик)".localized, symbol: "clock.arrow.circlepath") {
+            AppToggleRow(title: "Фоновый авто-сканер".localized, isOn: $bgScheduler)
+
+            if bgScheduler {
+                AppDivider()
+
+                AppRow {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Папка для сканирования".localized)
+                                .font(.body)
+                            Text(folderName.isEmpty ? "Не выбрана".localized : folderName)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Button {
+                            HapticHelper.trigger(.light)
+                            showFolderPicker = true
+                        } label: {
+                            Text(folderName.isEmpty ? "Выбрать".localized : "Изменить".localized)
+                        }
+                        .buttonStyle(.appCapsule)
+                    }
+                }
+
+                AppDivider()
+
+                AppPickerRow(
+                    title: "Интервал проверки".localized,
+                    selection: Binding(
+                        get: { "\(schedulerIntervalHours) ч" },
+                        set: { schedulerIntervalHours = Int($0.replacingOccurrences(of: " ч", with: "")) ?? 1 }
+                    ),
+                    options: ["1 ч", "2 ч", "4 ч", "8 ч", "12 ч", "24 ч"],
+                    label: { $0.localized }
+                )
+
+                AppDivider()
+
+                AppRow {
+                    HStack {
+                        Text("Последний запуск".localized)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Text(lastRunText)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+
+                AppDivider()
+
+                AppRow {
+                    Button {
+                        HapticHelper.trigger(.medium)
+                        runSchedulerNow()
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isRunningScheduler {
+                                ProgressView()
+                                    .tint(Color.white)
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "play.fill")
+                            }
+                            Text(isRunningScheduler ? "Запуск проверки...".localized : "Запустить проверку сейчас".localized)
+                        }
+                    }
+                    .buttonStyle(.appPrimary)
+                    .disabled(isRunningScheduler || folderName.isEmpty)
+                }
             }
         }
-        .glassCard()
     }
-    
-    @ViewBuilder
-    private var schedulerSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Автозагрузка папки (Планировщик)".localized, icon: "clock.arrow.circlepath")
-            Toggle("Фоновый авто-сканер".localized, isOn: $bgScheduler)
-                .tint(Color(hex: "007AFF"))
-            
-            if bgScheduler {
-                Divider().background(Color.primary.opacity(0.08))
-                
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Папка для сканирования".localized)
-                            .font(.system(size: 14))
-                        Text(folderName.isEmpty ? "Не выбрана".localized : folderName)
-                            .font(.system(size: 12))
+
+    // MARK: - Апскейл
+
+    private var upscaleSection: some View {
+        AppSection("Автоматический Апскейл".localized, symbol: "wand.and.stars") {
+            AppToggleRow(title: "Включить авто-апскейл".localized, isOn: $autoUpscale)
+
+            if autoUpscale {
+                AppDivider()
+
+                AppPickerRow(
+                    title: "Порог срабатывания".localized,
+                    selection: $upscaleThreshold,
+                    options: [
+                        "Меньше 4 МБ (Рекомендуется)",
+                        "Меньше 2 МБ",
+                        "Меньше 8 МБ"
+                    ],
+                    label: { $0.localized }
+                )
+
+                AppDivider()
+
+                AppPickerRow(
+                    title: "Коэффициент (масштаб)".localized,
+                    selection: $upscaleFactor,
+                    options: [
+                        "Увеличение 2x (Бикубическое)",
+                        "Увеличение 4x (Нейросеть)"
+                    ],
+                    label: { $0.localized }
+                )
+            }
+        }
+    }
+
+    // MARK: - Выгрузка
+
+    private var uploadSection: some View {
+        AppSection("Параметры выгрузки и очередность".localized, symbol: "arrow.up.forward.app.fill") {
+            AppPickerRow(
+                title: "Потоки параллельной загрузки".localized,
+                selection: $parallelStreams,
+                options: [1, 2, 3, 5],
+                label: { "\($0) \(getStreamWord($0).localized)" }
+            )
+
+            AppDivider()
+
+            AppToggleRow(
+                title: "Загрузка видео по очереди (Строго 1 за 1)".localized,
+                subtitle: "Видеофайлы отправляются строго по очереди один за другим без перегрева процессора.".localized,
+                isOn: $seqVideo
+            )
+
+            AppDivider()
+
+            AppToggleRow(
+                title: "Загрузка фото по очереди".localized,
+                subtitle: "Фотографии будут отправляться строго последовательно по одной.".localized,
+                isOn: $seqPhoto
+            )
+
+            AppDivider()
+
+            AppToggleRow(title: "Автоповтор при сбоях (3 попытки)".localized, isOn: $retryOnFail)
+
+            AppDivider()
+
+            AppToggleRow(title: "Сжатие JPEG перед загрузкой".localized, isOn: $compressJpeg)
+
+            AppDivider()
+
+            AppToggleRow(title: "Системные уведомления".localized, isOn: $sysNotifications)
+        }
+    }
+
+    // MARK: - ПК-сервер
+
+    private var pcServerSection: some View {
+        AppSection(
+            "Локальный ПК-сервер".localized,
+            symbol: "server.rack",
+            footer: "Позволяет отправлять фото через программу на вашем компьютере.".localized
+        ) {
+            AppToggleRow(title: "Загрузка через ПК-сервер".localized, isOn: $pcServerEnabled)
+
+            if pcServerEnabled {
+                AppDivider()
+
+                AppRow {
+                    AppTextField(
+                        title: "Адрес сервера (IP:Порт)".localized,
+                        placeholder: "192.168.1.50:5000",
+                        text: $pcServerAddress,
+                        monospaced: true
+                    )
+                }
+            }
+        }
+    }
+
+    // MARK: - Кэш
+
+    private var cacheSection: some View {
+        AppSection("Память и Очистка кэша".localized, symbol: "internaldrive.fill") {
+            AppToggleRow(
+                title: "Режим проводника (Прямая выгрузка без кэша)".localized,
+                subtitle: "Приложение работает как прямой проводник: файлы отправляются без дублирования на диск телефона.".localized,
+                isOn: $noCacheMode
+            )
+
+            AppDivider()
+
+            AppRow {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Очистка остаточного кэша".localized)
+                            .font(.body)
+                        Text("Использовано диска: ".localized + String(format: "%.1f MB", cacheSizeMB))
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    Button(action: {
-                        HapticHelper.trigger(.light)
-                        showFolderPicker = true
-                    }) {
-                        Text(folderName.isEmpty ? "Выбрать".localized : "Изменить".localized)
-                            .font(.system(size: 12, weight: .semibold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color(hex: "007AFF"))
-                            .foregroundStyle(.white)
-                            .clipShape(Capsule())
+
+                    Spacer(minLength: 8)
+
+                    Button(action: clearCache) {
+                        Label("Очистить".localized, systemImage: "trash")
                     }
-                }
-                
-                Divider().background(Color.primary.opacity(0.08))
-                
-                pickerRow("Интервал проверки".localized, selection: Binding(
-                    get: { "\(schedulerIntervalHours) ч" },
-                    set: { schedulerIntervalHours = Int($0.replacingOccurrences(of: " ч", with: "")) ?? 1 }
-                ), options: ["1 ч", "2 ч", "4 ч", "8 ч", "12 ч", "24 ч"])
-                
-                Divider().background(Color.primary.opacity(0.08))
-                
-                HStack {
-                    Text("Последний запуск".localized)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(lastRunText)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                
-                Divider().background(Color.primary.opacity(0.08))
-                
-                Button(action: {
-                    HapticHelper.trigger(.medium)
-                    runSchedulerNow()
-                }) {
-                    HStack {
-                        if isRunningScheduler {
-                            ProgressView()
-                                .tint(.white)
-                                .controlSize(.small)
-                                .padding(.trailing, 6)
-                        } else {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 12))
-                        }
-                        Text(isRunningScheduler ? "Запуск проверки...".localized : "Запустить проверку сейчас".localized)
-                            .font(.system(size: 13, weight: .bold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(AppleTheme.primaryGradient.opacity(isRunningScheduler ? 0.6 : 1.0))
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-                .disabled(isRunningScheduler || folderName.isEmpty)
-            }
-        }
-        .glassCard()
-    }
-    
-    @ViewBuilder
-    private var upscaleSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Автоматический Апскейл".localized, icon: "wand.and.stars")
-            Toggle("Включить авто-апскейл".localized, isOn: $autoUpscale)
-                .tint(Color(hex: "007AFF"))
-            
-            if autoUpscale {
-                Divider().background(Color.primary.opacity(0.08))
-                pickerRow("Порог срабатывания".localized, selection: $upscaleThreshold, options: [
-                    "Меньше 4 МБ (Рекомендуется)",
-                    "Меньше 2 МБ",
-                    "Меньше 8 МБ"
-                ])
-                Divider().background(Color.primary.opacity(0.08))
-                pickerRow("Коэффициент (масштаб)".localized, selection: $upscaleFactor, options: [
-                    "Увеличение 2x (Бикубическое)",
-                    "Увеличение 4x (Нейросеть)"
-                ])
-            }
-        }
-        .glassCard()
-    }
-    
-    @ViewBuilder
-    private var uploadSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Параметры выгрузки и очередность".localized, icon: "arrow.up.forward.app.fill")
-            pickerIntRow("Потоки параллельной загрузки".localized, selection: $parallelStreams, options: [1, 2, 3, 5])
-            Divider().background(Color.primary.opacity(0.08))
-            
-            Toggle("Загрузка видео по очереди (Строго 1 за 1)".localized, isOn: $seqVideo)
-                .tint(Color(hex: "007AFF"))
-            Text("Видеофайлы отправляются строго по очереди один за другим без перегрева процессора.".localized)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-            
-            Divider().background(Color.primary.opacity(0.08))
-            
-            Toggle("Загрузка фото по очереди".localized, isOn: $seqPhoto)
-                .tint(Color(hex: "007AFF"))
-            Text("Фотографии будут отправляться строго последовательно по одной.".localized)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-            
-            Divider().background(Color.primary.opacity(0.08))
-            Toggle("Автоповтор при сбоях (3 попытки)".localized, isOn: $retryOnFail)
-                .tint(Color(hex: "007AFF"))
-            Divider().background(Color.primary.opacity(0.08))
-            Toggle("Сжатие JPEG перед загрузкой".localized, isOn: $compressJpeg)
-                .tint(Color(hex: "007AFF"))
-            Divider().background(Color.primary.opacity(0.08))
-            Toggle("Системные уведомления".localized, isOn: $sysNotifications)
-                .tint(Color(hex: "007AFF"))
-        }
-        .glassCard()
-    }
-    
-    @ViewBuilder
-    private var pcServerSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Локальный ПК-сервер".localized, icon: "server.rack")
-            Toggle("Загрузка через ПК-сервер".localized, isOn: $pcServerEnabled)
-                .tint(Color(hex: "007AFF"))
-            
-            if pcServerEnabled {
-                Divider().background(Color.primary.opacity(0.08))
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Адрес сервера (IP:Порт)".localized)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.secondary)
-                    
-                    TextField("192.168.1.50:5000", text: $pcServerAddress)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13))
-                        .padding(12)
-                        .background(Color.primary.opacity(0.06))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.primary.opacity(0.12), lineWidth: 1.2)
-                        )
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
-                }
-            }
-            
-            Text("Позволяет отправлять фото через программу на вашем компьютере.".localized)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-        }
-        .glassCard()
-    }
-    
-    @ViewBuilder
-    private var cacheSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Память и Очистка кэша".localized, icon: "internaldrive.fill")
-            
-            Toggle("Режим проводника (Прямая выгрузка без кэша)".localized, isOn: $noCacheMode)
-                .tint(Color(hex: "007AFF"))
-            Text("Приложение работает как прямой проводник: файлы отправляются без дублирования на диск телефона.".localized)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-            
-            Divider().background(Color.primary.opacity(0.08))
-            
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Очистка остаточного кэша".localized)
-                        .font(.system(size: 14, weight: .medium))
-                    Text("Использовано диска: ".localized + String(format: "%.1f MB", cacheSizeMB))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                
-                Button(action: clearCache) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trash")
-                        Text("Очистить".localized)
-                    }
-                    .font(.system(size: 12, weight: .bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.red.opacity(0.15))
-                    .foregroundStyle(.red)
-                    .clipShape(Capsule())
+                    .buttonStyle(.appDestructive)
                 }
             }
         }
-        .glassCard(cornerRadius: 16, padding: 16)
         .onAppear {
             calculateCacheSize()
         }
     }
-    
-    @ViewBuilder
-    private var saveButtonSection: some View {
-        Button(action: {
-            HapticHelper.trigger(.medium)
-            saveSettings()
-        }) {
-            Text("Сохранить все настройки".localized)
-                .font(.system(size: 14, weight: .bold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(AppleTheme.primaryGradient)
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .ambientShadow(radius: 8)
+
+    // MARK: - Поддержка
+
+    private var supportSection: some View {
+        AppSection(
+            "Поддержка и связь с разработчиком".localized,
+            symbol: "questionmark.circle.fill",
+            footer: "Если у вас возникли вопросы, предложения или требуется помощь в настройке стоков, свяжитесь с нами напрямую:".localized
+        ) {
+            // Обращение на Email
+            Link(destination: URL(string: "mailto:samjan190799@gmail.com?subject=SmartStock%20Support")!) {
+                AppNavRowLabel(
+                    symbol: "envelope.fill",
+                    tint: AppPalette.accent,
+                    title: "Написать в службу поддержки".localized,
+                    subtitle: "samjan190799@gmail.com",
+                    trailingSymbol: "arrow.up.right"
+                )
+            }
+            .buttonStyle(.plain)
+
+            AppDivider()
+
+            // Официальный сайт поддержки
+            Link(destination: URL(string: "https://samjan190799-cmyk.github.io/StockFlow.ios/support.html")!) {
+                AppNavRowLabel(
+                    symbol: "globe",
+                    tint: AppPalette.violet,
+                    title: "Сайт поддержки и база знаний (FAQ)".localized,
+                    subtitle: "Руководства по FTP и ответы на частые вопросы".localized,
+                    trailingSymbol: "arrow.up.right"
+                )
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(PremiumButtonStyle())
     }
-    
-    @ViewBuilder
-    private var versionFooterSection: some View {
-        HStack {
-            Spacer()
-            Text("SmartStock v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7") (Сборка \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "8"))")
-                .font(.system(size: 10, weight: .medium))
+
+    // MARK: - Правовая информация
+
+    private var disclaimerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label {
+                Text("Правовая информация и конфиденциальность".localized)
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+            } icon: {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(AppPalette.accentLight)
+            }
+
+            Text("SmartStock является независимым инструментом и не связан с Shutterstock, Adobe Stock, Getty Images, Depositphotos, Freepik, Alamy, Dreamstime, 123RF, Pond5 или Google.".localized)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    handleVersionTap()
-                }
-            Spacer()
+                .fixedSize(horizontal: false, vertical: true)
+
+            Rectangle()
+                .fill(Color.primary.opacity(0.08))
+                .frame(height: 1)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Link("Политика конфиденциальности".localized, destination: URL(string: "https://samjan190799-cmyk.github.io/StockFlow.ios/privacy.html")!)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(AppPalette.accentLight)
+
+                Link("Условия использования (EULA)".localized, destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(AppPalette.accentLight)
+            }
         }
-        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
+    }
+
+    // MARK: - Версия (5 быстрых тапов открывают панель тестировщика)
+
+    private var versionFooterSection: some View {
+        Text("SmartStock v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7") (Сборка \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "8"))")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                handleVersionTap()
+            }
     }
 
     private func handleVersionTap() {
@@ -640,33 +682,34 @@ struct SystemSettingsView: View {
         }
     }
 
-    @ViewBuilder
+    // MARK: - Панель тестировщика (скрыта, открывается 5 быстрыми тапами по версии)
+
     private var testerDebugSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
-                Image(systemName: "ladybug.fill")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.orange)
-                Text("Режим тестирования (QA)".localized)
-                    .font(.system(size: 13, weight: .black))
-                    .foregroundStyle(.orange)
-                
-                Spacer()
-                
+                Label {
+                    Text("Режим тестирования (QA)".localized)
+                        .font(.subheadline.weight(.heavy))
+                } icon: {
+                    Image(systemName: "ladybug.fill")
+                }
+                .foregroundStyle(Color.orange)
+
+                Spacer(minLength: 8)
+
                 Text("TESTER OVERRIDE")
-                    .font(.system(size: 8, weight: .black))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.orange.opacity(0.15))
-                    .foregroundStyle(.orange)
-                    .clipShape(Capsule())
+                    .font(.caption2.weight(.heavy))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.orange.opacity(0.18)))
+                    .foregroundStyle(Color.orange)
             }
-            
+
             Text("Скрытая панель для тестировщиков. Позволяет проверять функции без реальной покупки в Sandbox.".localized)
-                .font(.system(size: 11))
+                .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            
+
             Toggle(isOn: Binding(
                 get: { self.testerProEnabled },
                 set: { newValue in
@@ -678,18 +721,15 @@ struct SystemSettingsView: View {
             )) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Эмуляция SmartStock PRO".localized)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.primary)
+                        .font(.subheadline.weight(.bold))
                     Text(testerProEnabled ? "Статус: PRO активен (безлимитные стоки, нет рекламы)".localized : "Статус: Базовый тариф (лимит 2 стока, реклама)".localized)
-                        .font(.system(size: 10))
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
             .tint(.orange)
-            
-            Divider().background(Color.white.opacity(0.1))
-            
-            Button(action: {
+
+            Button {
                 HapticHelper.trigger(.medium)
                 storeManager.setTesterProOverride(active: false, isPro: false)
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -697,243 +737,25 @@ struct SystemSettingsView: View {
                     testerProEnabled = storeManager.isProUser
                 }
                 showToast("Тестовый режим отключён, восстановлен реальный StoreKit".localized)
-            }) {
-                HStack {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 11, weight: .bold))
-                    Text("Сбросить на реальный StoreKit".localized)
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } label: {
+                Label("Сбросить на реальный StoreKit".localized, systemImage: "arrow.counterclockwise")
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(.appSecondary)
         }
-        .padding(14)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(hex: "1F1A24").opacity(0.85))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.orange.opacity(0.08))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.orange.opacity(0.4), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.orange.opacity(0.45), lineWidth: 1)
         )
         .transition(.asymmetric(insertion: .scale(scale: 0.95).combined(with: .opacity), removal: .opacity))
     }
 
-    @ViewBuilder
-    private var supportSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Поддержка и связь с разработчиком".localized, icon: "questionmark.circle.fill")
-            
-            Text("Если у вас возникли вопросы, предложения или требуется помощь в настройке стоков, свяжитесь с нами напрямую:".localized)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .lineSpacing(2)
-            
-            Divider().background(Color.primary.opacity(0.08))
-            
-            // Кнопка обращения на Email
-            Link(destination: URL(string: "mailto:samjan190799@gmail.com?subject=SmartStock%20Support")!) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(Color(hex: "007AFF").opacity(0.15))
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "envelope.fill")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Color(hex: "007AFF"))
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Написать в службу поддержки".localized)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.primary)
-                        Text("samjan190799@gmail.com")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(10)
-                .background(Color.primary.opacity(0.04))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .buttonStyle(.plain)
-            
-            // Кнопка официального сайта поддержки
-            Link(destination: URL(string: "https://samjan190799-cmyk.github.io/StockFlow.ios/support.html")!) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.purple.opacity(0.15))
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "globe")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Color.purple)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Сайт поддержки и база знаний (FAQ)".localized)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.primary)
-                        Text("Руководства по FTP и ответы на частые вопросы".localized)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(10)
-                .background(Color.primary.opacity(0.04))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .buttonStyle(.plain)
-        }
-        .glassCard(cornerRadius: 16, padding: 16)
-    }
+    // MARK: - Helpers
 
-    private var disclaimerSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(Color(hex: "007AFF"))
-                    .font(.system(size: 14))
-                Text("Правовая информация и конфиденциальность".localized)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-            }
-            
-            Text("SmartStock является независимым инструментом и не связан с Shutterstock, Adobe Stock, Getty Images, Depositphotos, Freepik, Alamy, Dreamstime, 123RF, Pond5 или Google.".localized)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .lineSpacing(2)
-            
-            Divider().background(Color.primary.opacity(0.08))
-            
-            HStack(spacing: 16) {
-                Link("Политика конфиденциальности".localized, destination: URL(string: "https://samjan190799-cmyk.github.io/StockFlow.ios/privacy.html")!)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color(hex: "007AFF"))
-                
-                Text("•")
-                    .foregroundStyle(.secondary)
-                
-                Link("Условия использования (EULA)".localized, destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color(hex: "007AFF"))
-            }
-            .padding(.top, 2)
-        }
-        .glassCard(cornerRadius: 16, padding: 16)
-    }
-    
-    // MARK: - Row Helpers
-    private func sectionHeader(_ text: String, icon: String) -> some View {
-        HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(hex: "007AFF").opacity(0.14))
-                    .frame(width: 28, height: 28)
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color(hex: "007AFF"))
-            }
-            Text(text)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.primary)
-                .textCase(.uppercase)
-        }
-        .padding(.bottom, 2)
-    }
-    
-    private func pickerRow(_ label: String, selection: Binding<String>, options: [String]) -> some View {
-        HStack(alignment: .center) {
-            Text(label)
-                .font(.system(size: 14))
-                .foregroundStyle(.primary)
-            Spacer()
-            Menu {
-                ForEach(options, id: \.self) { option in
-                    Button(action: {
-                        HapticHelper.selection()
-                        selection.wrappedValue = option
-                    }) {
-                        HStack {
-                            Text(option.localized)
-                            if selection.wrappedValue == option {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(selection.wrappedValue.localized)
-                        .font(.system(size: 12, weight: .semibold))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(hex: "007AFF"))
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
-            }
-        }
-    }
-    
-    private func pickerIntRow(_ label: String, selection: Binding<Int>, options: [Int]) -> some View {
-        HStack(alignment: .center) {
-            Text(label)
-                .font(.system(size: 14))
-                .foregroundStyle(.primary)
-            Spacer()
-            Menu {
-                ForEach(options, id: \.self) { option in
-                    Button(action: {
-                        HapticHelper.selection()
-                        selection.wrappedValue = option
-                    }) {
-                        HStack {
-                            Text("\(option) \(getStreamWord(option).localized)")
-                            if selection.wrappedValue == option {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("\(selection.wrappedValue) \(getStreamWord(selection.wrappedValue).localized)")
-                        .font(.system(size: 12, weight: .semibold))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(hex: "007AFF"))
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
-            }
-        }
-    }
-    
     private func getStreamWord(_ count: Int) -> String {
         switch count {
         case 1: return "поток"
@@ -988,10 +810,6 @@ struct SystemSettingsView: View {
         showToast("Кэш скачанных медиафайлов очищен!".localized)
     }
     
-    private func saveSettings() {
-        showToast("Настройки успешно сохранены!".localized)
-    }
-
     private func showToast(_ message: String) {
         DispatchQueue.main.async {
             self.savedToastMessage = message

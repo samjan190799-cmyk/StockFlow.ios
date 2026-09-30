@@ -134,29 +134,8 @@ public struct GlassModifier: ViewModifier {
     public var paddingValue: CGFloat
     
     public func body(content: Content) -> some View {
-        let isDark = colorScheme == .dark
-        
-        return content
-            .padding(paddingValue)
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(isDark ? AppleTheme.cardDark.opacity(0.92) : AppleTheme.cardLight)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                isDark ? Color.white.opacity(0.14) : Color.white,
-                                isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.0
-                    )
-            )
-            .shadow(color: Color.black.opacity(isDark ? 0.28 : 0.04), radius: 8, x: 0, y: 4)
+        // Единая поверхность карточки нового дизайна (см. DesignKit.swift)
+        content.appCard(cornerRadius: cornerRadius, padding: paddingValue)
     }
 }
 

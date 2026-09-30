@@ -60,28 +60,13 @@ struct AIAssistantView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                LiquidBackgroundView()
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        
-                        // Header info panel
-                        headerPanel
-                        
-                        // AI Status and Plan Card
-                        aiStatusCard
-                        
-                        // Prompt Templates & Editor
-                        promptSection
-                        
-                        Spacer(minLength: 40)
-                    }
-                    .padding()
-                }
+            AppScreen {
+                headerCard
+                statusSection
+                promptSection
             }
             .navigationTitle("ИИ-Ассистент".localized)
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $showPaywall) {
                 PaywallView()
             }
@@ -96,187 +81,174 @@ struct AIAssistantView: View {
             }
         }
     }
-    
+
     // MARK: - Subviews
-    
-    private var headerPanel: some View {
+
+    private var headerCard: some View {
         HStack(spacing: 16) {
-            SmartStockLogoView(size: 58)
-            
+            SmartStockLogoView(size: 56)
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("SmartStock AI Engine".localized)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.primary)
+                    .font(.headline)
                 Text("Мультимодальный анализ визуальных сцен, генерация коммерческих названий, описаний и SEO-тегов.".localized)
-                    .font(.system(size: 11))
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: 20, padding: 14)
+        .appCard()
     }
-    
-    private var aiStatusCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Нейросетевое ядро".localized)
-                        .font(.system(size: 14, weight: .bold))
-                    Text("Google Gemini Vision / Pro".localized)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+
+    private var statusSection: some View {
+        AppSection("Нейросетевое ядро".localized, symbol: "sparkles", tint: AppPalette.amber) {
+            AppRow {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Google Gemini Vision / Pro".localized)
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    Spacer(minLength: 8)
+                    AppChip(text: "Активен".localized, symbol: "checkmark.circle.fill", tone: .success)
                 }
-                
-                Spacer()
-                
-                // Status Pill
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color(hex: "10B981"))
-                        .frame(width: 7, height: 7)
-                    Text("Активен".localized)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color(hex: "10B981"))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Color(hex: "10B981").opacity(0.12))
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(Color(hex: "10B981").opacity(0.35), lineWidth: 1)
-                )
             }
-            
-            Divider()
-                .background(Color.white.opacity(0.08))
-            
-            // Limit / Plan status
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Дневной лимит".localized)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    
-                    if storeManager.isProUser {
-                        Text("Безлимитный доступ (PRO)".localized)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Color(hex: "F59E0B"))
-                    } else {
-                        let baseRemaining = max(0, 15 - rewardManager.dailyAIUsed)
-                        let text = rewardManager.bonusCredits > 0 ? "\(baseRemaining)/15 (+\(rewardManager.bonusCredits) бонус)" : "\(rewardManager.remainingAIToday)/15 доступно"
-                        Text(text)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.primary)
-                    }
-                }
-                
-                Spacer()
-                
-                if !storeManager.isProUser {
-                    Button(action: {
-                        HapticHelper.trigger(.light)
-                        showPaywall = true
-                    }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "crown.fill")
-                                .font(.system(size: 11))
-                            Text("Безлимит".localized)
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(AppleTheme.primaryGradient)
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(PremiumButtonStyle())
-                }
+
+            AppDivider()
+
+            AppRow {
+                limitBlock
             }
         }
-        .glassCard(cornerRadius: 20, padding: 14)
     }
-    
+
+    @ViewBuilder
+    private var limitBlock: some View {
+        if storeManager.isProUser {
+            HStack(spacing: 10) {
+                Image(systemName: "crown.fill")
+                    .foregroundStyle(Color.yellow)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Дневной лимит".localized)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Text("Безлимитный доступ (PRO)".localized)
+                        .font(.subheadline.weight(.semibold))
+                }
+                Spacer(minLength: 0)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Дневной лимит".localized)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(limitText)
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                }
+
+                ProgressView(value: limitFraction)
+                    .tint(AppPalette.amber)
+
+                Button {
+                    HapticHelper.trigger(.light)
+                    showPaywall = true
+                } label: {
+                    Label("Безлимит".localized, systemImage: "crown.fill")
+                }
+                .buttonStyle(.appCapsule)
+            }
+        }
+    }
+
+    private var baseRemaining: Int {
+        max(0, RewardAdManager.baseDailyLimit - rewardManager.dailyAIUsed)
+    }
+
+    private var limitFraction: Double {
+        Double(baseRemaining) / Double(max(RewardAdManager.baseDailyLimit, 1))
+    }
+
+    private var limitText: String {
+        let limit = RewardAdManager.baseDailyLimit
+        if rewardManager.bonusCredits > 0 {
+            return "\(baseRemaining)/\(limit) (+\(rewardManager.bonusCredits) бонус)"
+        }
+        return "\(rewardManager.remainingAIToday)/\(limit) доступно"
+    }
+
     private var promptSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Стиль индексации".localized)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.footnote.weight(.bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
-                    .padding(.leading, 4)
-                
+
                 Spacer()
-                
-                Button(action: {
+
+                Button {
                     HapticHelper.trigger(.light)
                     showResetAlert = true
-                }) {
+                } label: {
                     Text("Сбросить".localized)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color(hex: "6366F1"))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AppPalette.accentLight)
+                        .padding(.vertical, 6)
                 }
             }
-            
-            // Templates scroll (Liquid Glass Tag Ribbon)
+            .padding(.horizontal, 4)
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(templates) { template in
-                        let isSelected = customPrompt == template.text
-                        Button(action: {
-                            HapticHelper.selection()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                customPrompt = template.text
-                            }
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: template.icon)
-                                    .font(.system(size: 11))
-                                Text(template.name.localized)
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(
-                                isSelected ? AppleTheme.primaryGradient : LinearGradient(
-                                    colors: [Color.white.opacity(0.08), Color.white.opacity(0.03)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .foregroundStyle(isSelected ? .white : .primary.opacity(0.85))
-                            .clipShape(Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(isSelected ? Color.clear : Color.white.opacity(0.15), lineWidth: 1.0)
-                            )
-                        }
-                        .buttonStyle(PremiumButtonStyle())
+                        templateChip(template)
                     }
                 }
                 .padding(.horizontal, 2)
             }
-            
-            // TextEditor Card (Liquid Glass container)
+
             VStack(alignment: .leading, spacing: 10) {
                 TextEditor(text: $customPrompt)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(Font.system(.footnote, design: .monospaced))
                     .scrollContentBackground(.hidden)
                     .padding(8)
-                    .frame(height: 140)
-                    .background(Color.black.opacity(0.18))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1.0)
-                    )
-                
+                    .frame(minHeight: 180)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.05)))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.10), lineWidth: 1))
+
                 Text("Промпт определяет формат возвращаемого JSON-файла с заголовком, описанием и ключевыми словами.".localized)
-                    .font(.system(size: 10))
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .glassCard(cornerRadius: 20, padding: 14)
+            .appCard()
         }
+    }
+
+    private func templateChip(_ template: PromptTemplate) -> some View {
+        let isSelected = customPrompt == template.text
+        return Button {
+            HapticHelper.selection()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                customPrompt = template.text
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: template.icon)
+                Text(template.name.localized)
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .foregroundStyle(isSelected ? Color(.systemBackground) : Color.primary)
+            .background(Capsule().fill(isSelected ? Color.primary : Color.primary.opacity(0.08)))
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(isSelected ? 0 : 0.10), lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

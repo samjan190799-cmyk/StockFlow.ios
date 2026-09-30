@@ -163,6 +163,7 @@ StockFlow.ios/
 │   ├── AIAssistantView.swift ← UI ИИ-ассистента
 │   ├── StockSettingsView.swift ← UI настроек стоков
 │   ├── GalleryView.swift     ← главный экран (сетка, этапы, панель действий)
+│   ├── DesignKit.swift       ← общие элементы дизайна (карточки, секции, строки, кнопки)
 │   ├── QueueViewModel.swift  ← очередь: ИИ, загрузка, импорт
 │   ├── SystemSettingsView.swift ← Системные настройки
 │   ├── AuthHelper.swift      ← Помощник авторизации

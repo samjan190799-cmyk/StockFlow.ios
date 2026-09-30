@@ -17,6 +17,7 @@ Sources/
 ├── SmartStockApp.swift       — точка входа, AppDelegate, TabBar
 ├── GalleryView.swift         — главный экран: сетка, этапы, панель действий (iPhone и iPad)
 ├── GalleryComponents.swift   — плитка, лента этапов, панель действий, панель деталей iPad
+├── DesignKit.swift           — общие элементы дизайна: карточки, секции, строки настроек, кнопки, плашки
 ├── QueueViewModel.swift      — очередь: ИИ-анализ, загрузка, CSV-экспорт
 ├── PhotoDetailViews.swift    — окно деталей снимка, ключевые слова, CSV-документ
 ├── AIAssistantView.swift     — вкладка ИИ-ассистента
