@@ -133,6 +133,8 @@ else:
         cert_id_new = res_retry["data"]["id"]
         print("✅ Свежий сертификат подписи успешно сгенерирован!")
 
+new_profile_name = None
+
 if cer_b64:
     # Сохраняем .cer и собираем .p12
     cer_path = runner_tmp / "dist.cer"
@@ -206,21 +208,28 @@ if cer_b64:
                 main_b_id = create_bid_res["data"]["id"]
                 print(f"✅ Bundle ID зарегистрирован: {main_b_id}")
 
-        p_list = api_request("GET", "/profiles?filter[profileType]=IOS_APP_STORE")
+        # limit=200: по умолчанию Apple отдаёт только первую страницу, и часть старых профилей оставалась
+        p_list = api_request("GET", "/profiles?filter[profileType]=IOS_APP_STORE&limit=200")
+        deleted_any = False
         for p_item in p_list.get("data", []):
             p_id = p_item["id"]
             p_name = p_item["attributes"]["name"]
             if "SmartStock" in p_name:
                 print(f"🗑 Очистка старого профиля [{p_name}] ({p_id})...")
                 api_request("DELETE", f"/profiles/{p_id}")
+                deleted_any = True
+        if deleted_any:
+            time.sleep(3)  # Apple применяет удаление с небольшой задержкой
 
         if main_b_id:
-            print("⚙️ Создание профиля провижининга SmartStock_Clean_AppStore...")
+            # Уникальное имя: повторное имя даёт 409 "Multiple profiles found with the name"
+            new_profile_name = f"SmartStock_AppStore_{int(time.time())}"
+            print(f"⚙️ Создание профиля провижининга {new_profile_name}...")
             create_prof_res = api_request("POST", "/profiles", {
                 "data": {
                     "type": "profiles",
                     "attributes": {
-                        "name": "SmartStock_Clean_AppStore",
+                        "name": new_profile_name,
                         "profileType": "IOS_APP_STORE"
                     },
                     "relationships": {
@@ -229,15 +238,18 @@ if cer_b64:
                     }
                 }
             })
-            print("✅ Профиль SmartStock_Clean_AppStore создан!")
+            if "data" not in create_prof_res:
+                print("❌ Не удалось создать профиль провижининга. Останавливаем сборку, чтобы не подписать чужим профилем.")
+                sys.exit(1)
+            print(f"✅ Профиль {new_profile_name} создан!")
 
 print("📲 [3/4] Скачивание профилей для приложения...")
-profiles_res = api_request("GET", "/profiles?filter[profileType]=IOS_APP_STORE")
+profiles_res = api_request("GET", "/profiles?filter[profileType]=IOS_APP_STORE&limit=200")
 pp_dir = Path.home() / "Library/MobileDevice/Provisioning Profiles"
 pp_dir.mkdir(parents=True, exist_ok=True)
 
 main_uuid = None
-last_uuid = None
+fallback_uuid = None  # любой профиль именно нашего Bundle ID, если свежесозданный не найден
 
 for p in profiles_res.get("data", []):
     name = p["attributes"]["name"]
@@ -260,15 +272,27 @@ for p in profiles_res.get("data", []):
         
     dest_pp = pp_dir / f"{uuid}.mobileprovision"
     dest_pp.write_bytes(pp_bytes)
-    last_uuid = uuid
-    
-    if "SmartStock" in name or app_id.endswith(".com.samvel.smartstock.SmartStock") or app_id.endswith(".com.samvel.smartstock"):
-        main_uuid = uuid
-        print(f"✅ Профиль приложения смонтирован [{name}] (App ID: {app_id}): {uuid}")
 
-if not main_uuid and last_uuid:
-    main_uuid = last_uuid
-    print(f"✅ Назначен основной профиль: {main_uuid}")
+    # Берём только профили НАШЕГО приложения. Профили других приложений аккаунта (например DriveAlert) не трогаем.
+    is_our_app = (
+        app_id.endswith(".com.samvel.smartstock.SmartStock")
+        or app_id.endswith(".com.samvel.smartstock")
+        or (app_id == "" and "SmartStock" in name)
+    )
+    if is_our_app:
+        if new_profile_name and name == new_profile_name:
+            main_uuid = uuid
+            print(f"✅ Профиль приложения смонтирован [{name}] (App ID: {app_id}): {uuid}")
+        elif fallback_uuid is None:
+            fallback_uuid = uuid
+
+if not main_uuid and fallback_uuid:
+    main_uuid = fallback_uuid
+    print(f"✅ Назначен профиль приложения: {main_uuid}")
+
+if not main_uuid:
+    print("❌ Не найден профиль провижининга для com.samvel.smartstock.SmartStock. Останавливаем сборку.")
+    sys.exit(1)
 
 with open(github_env, "a", encoding="utf-8") as f:
     if main_uuid:
