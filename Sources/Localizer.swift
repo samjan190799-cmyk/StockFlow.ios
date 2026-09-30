@@ -14,6 +14,10 @@ extension String {
 
 struct Localizer {
     private static let enTranslations: [String: String] = [
+        "Вход отменён.": "Sign-in cancelled.",
+        "Вход в Google не выполнен": "Google sign-in failed",
+        "Окно входа Google не открылось. Повторите попытку.": "The Google sign-in window didn't open. Please try again.",
+        "Google отклонил вход": "Google rejected the sign-in",
         "Сначала войдите в Google.": "Sign in to Google first.",
         "Google не принял доступ. Выйдите и войдите снова — так приложение получит новые права на выбор фото.": "Google rejected the access. Sign out and sign in again so the app gets the new permission to pick photos.",
         "В вашем проекте Google Cloud не включён": "Your Google Cloud project doesn't have this enabled:",
@@ -627,6 +631,10 @@ struct Localizer {
     ]
     
     private static let hyTranslations: [String: String] = [
+        "Вход отменён.": "Մուտքը չեղարկվեց։",
+        "Вход в Google не выполнен": "Google-ով մուտքը չհաջողվեց",
+        "Окно входа Google не открылось. Повторите попытку.": "Google-ի մուտքի պատուհանը չբացվեց։ Փորձեք կրկին։",
+        "Google отклонил вход": "Google-ը մերժեց մուտքը",
         "Сначала войдите в Google.": "Նախ մուտք գործեք Google։",
         "Google не принял доступ. Выйдите и войдите снова — так приложение получит новые права на выбор фото.": "Google-ը չընդունեց հասանելիությունը։ Դուրս եկեք և նորից մուտք գործեք, որպեսզի հավելվածը ստանա լուսանկարներ ընտրելու նոր իրավունքները։",
         "В вашем проекте Google Cloud не включён": "Ձեր Google Cloud նախագծում միացված չէ",

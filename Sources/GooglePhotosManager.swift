@@ -191,6 +191,8 @@ enum GooglePhotosError: LocalizedError {
     case badResponse
     case timedOut
     case cancelled
+    case authWindowFailed
+    case authDenied(String)
 
     var errorDescription: String? {
         switch self {
@@ -208,6 +210,10 @@ enum GooglePhotosError: LocalizedError {
             return "Время ожидания выбора истекло. Попробуйте ещё раз.".localized
         case .cancelled:
             return "Выбор отменён.".localized
+        case .authWindowFailed:
+            return "Окно входа Google не открылось. Повторите попытку.".localized
+        case .authDenied(let details):
+            return "Google отклонил вход".localized + ": \(details)"
         }
     }
 }
@@ -262,6 +268,8 @@ final class GooglePhotosManager: ObservableObject {
     private static let scopeVersionKey = "google_photos_scope_version"
     private static let currentScopeVersion = 2
     private var webAuthContextProvider = WebAuthContextProvider()
+    /// Сессия входа хранится сильной ссылкой — иначе окно входа может закрыться, так и не показавшись
+    private var authSession: ASWebAuthenticationSession?
 
     // Google OAuth 2.0 Configuration
     var clientID: String {
@@ -378,10 +386,23 @@ final class GooglePhotosManager: ObservableObject {
                 }
                 session.presentationContextProvider = self.webAuthContextProvider
                 session.prefersEphemeralWebBrowserSession = true
-                session.start()
+                self.authSession = session
+                if !session.start() {
+                    self.authSession = nil
+                    continuation.resume(throwing: GooglePhotosError.authWindowFailed)
+                }
             }
+            self.authSession = nil
 
             var obtainedToken: String? = nil
+
+            // Google вернул ошибку вместо кода (access_denied, invalid_scope и т.п.) — показываем её причину
+            if let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
+               let queryItems = components.queryItems,
+               let googleError = queryItems.first(where: { $0.name == "error" })?.value {
+                let description = queryItems.first(where: { $0.name == "error_description" })?.value ?? ""
+                throw GooglePhotosError.authDenied(googleError + (description.isEmpty ? "" : " — \(description)"))
+            }
 
             // 1. Проверяем наличие 'code' в query параметрах (Authorization Code Flow with PKCE)
             if let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
@@ -408,7 +429,12 @@ final class GooglePhotosManager: ObservableObject {
                 throw URLError(.cannotParseResponse)
             }
         } catch {
-            self.statusMessage = "Авторизация отменена или завершилась ошибкой: \(error.localizedDescription)".localized
+            self.authSession = nil
+            if let authError = error as? ASWebAuthenticationSessionError, authError.code == .canceledLogin {
+                self.statusMessage = "Вход отменён.".localized
+            } else {
+                self.statusMessage = "Вход в Google не выполнен".localized + ": \(error.localizedDescription)"
+            }
         }
 
         self.isLoading = false

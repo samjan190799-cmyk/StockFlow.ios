@@ -309,10 +309,29 @@ struct SystemSettingsView: View {
                                 }
                             }
                         } label: {
-                            Text("Подключить".localized)
+                            if googlePhotosManager.isLoading {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(Color.white)
+                            } else {
+                                Text("Подключить".localized)
+                            }
                         }
                         .buttonStyle(.appCapsule(tint: Color(hex: "4285F4")))
+                        .disabled(googlePhotosManager.isLoading)
                     }
+                }
+            }
+
+            // Результат попытки входа: раньше ошибка нигде не показывалась, и казалось, что кнопка не работает
+            if !googlePhotosManager.isAuthenticated && !googlePhotosManager.statusMessage.isEmpty {
+                AppDivider()
+
+                AppRow {
+                    Text(googlePhotosManager.statusMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
