@@ -243,3 +243,9 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Убираем сертификат и профиль, созданные этим запуском, чтобы не занимать слоты аккаунта Apple.
+      # Чужие сертификаты (другие приложения) не затрагиваются.
+      - name: Cleanup CI signing certificate
+        if: always()
+        run: python3 .github/scripts/auto_cert_setup.py cleanup
