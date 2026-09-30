@@ -672,8 +672,11 @@ class QueueViewModel: ObservableObject {
                 BackgroundTaskManager.shared.endTask(named: "SmartStock.BatchUpload")
             }
             
+            let journal = FTPTranscriptLogger.shared
+            journal.logStep("Отправить все: к отправке \(readyPhotos.count) файлов")
             var successCount = 0
-            for photo in readyPhotos {
+            for (position, photo) in readyPhotos.enumerated() {
+                journal.logStep("Отправка \(position + 1)/\(readyPhotos.count): \(photo.filename)")
                 guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false) else {
                     self.triggerToast("Достигнут дневной лимит отправок. Оформите PRO для продолжения.".localized)
                     self.shouldShowDailyLimitAlert = true
@@ -686,6 +689,7 @@ class QueueViewModel: ObservableObject {
                 
                 do {
                     try await self.performRealUpload(for: photo)
+                    journal.logStep("Отправка \(position + 1)/\(readyPhotos.count): готово")
                     if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
                         self.photos[idx].status = .success
                         self.photos[idx].uploadProgress = 1.0
@@ -694,6 +698,7 @@ class QueueViewModel: ObservableObject {
                         successCount += 1
                     }
                 } catch {
+                    journal.logError("Отправка \(position + 1)/\(readyPhotos.count): \(error.localizedDescription)")
                     RewardAdManager.shared.refundActionSlot(isAIAnalysis: false)
                     if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
                         self.photos[idx].status = .error
@@ -881,6 +886,9 @@ class QueueViewModel: ObservableObject {
             }
         }
         
+        let preparedBytes = ((try? FileManager.default.attributesOfItem(atPath: fileURLToUpload.path))?[.size] as? Int64) ?? 0
+        FTPTranscriptLogger.shared.logStep("Файл \(photo.filename) подготовлен к отправке: \(preparedBytes / 1_048_576) МБ")
+        
         // Load active platforms
         guard let platformsData = UserDefaults.standard.data(forKey: "stock_platforms"),
               let platforms = try? JSONDecoder().decode([StockPlatform].self, from: platformsData) else {
@@ -930,6 +938,7 @@ class QueueViewModel: ObservableObject {
             var uploadError: Error? = nil
             
             let parsed = FTPSecureClient.parseHostAndPort(from: platform.host, defaultPort: 21)
+            FTPTranscriptLogger.shared.logStep("Отправка \(photo.filename) на \(platform.name)")
             
             while attempts < maxAttempts {
                 do {
