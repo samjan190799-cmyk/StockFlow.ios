@@ -1,5 +1,58 @@
 import SwiftUI
 import AVKit
+import SafariServices
+
+/// Источник файлов в окне импорта
+enum GoogleSourceTab: String, CaseIterable, Identifiable {
+    case photos = "Google Фото"
+    case drive = "Google Диск"
+
+    var id: String { rawValue }
+}
+
+/// Стадии выбора через Google Photos Picker
+enum GooglePickerPhase: Equatable {
+    case idle
+    case creating
+    case waiting
+    case loading
+    case failed(String)
+}
+
+struct GooglePickerBrowserItem: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+/// Окно Google Фото для выбора файлов (Safari внутри приложения, вход в аккаунт Google уже может быть выполнен)
+struct GooglePickerBrowserView: UIViewControllerRepresentable {
+    let url: URL
+    let onFinish: () -> Void
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let controller = SFSafariViewController(url: url)
+        controller.delegate = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onFinish: onFinish)
+    }
+
+    class Coordinator: NSObject, SFSafariViewControllerDelegate {
+        let onFinish: () -> Void
+
+        init(onFinish: @escaping () -> Void) {
+            self.onFinish = onFinish
+        }
+
+        func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+            onFinish()
+        }
+    }
+}
 
 enum MediaFilterType: String, CaseIterable, Identifiable {
     case all = "Все файлы"
@@ -71,6 +124,11 @@ struct GooglePhotosPickerView: View {
 
     var onSelectItems: ([GoogleMediaItem]) -> Void
 
+    @State private var tab: GoogleSourceTab = .photos
+    @State private var pickerPhase: GooglePickerPhase = .idle
+    @State private var pickerBrowser: GooglePickerBrowserItem? = nil
+    @State private var pickerTask: Task<Void, Never>? = nil
+    @State private var pickedCount = 0
     @State private var selectedItems: Set<String> = []
     @State private var selectedFilter: MediaFilterType = .all
     @State private var searchQuery = ""
@@ -145,9 +203,9 @@ struct GooglePhotosPickerView: View {
                         }
 
                         // Кнопка принудительного обновления списка
-                        if manager.isAuthenticated && !manager.isLoading {
+                        if manager.isAuthenticated && tab == .drive && !manager.isLoading {
                             Button(action: {
-                                Task { await manager.loadMediaItems(forceReload: true) }
+                                Task { await manager.loadDriveItems(forceReload: true) }
                             }) {
                                 Image(systemName: "arrow.clockwise")
                                     .font(.system(size: 14, weight: .semibold))
@@ -155,7 +213,7 @@ struct GooglePhotosPickerView: View {
                             }
                         }
 
-                        if manager.isAuthenticated && !selectedItems.isEmpty {
+                        if manager.isAuthenticated && tab == .drive && !selectedItems.isEmpty {
                             Button(action: importSelectedItems) {
                                 HStack(spacing: 6) {
                                     if isDownloading {
@@ -177,11 +235,14 @@ struct GooglePhotosPickerView: View {
                     }
                 }
             }
-            .task {
-                // Загружаем только если список пуст — иначе показываем кешированный
-                if manager.isAuthenticated && manager.mediaItems.isEmpty {
-                    await manager.loadMediaItems()
+            .onChange(of: tab) { newTab in
+                // Список с Google Диска загружаем только когда пользователь открыл эту вкладку
+                if newTab == .drive && manager.isAuthenticated && manager.mediaItems.isEmpty {
+                    Task { await manager.loadDriveItems() }
                 }
+            }
+            .onDisappear {
+                pickerTask?.cancel()
             }
         }
     }
@@ -277,35 +338,171 @@ struct GooglePhotosPickerView: View {
 
     private var authenticatedContent: some View {
         VStack(spacing: 12) {
-            // Информация об аккаунте
-            HStack {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
-                Text(manager.userEmail.isEmpty ? "Google Фото подключено".localized : manager.userEmail)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Spacer()
-                // Счётчик файлов
-                if !manager.mediaItems.isEmpty {
-                    Text("\(manager.mediaItems.count) файлов".localized)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Button(action: {
-                    triggerHaptic()
-                    manager.signOut()
-                }) {
-                    Text("Выйти".localized)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.red)
+            accountBar
+
+            Picker("", selection: $tab) {
+                ForEach(GoogleSourceTab.allCases) { option in
+                    Text(option.rawValue.localized).tag(option)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.white.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .pickerStyle(.segmented)
 
+            switch tab {
+            case .photos:
+                photosTabContent
+            case .drive:
+                driveTabContent
+            }
+        }
+    }
+
+    private var accountBar: some View {
+        HStack {
+            Image(systemName: "checkmark.seal.fill")
+                .foregroundStyle(.green)
+            Text(manager.userEmail.isEmpty ? "Google Фото подключено".localized : manager.userEmail)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            Spacer()
+            // Счётчик файлов
+            if tab == .drive && !manager.mediaItems.isEmpty {
+                Text("\(manager.mediaItems.count) файлов".localized)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Button(action: {
+                triggerHaptic()
+                manager.signOut()
+            }) {
+                Text("Выйти".localized)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    // MARK: - Вкладка «Google Фото» (Picker API)
+
+    private var photosTabContent: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                VStack(spacing: 14) {
+                    Image(systemName: "photo.stack")
+                        .font(.system(size: 40, weight: .semibold))
+                        .foregroundStyle(AppPalette.accentLight)
+                    photosPhaseContent
+                }
+                .frame(maxWidth: .infinity)
+                .appCard(cornerRadius: 20, padding: 20)
+
+                Text("Фото и видео выбираются в окне Google Фото. Приложение не видит остальную библиотеку — так требует Google.".localized)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+            }
+            .padding(.vertical, 6)
+        }
+        .sheet(item: $pickerBrowser) { item in
+            GooglePickerBrowserView(url: item.url) {
+                pickerBrowser = nil
+            }
+            .ignoresSafeArea()
+        }
+    }
+
+    @ViewBuilder
+    private var photosPhaseContent: some View {
+        switch pickerPhase {
+        case .idle:
+            Text("Импорт из Google Фото".localized)
+                .font(.headline)
+            Text("Откроется Google Фото: отметьте нужные фото и видео (до 2000 за раз) и нажмите «Готово».".localized)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button {
+                triggerHaptic()
+                startPicking()
+            } label: {
+                Label("Выбрать в Google Фото".localized, systemImage: "photo.on.rectangle.angled")
+            }
+            .buttonStyle(.appPrimary)
+
+        case .creating:
+            ProgressView()
+            Text("Подготовка выбора...".localized)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+        case .waiting:
+            ProgressView()
+            Text("Ожидаем ваш выбор в Google Фото...".localized)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            HStack(spacing: 10) {
+                Button {
+                    if let url = currentPickerURL {
+                        pickerBrowser = GooglePickerBrowserItem(url: url)
+                    }
+                } label: {
+                    Text("Открыть снова".localized)
+                }
+                .buttonStyle(.appSecondary)
+
+                Button {
+                    cancelPicking()
+                } label: {
+                    Text("Отмена".localized)
+                }
+                .buttonStyle(.appSecondary)
+            }
+
+        case .loading:
+            ProgressView()
+            Text("Получаем список выбранных файлов...".localized + (pickedCount > 0 ? " \(pickedCount)" : ""))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+        case .failed(let message):
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title2)
+                .foregroundStyle(Color.orange)
+            Text("Ошибка Google".localized)
+                .font(.headline)
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                triggerHaptic()
+                startPicking()
+            } label: {
+                Text("Повторить".localized)
+            }
+            .buttonStyle(.appPrimary)
+            Button {
+                manager.signOut()
+                pickerPhase = .idle
+            } label: {
+                Text("Выйти и войти снова".localized)
+            }
+            .buttonStyle(.appSecondary)
+        }
+    }
+
+    // MARK: - Вкладка «Google Диск» (список файлов на Диске)
+
+    private var driveTabContent: some View {
+        VStack(spacing: 12) {
             // Поиск и Фильтры
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
@@ -351,6 +548,25 @@ struct GooglePhotosPickerView: View {
                 }
             }
 
+            if let error = manager.lastError {
+                VStack(spacing: 8) {
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(Color.orange)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        Task { await manager.loadDriveItems(forceReload: true) }
+                    } label: {
+                        Text("Повторить".localized)
+                    }
+                    .buttonStyle(.appSecondary)
+                }
+                .padding(12)
+                .background(Color.orange.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
             // Сетка медиа
             if manager.isLoading {
                 VStack(spacing: 12) {
@@ -386,6 +602,84 @@ struct GooglePhotosPickerView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Логика выбора через Picker
+
+    @State private var currentPickerURL: URL? = nil
+
+    private func startPicking() {
+        pickerTask?.cancel()
+        manager.lastError = nil
+        pickedCount = 0
+        pickerPhase = .creating
+
+        pickerTask = Task {
+            do {
+                let session = try await manager.createPickerSession()
+                currentPickerURL = session.pickerURL
+                pickerPhase = .waiting
+                pickerBrowser = GooglePickerBrowserItem(url: session.pickerURL)
+
+                let ready = try await waitForSelection(session)
+                pickerBrowser = nil
+                guard ready else {
+                    await manager.endPickerSession()
+                    pickerPhase = .idle
+                    return
+                }
+
+                pickerPhase = .loading
+                let items = try await manager.fetchPickedItems(sessionId: session.id) { count in
+                    pickedCount = count
+                }
+                guard !items.isEmpty else {
+                    await manager.endPickerSession()
+                    pickerPhase = .failed("Ничего не выбрано.".localized)
+                    return
+                }
+
+                pickerPhase = .idle
+                onSelectItems(items)
+                dismiss()
+            } catch {
+                pickerBrowser = nil
+                await manager.endPickerSession()
+                if Task.isCancelled {
+                    pickerPhase = .idle
+                } else {
+                    pickerPhase = .failed(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// Опрашивает Google, пока пользователь не нажмёт «Готово». Если окно закрыли, даёт ещё пару проверок.
+    private func waitForSelection(_ session: GooglePickerSession) async throws -> Bool {
+        let deadline = Date().addingTimeInterval(session.timeout)
+        var browserClosedAt: Date? = nil
+
+        while Date() < deadline {
+            try Task.checkCancellation()
+            let isReady = try await manager.isPickerSelectionReady(sessionId: session.id)
+            if isReady {
+                return true
+            }
+            if pickerBrowser == nil {
+                if browserClosedAt == nil { browserClosedAt = Date() }
+                if Date().timeIntervalSince(browserClosedAt ?? Date()) > 6 {
+                    return false
+                }
+            }
+            try await Task.sleep(nanoseconds: UInt64(session.pollInterval * 1_000_000_000))
+        }
+        throw GooglePhotosError.timedOut
+    }
+
+    private func cancelPicking() {
+        pickerTask?.cancel()
+        pickerBrowser = nil
+        pickerPhase = .idle
     }
 
     private func mediaTile(_ item: GoogleMediaItem) -> some View {

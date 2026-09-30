@@ -217,22 +217,34 @@ class QueueViewModel: ObservableObject {
     
     func addGoogleMediaItems(_ items: [GoogleMediaItem]) {
         Task {
+            let total = items.count
+            var imported = 0
+            var failed = 0
+            var lastErrorText = ""
+
             for item in items {
                 do {
-                    let data = try await GooglePhotosManager.shared.downloadItemData(item)
-                    guard !data.isEmpty else {
+                    // Файл скачивается во временный файл (а не в память), затем переносится в папку приложения
+                    let tempURL = try await GooglePhotosManager.shared.downloadItemFile(item)
+
+                    let newId = UUID()
+                    let fileURL = self.photosDirectoryURL.appendingPathComponent("\(newId.uuidString).\(item.fileExtension)")
+                    if FileManager.default.fileExists(atPath: fileURL.path) {
+                        try? FileManager.default.removeItem(at: fileURL)
+                    }
+                    try FileManager.default.moveItem(at: tempURL, to: fileURL)
+
+                    let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+                    let byteCount = (attributes?[.size] as? Int64) ?? 0
+                    guard byteCount > 0 else {
+                        try? FileManager.default.removeItem(at: fileURL)
                         throw NSError(domain: "GooglePhotos", code: 404, userInfo: [NSLocalizedDescriptionKey: "Получен пустой файл"])
                     }
-                    
-                    let ext = item.fileExtension
-                    let newId = UUID()
-                    let fileURL = self.photosDirectoryURL.appendingPathComponent("\(newId.uuidString).\(ext)")
-                    try data.write(to: fileURL, options: .atomic)
-                    
+
                     let thumbImg = await ImageCacheHelper.shared.loadAndDownsample(fileURL: fileURL, maxPixelSize: 300)
-                    let thumbData = thumbImg?.jpegData(compressionQuality: 0.75) ?? (item.isVideo ? nil : data)
-                    let sizeStr = String(format: "%.1f MB", Double(data.count) / (1024.0 * 1024.0))
-                    
+                    let thumbData = thumbImg?.jpegData(compressionQuality: 0.75)
+                    let sizeStr = ByteCountFormatter.string(fromByteCount: byteCount, countStyle: .file)
+
                     let newPhoto = PhotoMetadata(
                         id: newId,
                         filename: item.filename,
@@ -248,10 +260,22 @@ class QueueViewModel: ObservableObject {
                         isVideo: item.isVideo
                     )
                     self.addPhoto(newPhoto)
-                    self.triggerToast("Добавлен файл из Google Фото: \(item.filename)".localized)
+                    imported += 1
+                    self.triggerToast("Импорт из Google Фото".localized + ": \(imported)/\(total)")
                 } catch {
-                    self.triggerToast("Ошибка импорта \(item.filename): \(error.localizedDescription)")
+                    failed += 1
+                    lastErrorText = error.localizedDescription
+                    print("[GooglePhotos] Ошибка импорта \(item.filename): \(error)")
                 }
+            }
+
+            // Сессия выбора больше не нужна
+            await GooglePhotosManager.shared.endPickerSession()
+
+            if failed == 0 {
+                self.triggerToast("Импортировано из Google Фото".localized + ": \(imported)")
+            } else {
+                self.triggerToast("Импортировано".localized + " \(imported)/\(total). " + "Не удалось".localized + ": \(failed). \(lastErrorText)")
             }
         }
     }

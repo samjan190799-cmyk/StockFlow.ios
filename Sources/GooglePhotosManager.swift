@@ -14,6 +14,8 @@ struct GoogleMediaItem: Identifiable, Codable, Sendable {
     let mediaMetadata: GoogleMediaMetadata?
     /// Время получения baseUrl — для инвалидации (Google Photos baseUrl живёт 60 мин)
     let fetchedAt: Date
+    /// true — файл лежит на Google Диске, false — выбран через Google Photos Picker
+    let isFromDrive: Bool
 
     var isVideo: Bool {
         let fn = filename.lowercased()
@@ -121,10 +123,10 @@ struct GoogleMediaItem: Identifiable, Codable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, filename, mimeType, baseUrl, productUrl, mediaMetadata, fetchedAt
+        case id, filename, mimeType, baseUrl, productUrl, mediaMetadata, fetchedAt, isFromDrive
     }
 
-    init(id: String, filename: String, mimeType: String, baseUrl: String, productUrl: String?, mediaMetadata: GoogleMediaMetadata?, fetchedAt: Date = Date()) {
+    init(id: String, filename: String, mimeType: String, baseUrl: String, productUrl: String?, mediaMetadata: GoogleMediaMetadata?, fetchedAt: Date = Date(), isFromDrive: Bool = false) {
         self.id = id
         self.filename = filename
         self.mimeType = mimeType
@@ -132,6 +134,7 @@ struct GoogleMediaItem: Identifiable, Codable, Sendable {
         self.productUrl = productUrl
         self.mediaMetadata = mediaMetadata
         self.fetchedAt = fetchedAt
+        self.isFromDrive = isFromDrive
     }
 
     init(from decoder: Decoder) throws {
@@ -143,6 +146,7 @@ struct GoogleMediaItem: Identifiable, Codable, Sendable {
         self.productUrl = try? container.decode(String.self, forKey: .productUrl)
         self.mediaMetadata = try? container.decode(GoogleMediaMetadata.self, forKey: .mediaMetadata)
         self.fetchedAt = (try? container.decode(Date.self, forKey: .fetchedAt)) ?? Date()
+        self.isFromDrive = (try? container.decode(Bool.self, forKey: .isFromDrive)) ?? false
     }
 }
 
@@ -177,6 +181,45 @@ struct GoogleMediaMetadata: Codable, Sendable {
     }
 }
 
+// MARK: - Ошибки Google Фото / Диска
+
+enum GooglePhotosError: LocalizedError {
+    case notAuthenticated
+    case reauthRequired
+    case apiDisabled(String)
+    case http(Int, String)
+    case badResponse
+    case timedOut
+    case cancelled
+
+    var errorDescription: String? {
+        switch self {
+        case .notAuthenticated:
+            return "Сначала войдите в Google.".localized
+        case .reauthRequired:
+            return "Google не принял доступ. Выйдите и войдите снова — так приложение получит новые права на выбор фото.".localized
+        case .apiDisabled(let apiName):
+            return "В вашем проекте Google Cloud не включён".localized + " \(apiName). " + "Включите его в APIs & Services → Library и повторите.".localized
+        case .http(let code, let message):
+            return "Google вернул ошибку".localized + " \(code)" + (message.isEmpty ? "" : ": \(message)")
+        case .badResponse:
+            return "Не удалось разобрать ответ Google.".localized
+        case .timedOut:
+            return "Время ожидания выбора истекло. Попробуйте ещё раз.".localized
+        case .cancelled:
+            return "Выбор отменён.".localized
+        }
+    }
+}
+
+/// Сессия выбора в Google Photos Picker API
+struct GooglePickerSession: Sendable {
+    let id: String
+    let pickerURL: URL
+    let pollInterval: TimeInterval
+    let timeout: TimeInterval
+}
+
 // MARK: - OAuth Web Session Context Provider
 final class WebAuthContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
     @MainActor
@@ -206,8 +249,18 @@ final class GooglePhotosManager: ObservableObject {
     @Published var statusMessage: String = ""
     @Published var downloadProgress: [String: Double] = [:]
     @Published var userEmail: String = ""
+    /// Последняя ошибка обращения к Google — показывается пользователю вместо пустого экрана
+    @Published var lastError: String?
 
     private(set) var accessToken: String?
+    /// Активная сессия Google Photos Picker (нужна, чтобы обновить ссылки на файлы и удалить сессию после импорта)
+    private var activePickerSessionId: String?
+    private var pickedItemsById: [String: GoogleMediaItem] = [:]
+
+    /// Версия набора прав. Google закрыл чтение всей библиотеки (photoslibrary.readonly) — теперь нужен Picker API.
+    /// Токены, выданные со старыми правами, не работают, поэтому при смене версии просим войти заново.
+    private static let scopeVersionKey = "google_photos_scope_version"
+    private static let currentScopeVersion = 2
     private var webAuthContextProvider = WebAuthContextProvider()
 
     // Google OAuth 2.0 Configuration
@@ -223,7 +276,26 @@ final class GooglePhotosManager: ObservableObject {
 
     // MARK: - Auth & Keychain
 
+    private func clearStoredCredentials() {
+        KeychainHelper.shared.delete(for: "com.stockflow.googlephotos")
+        KeychainHelper.shared.delete(for: "com.stockflow.googlephotos.refresh")
+        UserDefaults.standard.removeObject(forKey: "google_photos_user_email")
+        UserDefaults.standard.removeObject(forKey: Self.scopeVersionKey)
+        self.accessToken = nil
+        self.userEmail = ""
+        self.isAuthenticated = false
+    }
+
     private func checkExistingToken() {
+        let hasStoredToken = (KeychainHelper.shared.read(for: "com.stockflow.googlephotos") ?? "").isEmpty == false
+            || (KeychainHelper.shared.read(for: "com.stockflow.googlephotos.refresh") ?? "").isEmpty == false
+        if hasStoredToken && UserDefaults.standard.integer(forKey: Self.scopeVersionKey) != Self.currentScopeVersion {
+            // Вход был выполнен со старыми правами (чтение всей библиотеки) — Google их больше не принимает
+            clearStoredCredentials()
+            self.statusMessage = "Права Google Фото изменились. Войдите заново.".localized
+            return
+        }
+
         if let token = KeychainHelper.shared.read(for: "com.stockflow.googlephotos"),
            !token.isEmpty {
             self.accessToken = token
@@ -254,8 +326,9 @@ final class GooglePhotosManager: ObservableObject {
             return
         }
 
+        // Picker API: пользователь сам выбирает файлы в окне Google Фото (чтение всей библиотеки Google отключил)
         let scopes = [
-            "https://www.googleapis.com/auth/photoslibrary.readonly",
+            "https://www.googleapis.com/auth/photospicker.mediaitems.readonly",
             "https://www.googleapis.com/auth/drive.readonly",
             "https://www.googleapis.com/auth/userinfo.email"
         ].joined(separator: " ")
@@ -325,11 +398,12 @@ final class GooglePhotosManager: ObservableObject {
             if let token = obtainedToken, !token.isEmpty {
                 self.accessToken = token
                 KeychainHelper.shared.save(password: token, for: "com.stockflow.googlephotos")
+                UserDefaults.standard.set(Self.currentScopeVersion, forKey: Self.scopeVersionKey)
+                self.lastError = nil
                 self.isAuthenticated = true
                 self.statusMessage = "Успешная авторизация в Google".localized
 
                 await fetchUserProfile()
-                await loadMediaItems(forceReload: true)
             } else {
                 throw URLError(.cannotParseResponse)
             }
@@ -360,7 +434,12 @@ final class GooglePhotosManager: ObservableObject {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw URLError(.badServerResponse)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            var details = ""
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                details = (json["error_description"] as? String) ?? (json["error"] as? String) ?? ""
+            }
+            throw GooglePhotosError.http(status, details)
         }
 
         struct TokenResponse: Codable {
@@ -465,349 +544,337 @@ final class GooglePhotosManager: ObservableObject {
     }
 
     func signOut() {
-        KeychainHelper.shared.delete(for: "com.stockflow.googlephotos")
-        KeychainHelper.shared.delete(for: "com.stockflow.googlephotos.refresh")
-        UserDefaults.standard.removeObject(forKey: "google_photos_user_email")
-        self.accessToken = nil
-        self.userEmail = ""
-        self.isAuthenticated = false
+        clearStoredCredentials()
+        self.activePickerSessionId = nil
+        self.pickedItemsById = [:]
+        self.lastError = nil
         self.mediaItems = []
         self.statusMessage = "Отключено от Google Фото".localized
         // Очищаем кеш миниатюр при выходе
         GoogleImageCache.clearAll()
     }
 
-    // MARK: - Fetching Media from Google API
 
-    /// Загружает список медиафайлов.
-    /// - Parameters:
-    ///   - forceReload: если `false` и список уже загружен — возвращается без запросов к API.
-    ///   - filterVideoOnly: фильтровать только видео.
-    func loadMediaItems(forceReload: Bool = false, filterVideoOnly: Bool = false) async {
-        guard isAuthenticated, let token = accessToken else { return }
+    // MARK: - Обращения к Google API (с обновлением токена и понятными ошибками)
 
-        // Если список уже загружен и обновление не требуется — не нагружаем API
-        if !forceReload && !mediaItems.isEmpty {
-            return
+    private static let pickerAPIName = "Google Photos Picker API"
+    private static let driveAPIName = "Google Drive API"
+    private static let pickerBase = "https://photospicker.googleapis.com/v1"
+
+    /// Переводит ответ Google с ошибкой в понятную пользователю причину
+    private static func mapError(status: Int, data: Data, apiName: String) -> GooglePhotosError {
+        let raw = String(data: data, encoding: .utf8) ?? ""
+        let lower = raw.lowercased()
+        var message = ""
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let err = json["error"] as? [String: Any] {
+            message = (err["message"] as? String) ?? ""
+        }
+        if status == 401 {
+            return .reauthRequired
+        }
+        if status == 403 {
+            if lower.contains("service_disabled") || lower.contains("has not been used in project") || lower.contains("it is disabled") {
+                return .apiDisabled(apiName)
+            }
+            if lower.contains("insufficient") || lower.contains("scope") {
+                return .reauthRequired
+            }
+        }
+        return .http(status, String(message.prefix(200)))
+    }
+
+    private func authorizedData(url: URL, method: String = "GET", jsonBody: Data? = nil, apiName: String) async throws -> Data {
+        func attempt() async throws -> (Data, Int) {
+            guard let token = accessToken else { throw GooglePhotosError.notAuthenticated }
+            var request = URLRequest(url: url)
+            request.httpMethod = method
+            request.timeoutInterval = 30
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if let body = jsonBody {
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = body
+            }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
         }
 
-        self.isLoading = true
-        self.statusMessage = "Загрузка всех медиафайлов из Google Фото и Диска...".localized
+        var (data, status) = try await attempt()
+        if status == 401, await refreshAccessTokenIfNeeded() {
+            (data, status) = try await attempt()
+        }
+        guard (200..<300).contains(status) else {
+            throw Self.mapError(status: status, data: data, apiName: apiName)
+        }
+        return data
+    }
 
-        var fetchedItems: [GoogleMediaItem] = []
-        var pageCount = 0
-        let maxPages = 200 // До 20 000 объектов (200 страниц × 100)
+    private static func parseSeconds(_ value: Any?) -> TimeInterval? {
+        if let text = value as? String {
+            return Double(text.trimmingCharacters(in: CharacterSet(charactersIn: "s ")))
+        }
+        if let number = value as? Double {
+            return number
+        }
+        return nil
+    }
+
+    // MARK: - Google Photos Picker API (выбор фото и видео в окне Google Фото)
+
+    /// Создаёт сессию выбора. Адрес `pickerURL` нужно открыть пользователю — там он отмечает файлы.
+    func createPickerSession(maxItems: Int = 2000) async throws -> GooglePickerSession {
+        guard let url = URL(string: "\(Self.pickerBase)/sessions") else { throw GooglePhotosError.badResponse }
+        let body = try JSONSerialization.data(withJSONObject: ["pickingConfig": ["maxItemCount": String(maxItems)]])
+        let data = try await authorizedData(url: url, method: "POST", jsonBody: body, apiName: Self.pickerAPIName)
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let id = json["id"] as? String,
+              let uriString = json["pickerUri"] as? String,
+              let pickerURL = URL(string: uriString) else {
+            throw GooglePhotosError.badResponse
+        }
+
+        let polling = json["pollingConfig"] as? [String: Any]
+        let interval = Self.parseSeconds(polling?["pollInterval"]) ?? 5
+        let timeout = Self.parseSeconds(polling?["timeoutIn"]) ?? 600
+
+        activePickerSessionId = id
+        pickedItemsById = [:]
+        return GooglePickerSession(
+            id: id,
+            pickerURL: pickerURL,
+            pollInterval: max(2, min(interval, 15)),
+            timeout: min(max(timeout, 60), 1800)
+        )
+    }
+
+    /// true — пользователь закончил выбор и нажал «Готово» в Google Фото
+    func isPickerSelectionReady(sessionId: String) async throws -> Bool {
+        guard let url = URL(string: "\(Self.pickerBase)/sessions/\(sessionId)") else { throw GooglePhotosError.badResponse }
+        let data = try await authorizedData(url: url, apiName: Self.pickerAPIName)
+        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return (json?["mediaItemsSet"] as? Bool) ?? false
+    }
+
+    private struct PickerItemsPage: Decodable {
+        let mediaItems: [PickerItem]?
+        let nextPageToken: String?
+
+        struct PickerItem: Decodable {
+            let id: String?
+            let type: String?
+            let mediaFile: PickerMediaFile?
+        }
+
+        struct PickerMediaFile: Decodable {
+            let baseUrl: String?
+            let mimeType: String?
+            let filename: String?
+            let mediaFileMetadata: GoogleMediaMetadata?
+        }
+    }
+
+    /// Получает список файлов, которые пользователь выбрал в этой сессии
+    func fetchPickedItems(sessionId: String, onProgress: ((Int) -> Void)? = nil) async throws -> [GoogleMediaItem] {
+        var result: [GoogleMediaItem] = []
+        var seen = Set<String>()
+        var pageToken: String? = nil
         let now = Date()
 
-        // 1. Циклическая загрузка из Google Photos API (по nextPageToken)
-        var photosPageToken: String? = nil
         repeat {
-            pageCount += 1
-            var components = URLComponents(string: "https://photoslibrary.googleapis.com/v1/mediaItems")
-            var queryItems = [URLQueryItem(name: "pageSize", value: "100")]
-            if let pageToken = photosPageToken {
-                queryItems.append(URLQueryItem(name: "pageToken", value: pageToken))
+            var components = URLComponents(string: "\(Self.pickerBase)/mediaItems")
+            var queryItems = [
+                URLQueryItem(name: "sessionId", value: sessionId),
+                URLQueryItem(name: "pageSize", value: "100")
+            ]
+            if let token = pageToken {
+                queryItems.append(URLQueryItem(name: "pageToken", value: token))
             }
             components?.queryItems = queryItems
+            guard let url = components?.url else { throw GooglePhotosError.badResponse }
 
-            guard let photosURL = components?.url else { break }
+            let data = try await authorizedData(url: url, apiName: Self.pickerAPIName)
+            guard let page = try? JSONDecoder().decode(PickerItemsPage.self, from: data) else {
+                throw GooglePhotosError.badResponse
+            }
 
-            var request = URLRequest(url: photosURL)
+            for raw in page.mediaItems ?? [] {
+                guard let id = raw.id, !id.isEmpty, !seen.contains(id),
+                      let file = raw.mediaFile, let baseUrl = file.baseUrl, !baseUrl.isEmpty else { continue }
+                seen.insert(id)
+
+                let mimeType = file.mimeType ?? ""
+                let isVideo = (raw.type ?? "").uppercased() == "VIDEO" || mimeType.lowercased().hasPrefix("video/")
+                let rawName = file.filename ?? ""
+                let filename = rawName.isEmpty ? "\(id.prefix(8)).\(isVideo ? "mp4" : "jpg")" : rawName
+
+                result.append(GoogleMediaItem(
+                    id: id,
+                    filename: filename,
+                    mimeType: mimeType.isEmpty ? (isVideo ? "video/mp4" : "image/jpeg") : mimeType,
+                    baseUrl: baseUrl,
+                    productUrl: nil,
+                    mediaMetadata: file.mediaFileMetadata,
+                    fetchedAt: now,
+                    isFromDrive: false
+                ))
+            }
+
+            pageToken = page.nextPageToken
+            onProgress?(result.count)
+        } while pageToken != nil
+
+        pickedItemsById = Dictionary(result.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return result
+    }
+
+    /// Закрывает сессию выбора (Google хранит её, пока не удалить)
+    func endPickerSession() async {
+        guard let id = activePickerSessionId else { return }
+        activePickerSessionId = nil
+        pickedItemsById = [:]
+        if let url = URL(string: "\(Self.pickerBase)/sessions/\(id)") {
+            _ = try? await authorizedData(url: url, method: "DELETE", apiName: Self.pickerAPIName)
+        }
+    }
+
+    /// Ссылки на файлы из Picker живут около часа. Длинный импорт обновляет их повторным запросом списка сессии.
+    private func refreshedPickerItem(_ item: GoogleMediaItem) async -> GoogleMediaItem {
+        guard !item.isFromDrive, item.isBaseUrlStale else { return item }
+        if let cached = pickedItemsById[item.id], !cached.isBaseUrlStale {
+            return cached
+        }
+        guard let sessionId = activePickerSessionId,
+              let fresh = try? await fetchPickedItems(sessionId: sessionId),
+              let updated = fresh.first(where: { $0.id == item.id }) else {
+            return item
+        }
+        return updated
+    }
+
+    // MARK: - Google Диск (список фото и видео, хранящихся на Диске)
+
+    /// Загружает фото и видео с Google Диска. Фото из Google Фото здесь не появляются — для них есть Picker.
+    func loadDriveItems(forceReload: Bool = false) async {
+        guard isAuthenticated else { return }
+        if !forceReload && !mediaItems.isEmpty { return }
+
+        isLoading = true
+        lastError = nil
+        statusMessage = "Поиск медиафайлов на Google Диске...".localized
+
+        var fetched: [GoogleMediaItem] = []
+        var seen = Set<String>()
+        var pageToken: String? = nil
+        var pageCount = 0
+        let now = Date()
+        let query = "(mimeType contains 'image/' or mimeType contains 'video/' or name contains '.jpg' or name contains '.jpeg' or name contains '.png' or name contains '.heic' or name contains '.heif' or name contains '.dng' or name contains '.webp' or name contains '.mov' or name contains '.mp4') and trashed = false"
+
+        do {
+            repeat {
+                pageCount += 1
+                var components = URLComponents(string: "https://www.googleapis.com/drive/v3/files")
+                var queryItems = [
+                    URLQueryItem(name: "q", value: query),
+                    URLQueryItem(name: "pageSize", value: "1000"),
+                    URLQueryItem(name: "fields", value: "nextPageToken,files(id,name,mimeType,thumbnailLink,webContentLink)")
+                ]
+                if let token = pageToken {
+                    queryItems.append(URLQueryItem(name: "pageToken", value: token))
+                }
+                components?.queryItems = queryItems
+                guard let url = components?.url else { throw GooglePhotosError.badResponse }
+
+                let data = try await authorizedData(url: url, apiName: Self.driveAPIName)
+                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    throw GooglePhotosError.badResponse
+                }
+
+                for file in (json["files"] as? [[String: Any]]) ?? [] {
+                    let id = (file["id"] as? String) ?? ""
+                    let name = (file["name"] as? String) ?? "file.jpg"
+                    let mimeType = (file["mimeType"] as? String) ?? "image/jpeg"
+                    guard !id.isEmpty, !seen.contains(id),
+                          GoogleMediaItem.isSupportedMedia(filename: name, mimeType: mimeType) else { continue }
+                    seen.insert(id)
+
+                    let thumbnailLink = file["thumbnailLink"] as? String
+                    let webContentLink = file["webContentLink"] as? String
+                    fetched.append(GoogleMediaItem(
+                        id: id,
+                        filename: name,
+                        mimeType: mimeType,
+                        baseUrl: webContentLink ?? thumbnailLink ?? "",
+                        productUrl: thumbnailLink,
+                        mediaMetadata: nil,
+                        fetchedAt: now,
+                        isFromDrive: true
+                    ))
+                }
+
+                pageToken = json["nextPageToken"] as? String
+                statusMessage = "Поиск медиафайлов... Загружено: \(fetched.count)"
+            } while pageToken != nil && pageCount < 100
+        } catch {
+            lastError = error.localizedDescription
+        }
+
+        mediaItems = fetched
+        if fetched.isEmpty {
+            statusMessage = "На Google Диске не найдено фото и видео.".localized
+        } else {
+            statusMessage = "Найдено медиафайлов: \(fetched.count)"
+        }
+        isLoading = false
+    }
+
+    // MARK: - Скачивание
+
+    /// Скачивает файл во временный файл (а не в память — видео бывают очень большими).
+    /// Вызывающий обязан перенести или удалить полученный файл.
+    func downloadItemFile(_ item: GoogleMediaItem) async throws -> URL {
+        downloadProgress[item.id] = 0.1
+        defer { downloadProgress[item.id] = nil }
+
+        if item.isFromDrive {
+            guard let url = URL(string: "https://www.googleapis.com/drive/v3/files/\(item.id)?alt=media") else {
+                throw GooglePhotosError.badResponse
+            }
+            return try await downloadFile(from: url, apiName: Self.driveAPIName)
+        }
+
+        let fresh = await refreshedPickerItem(item)
+        guard let url = fresh.downloadURL else { throw GooglePhotosError.badResponse }
+        return try await downloadFile(from: url, apiName: Self.pickerAPIName)
+    }
+
+    private func downloadFile(from url: URL, apiName: String) async throws -> URL {
+        for attempt in 0..<2 {
+            guard let token = accessToken else { throw GooglePhotosError.notAuthenticated }
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 120
+            // Ссылки Picker API работают только с токеном в заголовке
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
-            if let (data, response) = try? await URLSession.shared.data(for: request),
-               let httpResp = response as? HTTPURLResponse {
-                if httpResp.statusCode == 401 {
-                    if await refreshAccessTokenIfNeeded(), let newToken = accessToken {
-                        var retryReq = URLRequest(url: photosURL)
-                        retryReq.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
-                        if let (retryData, retryResp) = try? await URLSession.shared.data(for: retryReq),
-                           (retryResp as? HTTPURLResponse)?.statusCode == 200 {
-                            parsePhotosResponse(retryData, into: &fetchedItems, pageToken: &photosPageToken, fetchedAt: now)
-                        } else {
-                            photosPageToken = nil
-                        }
-                    } else {
-                        photosPageToken = nil
-                    }
-                } else if httpResp.statusCode == 200 {
-                    parsePhotosResponse(data, into: &fetchedItems, pageToken: &photosPageToken, fetchedAt: now)
-                } else {
-                    photosPageToken = nil
-                }
-            } else {
-                photosPageToken = nil
+            let (tempURL, response) = try await URLSession.shared.download(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+            if (200..<300).contains(status) {
+                // Системный временный файл удаляется сразу после возврата — переносим в свой
+                let destination = FileManager.default.temporaryDirectory.appendingPathComponent("gp_\(UUID().uuidString)")
+                try FileManager.default.moveItem(at: tempURL, to: destination)
+                return destination
             }
 
-            self.statusMessage = "Загрузка Google Фото... Найдено: \(fetchedItems.count)"
-
-        } while photosPageToken != nil && pageCount < maxPages
-
-        // 2. Циклическая загрузка из Google Drive API (по nextPageToken)
-        let currentToken = accessToken ?? token
-        var drivePageToken: String? = nil
-        let driveQuery = "(mimeType contains 'image/' or mimeType contains 'video/' or name contains '.jpg' or name contains '.jpeg' or name contains '.png' or name contains '.heic' or name contains '.heif' or name contains '.dng' or name contains '.webp' or name contains '.mov' or name contains '.mp4') and trashed = false"
-
-        repeat {
-            var components = URLComponents(string: "https://www.googleapis.com/drive/v3/files")
-            var queryItems = [
-                URLQueryItem(name: "q", value: driveQuery),
-                URLQueryItem(name: "pageSize", value: "1000"),
-                URLQueryItem(name: "fields", value: "nextPageToken,files(id,name,mimeType,thumbnailLink,webContentLink)")
-            ]
-            if let pageToken = drivePageToken {
-                queryItems.append(URLQueryItem(name: "pageToken", value: pageToken))
-            }
-            components?.queryItems = queryItems
-
-            guard let driveURL = components?.url else { break }
-
-            var request = URLRequest(url: driveURL)
-            request.setValue("Bearer \(currentToken)", forHTTPHeaderField: "Authorization")
-
-            if let (data, response) = try? await URLSession.shared.data(for: request),
-               let httpResp = response as? HTTPURLResponse {
-                let targetData: Data?
-                if httpResp.statusCode == 401 {
-                    if await refreshAccessTokenIfNeeded(), let newToken = accessToken {
-                        var retryReq = URLRequest(url: driveURL)
-                        retryReq.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
-                        if let (retryData, retryResp) = try? await URLSession.shared.data(for: retryReq),
-                           (retryResp as? HTTPURLResponse)?.statusCode == 200 {
-                            targetData = retryData
-                        } else {
-                            targetData = nil
-                        }
-                    } else {
-                        targetData = nil
-                    }
-                } else if httpResp.statusCode == 200 {
-                    targetData = data
-                } else {
-                    targetData = nil
-                }
-
-                if let responseData = targetData,
-                   let jsonDict = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] {
-                    if let rawFiles = jsonDict["files"] as? [[String: Any]] {
-                        for fileDict in rawFiles {
-                            let id = (fileDict["id"] as? String) ?? ""
-                            let name = (fileDict["name"] as? String) ?? "file.jpg"
-                            let mimeType = (fileDict["mimeType"] as? String) ?? "image/jpeg"
-                            let thumbnailLink = fileDict["thumbnailLink"] as? String
-                            let webContentLink = fileDict["webContentLink"] as? String
-
-                            guard !id.isEmpty else { continue }
-                            guard GoogleMediaItem.isSupportedMedia(filename: name, mimeType: mimeType) else { continue }
-
-                            if !fetchedItems.contains(where: { $0.id == id }) {
-                                let item = GoogleMediaItem(
-                                    id: id,
-                                    filename: name,
-                                    mimeType: mimeType,
-                                    baseUrl: webContentLink ?? thumbnailLink ?? "",
-                                    productUrl: thumbnailLink,
-                                    mediaMetadata: nil,
-                                    fetchedAt: now
-                                )
-                                fetchedItems.append(item)
-                            }
-                        }
-                    }
-                    drivePageToken = jsonDict["nextPageToken"] as? String
-                } else {
-                    drivePageToken = nil
-                }
-            } else {
-                drivePageToken = nil
+            if status == 401, attempt == 0, await refreshAccessTokenIfNeeded() {
+                try? FileManager.default.removeItem(at: tempURL)
+                continue
             }
 
-            self.statusMessage = "Поиск медиафайлов... Загружено: \(fetchedItems.count)"
-        } while drivePageToken != nil
-
-        if filterVideoOnly {
-            self.mediaItems = fetchedItems.filter { $0.isVideo }
-        } else {
-            self.mediaItems = fetchedItems
+            let body = (try? Data(contentsOf: tempURL)) ?? Data()
+            try? FileManager.default.removeItem(at: tempURL)
+            throw Self.mapError(status: status, data: body, apiName: apiName)
         }
-
-        if self.mediaItems.isEmpty {
-            self.statusMessage = "Медиафайлов не найдено. Проверьте, включен ли Photos/Drive API в Google Cloud.".localized
-        } else {
-            self.statusMessage = "Найдено медиафайлов: \(self.mediaItems.count)".localized
-        }
-
-        self.isLoading = false
-    }
-
-    /// Вспомогательный парсер ответа Google Photos List API
-    private func parsePhotosResponse(_ data: Data, into items: inout [GoogleMediaItem], pageToken: inout String?, fetchedAt: Date) {
-        struct GooglePhotosListResponse: Codable {
-            let mediaItems: [RawMediaItem]?
-            let nextPageToken: String?
-
-            struct RawMediaItem: Codable {
-                let id: String?
-                let filename: String?
-                let mimeType: String?
-                let baseUrl: String?
-                let productUrl: String?
-                let mediaMetadata: GoogleMediaMetadata?
-            }
-        }
-        if let result = try? JSONDecoder().decode(GooglePhotosListResponse.self, from: data) {
-            if let rawItems = result.mediaItems {
-                for raw in rawItems {
-                    guard let id = raw.id, !id.isEmpty else { continue }
-                    let filename = raw.filename ?? "photo.jpg"
-                    let mimeType = raw.mimeType ?? "image/jpeg"
-                    guard GoogleMediaItem.isSupportedMedia(filename: filename, mimeType: mimeType) else { continue }
-                    guard !items.contains(where: { $0.id == id }) else { continue }
-                    let item = GoogleMediaItem(
-                        id: id,
-                        filename: filename,
-                        mimeType: mimeType,
-                        baseUrl: raw.baseUrl ?? "",
-                        productUrl: raw.productUrl,
-                        mediaMetadata: raw.mediaMetadata,
-                        fetchedAt: fetchedAt
-                    )
-                    items.append(item)
-                }
-            }
-            pageToken = result.nextPageToken
-        } else {
-            pageToken = nil
-        }
-    }
-
-    // MARK: - Refresh single item's baseUrl (anti-stale)
-
-    /// Получает свежий baseUrl для одного элемента Google Photos (живёт 60 мин).
-    /// Вызывается перед скачиванием или если получен 401/403.
-    func refreshedItem(_ item: GoogleMediaItem, force: Bool = false) async -> GoogleMediaItem {
-        guard !item.id.isEmpty,
-              !item.baseUrl.contains("drive.google.com"),
-              !item.baseUrl.contains("content.googleapis.com"),
-              (force || item.isBaseUrlStale),
-              let token = accessToken else {
-            return item
-        }
-
-        guard let url = URL(string: "https://photoslibrary.googleapis.com/v1/mediaItems/\(item.id)") else {
-            return item
-        }
-
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        if let (data, response) = try? await URLSession.shared.data(for: request),
-           (response as? HTTPURLResponse)?.statusCode == 200,
-           let json = try? JSONDecoder().decode(GoogleMediaItem.self, from: data) {
-            // Обновляем в общем списке тоже
-            if let idx = mediaItems.firstIndex(where: { $0.id == item.id }) {
-                mediaItems[idx] = json
-            }
-            return json
-        }
-
-        // Retry после refresh токена
-        if await refreshAccessTokenIfNeeded(), let newToken = accessToken {
-            var retryReq = URLRequest(url: url)
-            retryReq.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
-            if let (retryData, retryResp) = try? await URLSession.shared.data(for: retryReq),
-               (retryResp as? HTTPURLResponse)?.statusCode == 200,
-               let json = try? JSONDecoder().decode(GoogleMediaItem.self, from: retryData) {
-                if let idx = mediaItems.firstIndex(where: { $0.id == item.id }) {
-                    mediaItems[idx] = json
-                }
-                return json
-            }
-        }
-
-        return item
-    }
-
-    // MARK: - Download Media
-
-    /// Скачивает реальный медиафайл из Google Photos / Google Drive без повреждений.
-    func downloadItemData(_ item: GoogleMediaItem) async throws -> Data {
-        self.downloadProgress[item.id] = 0.1
-        let currentToken = accessToken
-
-        // 1. Попытка скачивания через Google Photos API (CDN без Bearer заголовка)
-        if !item.baseUrl.isEmpty && !item.baseUrl.contains("drive.google.com") && !item.baseUrl.contains("googleapis.com/drive") {
-            let freshItem = await refreshedItem(item)
-            if let photoUrl = freshItem.downloadURL ?? URL(string: freshItem.baseUrl) {
-                // Прямой публичный запрос к Google CDN
-                if let (data, response) = try? await URLSession.shared.data(from: photoUrl),
-                   let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200, !data.isEmpty {
-                    if item.isVideo || UIImage(data: data) != nil || data.count > 1024 {
-                        self.downloadProgress[item.id] = 1.0
-                        return data
-                    }
-                }
-
-                // Если ссылка протухла — форсированно обновляем через Photos API
-                let reFreshItem = await refreshedItem(item, force: true)
-                if let retryURL = reFreshItem.downloadURL ?? URL(string: reFreshItem.baseUrl),
-                   let (retryData, retryResp) = try? await URLSession.shared.data(from: retryURL),
-                   (retryResp as? HTTPURLResponse)?.statusCode == 200, !retryData.isEmpty {
-                    if item.isVideo || UIImage(data: retryData) != nil || retryData.count > 1024 {
-                        self.downloadProgress[item.id] = 1.0
-                        return retryData
-                    }
-                }
-            }
-        }
-
-        // 2. Попытка скачивания через Google Drive API с Bearer токеном
-        if let token = currentToken, !token.isEmpty {
-            let driveURL = URL(string: "https://www.googleapis.com/drive/v3/files/\(item.id)?alt=media")
-            if let driveURL = driveURL {
-                var request = URLRequest(url: driveURL)
-                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                request.timeoutInterval = 30
-
-                if let (data, response) = try? await URLSession.shared.data(for: request),
-                   let httpResp = response as? HTTPURLResponse {
-                    if httpResp.statusCode == 200 && !data.isEmpty {
-                        self.downloadProgress[item.id] = 1.0
-                        return data
-                    } else if httpResp.statusCode == 401 {
-                        if await refreshAccessTokenIfNeeded(), let newToken = accessToken {
-                            var retryReq = URLRequest(url: driveURL)
-                            retryReq.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
-                            if let (retryData, retryResp) = try? await URLSession.shared.data(for: retryReq),
-                               (retryResp as? HTTPURLResponse)?.statusCode == 200 && !retryData.isEmpty {
-                                self.downloadProgress[item.id] = 1.0
-                                return retryData
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. Резервный запрос по downloadURL / baseUrl
-        if let fallbackURL = item.downloadURL ?? URL(string: item.baseUrl) {
-            if let (pubData, pubResp) = try? await URLSession.shared.data(from: fallbackURL),
-               (pubResp as? HTTPURLResponse)?.statusCode == 200, !pubData.isEmpty {
-                self.downloadProgress[item.id] = 1.0
-                return pubData
-            }
-
-            if let token = currentToken, !token.isEmpty {
-                var authReq = URLRequest(url: fallbackURL)
-                authReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                if let (authData, authResp) = try? await URLSession.shared.data(for: authReq),
-                   (authResp as? HTTPURLResponse)?.statusCode == 200, !authData.isEmpty {
-                    self.downloadProgress[item.id] = 1.0
-                    return authData
-                }
-            }
-        }
-
-        throw NSError(domain: "GooglePhotosManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Не удалось загрузить файл \(item.filename) из Google Фото / Диска"])
+        throw GooglePhotosError.badResponse
     }
 }

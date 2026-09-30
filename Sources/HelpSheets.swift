@@ -47,8 +47,8 @@ struct GoogleOAuthHelpSheet: View {
                         // Step 2
                         instructionStep(
                             number: "2",
-                            title: "Включите Photos Library API".localized,
-                            description: "В разделе «APIs & Services» → «Library» найдите «Photos Library API» (а также «Google Drive API») и нажмите кнопку «Enable» (Включить).".localized,
+                            title: "Включите Google Photos Picker API".localized,
+                            description: "В разделе «APIs & Services» → «Library» найдите «Google Photos Picker API» (и «Google Drive API», если нужны файлы с Диска) и нажмите «Enable» (Включить). Старый «Photos Library API» больше не даёт читать вашу библиотеку.".localized,
                             icon: "checkmark.seal.fill",
                             color: .green
                         )
@@ -57,7 +57,7 @@ struct GoogleOAuthHelpSheet: View {
                         instructionStep(
                             number: "3",
                             title: "Настройте OAuth Consent Screen".localized,
-                            description: "В разделе «OAuth consent screen» выберите тип «External» (Внешний), укажите имя приложения и ваш email. В блоке «Test users» добавьте свой Gmail-адрес.".localized,
+                            description: "В разделе «OAuth consent screen» выберите тип «External» (Внешний), укажите имя приложения и ваш email. В блоке «Test users» добавьте свой Gmail-адрес. В разделе «Data Access» добавьте право photospicker.mediaitems.readonly.".localized,
                             icon: "person.crop.circle.badge.checkmark",
                             color: .orange
                         )
