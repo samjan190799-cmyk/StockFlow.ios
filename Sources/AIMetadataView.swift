@@ -78,11 +78,6 @@ struct AIMetadataView: View {
                     descriptionField
                         .glassCard(cornerRadius: 18, padding: 14)
                     
-                    // Рекламный баннер Meta Audience Network (скрыт для PRO)
-                    MetaBannerAdView {
-                        showPaywall = true
-                    }
-                    
                     // Continue Button
                     continueButton
                         .padding(.top, 4)
@@ -670,7 +665,7 @@ struct AIMetadataView: View {
         let apiKey = AIManager.defaultSystemGeminiKey
         
         guard RewardAdManager.shared.canPerformAction(isAIAnalysis: true) else {
-            alertMessage = "Достигнут дневной лимит (15 ИИ-анализов в день). Посмотрите видео (+5) или оформите PRO!".localized
+            alertMessage = "Достигнут дневной лимит (15 ИИ-анализов в день). Оформите PRO!".localized
             showingAlert = true
             return
         }

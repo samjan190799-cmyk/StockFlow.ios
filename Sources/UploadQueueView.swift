@@ -356,7 +356,7 @@ class QueueViewModel: ObservableObject {
         
         // 1. Проверяем и сразу списываем слот
         guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true) else {
-            triggerToast("Достигнут дневной лимит (15 ИИ-анализов в день). Посмотрите видео (+5) или оформите PRO!".localized)
+            triggerToast("Достигнут дневной лимит (15 ИИ-анализов в день). Оформите PRO!".localized)
             shouldShowDailyLimitAlert = true
             HapticHelper.notification(.warning)
             return
@@ -428,7 +428,7 @@ class QueueViewModel: ObservableObject {
             var processedCount = 0
             for photo in unanalyzed {
                 guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true) else {
-                    self.triggerToast("Достигнут дневной лимит ИИ. Посмотрите видео (+5) для продолжения.".localized)
+                    self.triggerToast("Достигнут дневной лимит ИИ. Оформите PRO для продолжения.".localized)
                     self.shouldShowDailyLimitAlert = true
                     break
                 }
@@ -505,7 +505,7 @@ class QueueViewModel: ObservableObject {
         
         // Проверяем и сразу списываем слот на отправку
         guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false) else {
-            triggerToast("Достигнут дневной лимит (15 отправок в день). Посмотрите видео (+5) или оформите PRO!".localized)
+            triggerToast("Достигнут дневной лимит (15 отправок в день). Оформите PRO!".localized)
             shouldShowDailyLimitAlert = true
             HapticHelper.notification(.warning)
             return
@@ -642,7 +642,7 @@ class QueueViewModel: ObservableObject {
             var successCount = 0
             for photo in readyPhotos {
                 guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false) else {
-                    self.triggerToast("Достигнут дневной лимит отправок. Посмотрите видео (+5) для продолжения.".localized)
+                    self.triggerToast("Достигнут дневной лимит отправок. Оформите PRO для продолжения.".localized)
                     self.shouldShowDailyLimitAlert = true
                     break
                 }
@@ -754,7 +754,7 @@ class QueueViewModel: ObservableObject {
                 // 2. Отправка на стоки
                 if let readyPhoto = self.photos.first(where: { $0.id == photo.id }), readyPhoto.status == .ready {
                     guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false) else {
-                        self.triggerToast("Достигнут дневной лимит отправок. Посмотрите видео (+5) для продолжения.".localized)
+                        self.triggerToast("Достигнут дневной лимит отправок. Оформите PRO для продолжения.".localized)
                         self.shouldShowDailyLimitAlert = true
                         break
                     }
@@ -1360,7 +1360,6 @@ struct UploadQueueView: View {
     @ObservedObject private var storeManager = StoreManager.shared
     @ObservedObject private var rewardManager = RewardAdManager.shared
     @State private var showPaywall = false
-    @State private var showRewardedAd = false
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var searchText = ""
     @State private var selectedFilter: PhotoStatus? = nil
@@ -1477,27 +1476,6 @@ struct UploadQueueView: View {
                                         .stroke(Color(hex: "A855F7").opacity(0.35), lineWidth: 1)
                                 )
                             }
-                            
-                            Button(action: {
-                                HapticHelper.trigger(.light)
-                                showRewardedAd = true
-                            }) {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "play.circle.fill")
-                                        .font(.system(size: 11))
-                                    Text("+5")
-                                        .font(.system(size: 11, weight: .bold))
-                                }
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 5)
-                                .background(Color.orange.opacity(0.18))
-                                .foregroundStyle(Color.orange)
-                                .clipShape(Capsule())
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color.orange.opacity(0.4), lineWidth: 1)
-                                )
-                            }
                         }
                     }
                 }
@@ -1582,9 +1560,6 @@ struct UploadQueueView: View {
             .sheet(isPresented: $showPaywall) {
                 PaywallView()
             }
-            .sheet(isPresented: $showRewardedAd) {
-                RewardedAdView()
-            }
             .onChange(of: viewModel.shouldShowPaywallFromLimit) { show in
                 if show {
                     showPaywall = true
@@ -1592,15 +1567,12 @@ struct UploadQueueView: View {
                 }
             }
             .alert("Дневной лимит исчерпан".localized, isPresented: $viewModel.shouldShowDailyLimitAlert) {
-                Button("🎬 Получить +5 слотов".localized) {
-                    showRewardedAd = true
-                }
                 Button("👑 SmartStock PRO".localized) {
                     showPaywall = true
                 }
                 Button("Закрыть".localized, role: .cancel) {}
             } message: {
-                Text("В бесплатной версии доступно 15 ИИ-анализов и 15 отправок на стоки в день. Вы можете посмотреть видео (+5 слотов) или перейти на безлимитный PRO.".localized)
+                Text("В бесплатной версии доступно 15 ИИ-анализов и 15 отправок на стоки в день. Вы можете перейти на безлимитный PRO.".localized)
             }
             .alert("Ошибка загрузки".localized, isPresented: $showingErrorAlert) {
                 Button("Скопировать".localized) {
@@ -1767,12 +1739,6 @@ struct UploadQueueView: View {
                     .frame(maxWidth: .infinity)
                     .glassCard(cornerRadius: 20, padding: 24)
                     .padding(.top, 20)
-                    
-                    // Органичный баннер Meta при пустой очереди
-                    MetaBannerAdView {
-                        showPaywall = true
-                    }
-                    .padding(.top, 10)
                 } else {
                     LazyVStack(spacing: 16) {
                         ForEach(Array(filteredPhotos.enumerated()), id: \.element.id) { index, photo in
@@ -1832,20 +1798,6 @@ struct UploadQueueView: View {
                                     }
                                 }
                                 .applyScrollTransitionIfAvailable()
-                                
-                                // Органичный In-Feed баннер Meta Audience Network после 2-го снимка
-                                if index == 1 {
-                                    MetaBannerAdView {
-                                        showPaywall = true
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Если в очереди только 1 фото, показываем баннер под ним
-                        if filteredPhotos.count == 1 {
-                            MetaBannerAdView {
-                                showPaywall = true
                             }
                         }
                     }

@@ -2,38 +2,27 @@ import Foundation
 import SwiftUI
 import Combine
 
-/// Менеджер вознаграждений за рекламу и раздельных дневных лимитов (15 ИИ-анализов + 15 отправок в день + бонусы)
+/// Менеджер раздельных дневных лимитов (15 ИИ-анализов + 15 отправок в день + бонусные слоты)
 @MainActor
 public final class RewardAdManager: ObservableObject {
     public static let shared = RewardAdManager()
-    
-    // Идентификаторы Meta Audience Network (Facebook Audience Network)
-    public static let metaPlacementID = "VID_HD_16_9_30S_APP_INSTALL#YOUR_PLACEMENT_ID"
-    public static let metaBannerPlacementID = "IMG_16_9_APP_INSTALL#YOUR_BANNER_PLACEMENT_ID"
-    
-    // Супер-награда за 30-секундное видео от Meta (+15 слотов)
-    public static let superRewardAmount: Int = 15
-    
+
     // Базовый дневной лимит (15 ИИ-анализов и 15 отправок в день)
     public static let baseDailyLimit: Int = 15
-    
+
     // Ключи UserDefaults
     private let bonusCreditsKey = "bonus_upload_credits_v1"
-    private let totalAdsWatchedKey = "total_reward_ads_watched"
     private let dailyUploadsUsedKey = "daily_free_uploads_used_v3"
     private let dailyAIUsedKey = "daily_free_ai_used_v3"
     private let dailyDayKey = "daily_free_limits_day_v3"
     
     @Published public private(set) var bonusCredits: Int = 0
-    @Published public private(set) var totalAdsWatched: Int = 0
     @Published public private(set) var dailyUploadsUsed: Int = 0
     @Published public private(set) var dailyAIUsed: Int = 0
-    @Published public var isShowingRewardModal: Bool = false
     @Published public var showDailyLimitAlert: Bool = false
-    
+
     private init() {
         self.bonusCredits = UserDefaults.standard.integer(forKey: bonusCreditsKey)
-        self.totalAdsWatched = UserDefaults.standard.integer(forKey: totalAdsWatchedKey)
         checkAndResetDailyCount()
     }
     
@@ -148,17 +137,6 @@ public final class RewardAdManager: ObservableObject {
                 UserDefaults.standard.set(bonusCredits, forKey: bonusCreditsKey)
             }
         }
-    }
-    
-    // MARK: - Начисление бонусов за просмотр рекламы (+5 слотов)
-    
-    public func rewardUser(with credits: Int = 5) {
-        self.bonusCredits += credits
-        self.totalAdsWatched += 1
-        UserDefaults.standard.set(self.bonusCredits, forKey: bonusCreditsKey)
-        UserDefaults.standard.set(self.totalAdsWatched, forKey: totalAdsWatchedKey)
-        
-        HapticHelper.notification(.success)
     }
     
     public func getMaxQueueLimit(baseLimit: Int = 20) -> Int {
