@@ -83,5 +83,39 @@ for b in builds.get("data", []):
         f" · шифрование: {a.get('usesNonExemptEncryption')} · мин. iOS: {a.get('minOsVersion')} · истекла: {a.get('expired')}"
     )
 
+# --- Вылеты, о которых TestFlight сообщил разработчику (только чтение) ---
+crashes = get(
+    f"/apps/{app_id}/betaFeedbackCrashSubmissions?limit=8&sort=-createdDate&include=build"
+    "&fields[betaFeedbackCrashSubmissions]=createdDate,deviceModel,osVersion,comment,build&fields[builds]=version"
+)
+print("\nВылеты из TestFlight:")
+if crashes is None:
+    print("  (не удалось получить список вылетов)")
+elif not crashes.get("data"):
+    print("  Отчётов о вылетах нет. Если приложение закрывается без отчёта, вероятнее всего его останавливает система из-за нехватки памяти.")
+else:
+    build_versions = {i["id"]: i.get("attributes", {}).get("version") for i in crashes.get("included", []) if i.get("type") == "builds"}
+    for index, c in enumerate(crashes["data"]):
+        a = c.get("attributes", {})
+        build_ref = (c.get("relationships", {}).get("build", {}).get("data") or {}).get("id")
+        print(f"  • сборка {build_versions.get(build_ref, '?')} · {a.get('createdDate')} · {a.get('deviceModel')} · iOS {a.get('osVersion')} · комментарий: {a.get('comment') or '—'}")
+        if index < 3:
+            log = get(f"/betaFeedbackCrashSubmissions/{c['id']}/crashLog")
+            log_data = (log or {}).get("data") or {}
+            if isinstance(log_data, list):
+                log_data = log_data[0] if log_data else {}
+            text = (log_data.get("attributes", {}) or {}).get("logText") or ""
+            if text:
+                lines = text.splitlines()
+                for line in lines[:40]:
+                    if any(k in line for k in ("Exception", "Termination", "Triggered by", "Crashed", "Hardware Model", "OS Version", "Version:")):
+                        print("      ", line.strip()[:160])
+                for i, line in enumerate(lines):
+                    if "Crashed:" in line:
+                        print("       --- поток, в котором произошёл вылет ---")
+                        for frame in lines[i:i + 18]:
+                            print("      ", frame.strip()[:170])
+                        break
+
 print("\nПояснения: processingState VALID = обработана; PROCESSING = ещё обрабатывается; FAILED/INVALID = Apple отклонила (причина придёт письмом).")
 print("internalBuildState READY_FOR_BETA_TESTING или IN_BETA_TESTING = доступна внутренним тестерам; MISSING_EXPORT_COMPLIANCE = нужен ответ про шифрование.")
