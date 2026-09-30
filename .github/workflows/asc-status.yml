@@ -1,9 +1,16 @@
 name: ASC build status (только чтение)
 
-# Показывает, как Apple обработала последние сборки SmartStock. Запускается только вручную.
+# Показывает, как Apple обработала последние сборки SmartStock.
 # Делает исключительно GET-запросы, ничего не собирает, не подписывает и не загружает.
+# Запускается вручную, а также при изменении этого файла или скрипта на ветках claude/**
+# (GitHub не позволяет запускать вручную новый workflow, которого ещё нет в main).
 on:
   workflow_dispatch:
+  push:
+    branches: [ "claude/**" ]
+    paths:
+      - ".github/workflows/asc-status.yml"
+      - ".github/scripts/asc_build_status.py"
 
 permissions:
   contents: read
