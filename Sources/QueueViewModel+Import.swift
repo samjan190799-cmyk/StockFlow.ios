@@ -7,7 +7,10 @@ extension QueueViewModel {
         guard !items.isEmpty else { return }
 
         Task { @MainActor in
-            for item in items {
+            let journal = FTPTranscriptLogger.shared
+            journal.logStep("Импорт из галереи iPhone: выбрано \(items.count)")
+            for (index, item) in items.enumerated() {
+                journal.logStep("Галерея iPhone \(index + 1)/\(items.count): загружаю")
                 let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
 
                 if isVideo {
@@ -49,8 +52,10 @@ extension QueueViewModel {
                             isVideo: true
                         )
                         self.addPhoto(newPhoto)
+                        journal.logStep("Галерея iPhone \(index + 1)/\(items.count): видео добавлено (\(fileSizeStr))")
 
                     } catch {
+                        journal.logError("Галерея iPhone \(index + 1)/\(items.count): ошибка видео \(error.localizedDescription)")
                         self.triggerToast("Ошибка импорта видео: \(error.localizedDescription)")
                         print("[Video] Ошибка: \(error)")
                     }
@@ -120,8 +125,10 @@ extension QueueViewModel {
                             isVideo: false
                         )
                         self.addPhoto(newPhoto)
+                        journal.logStep("Галерея iPhone \(index + 1)/\(items.count): фото добавлено (\(fileSizeStr))")
 
                     } catch {
+                        journal.logError("Галерея iPhone \(index + 1)/\(items.count): ошибка фото \(error.localizedDescription)")
                         print("[Photo] Ошибка: \(error)")
                     }
                 }

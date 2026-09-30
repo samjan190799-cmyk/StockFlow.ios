@@ -7,6 +7,7 @@ struct SmartStockApp: App {
     @AppStorage("sys_theme") private var sysTheme: String = "Темная"
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @StateObject private var viewModel = QueueViewModel()
+    @Environment(\.scenePhase) private var scenePhase
     
     var colorScheme: ColorScheme? {
         switch sysTheme {
@@ -99,6 +100,9 @@ struct SmartStockApp: App {
             }
             .preferredColorScheme(colorScheme)
             .tint(AppPalette.accent)
+            .onChange(of: scenePhase) { phase in
+                FTPTranscriptLogger.shared.logLifecycle(phase)
+            }
         }
     }
 }

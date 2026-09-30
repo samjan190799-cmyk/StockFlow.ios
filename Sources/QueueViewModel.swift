@@ -221,9 +221,16 @@ class QueueViewModel: ObservableObject {
             var imported = 0
             var failed = 0
             var lastErrorText = ""
+            let journal = FTPTranscriptLogger.shared
 
-            for item in items {
+            // Импорт продолжается, даже если пользователь ненадолго свернул приложение
+            BackgroundTaskManager.shared.beginTask(named: "SmartStock.GoogleImport")
+            defer { BackgroundTaskManager.shared.endTask(named: "SmartStock.GoogleImport") }
+            journal.logStep("Импорт из Google Фото: выбрано \(total)")
+
+            for (index, item) in items.enumerated() {
                 do {
+                    journal.logStep("Google \(index + 1)/\(total): скачиваю \(item.filename)")
                     // Файл скачивается во временный файл (а не в память), затем переносится в папку приложения
                     let tempURL = try await GooglePhotosManager.shared.downloadItemFile(item)
 
@@ -261,10 +268,12 @@ class QueueViewModel: ObservableObject {
                     )
                     self.addPhoto(newPhoto)
                     imported += 1
+                    journal.logStep("Google \(index + 1)/\(total): готово, \(sizeStr)")
                     self.triggerToast("Импорт из Google Фото".localized + ": \(imported)/\(total)")
                 } catch {
                     failed += 1
                     lastErrorText = error.localizedDescription
+                    journal.logError("Google \(index + 1)/\(total): \(item.filename) — \(error.localizedDescription)")
                     print("[GooglePhotos] Ошибка импорта \(item.filename): \(error)")
                 }
             }
