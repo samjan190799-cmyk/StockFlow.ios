@@ -15,7 +15,10 @@ iOS-приложение на Swift/SwiftUI для загрузки фотогр
 ```
 Sources/
 ├── SmartStockApp.swift       — точка входа, AppDelegate, TabBar
-├── UploadQueueView.swift     — очередь загрузки, QueueViewModel
+├── GalleryView.swift         — главный экран: сетка, этапы, панель действий (iPhone и iPad)
+├── GalleryComponents.swift   — плитка, лента этапов, панель действий, панель деталей iPad
+├── QueueViewModel.swift      — очередь: ИИ-анализ, загрузка, CSV-экспорт
+├── PhotoDetailViews.swift    — окно деталей снимка, ключевые слова, CSV-документ
 ├── AIAssistantView.swift     — вкладка ИИ-ассистента
 ├── AIMetadataView.swift      — экран редактирования метаданных
 ├── AIManager.swift           — Gemini/OpenAI интеграция

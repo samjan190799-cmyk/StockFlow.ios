@@ -1,0 +1,58 @@
+name: Compile check (без загрузки в TestFlight)
+
+# Проверяет, что проект собирается. Не использует секреты, не выпускает сертификаты
+# и ничего не отправляет в App Store Connect. Запускается на ветках, кроме main/master
+# (там работает build.yml), и на pull request.
+on:
+  push:
+    branches-ignore: [ "main", "master" ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compile-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    name: Compile SmartStock (Release, без подписи)
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Select Latest Xcode
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -n 1)
+          echo "Using: $LATEST_XCODE"
+          sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Build (без подписи)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project SmartStock.xcodeproj \
+            -scheme SmartStock \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED="NO" \
+            CODE_SIGNING_REQUIRED="NO" \
+            SWIFT_OPTIMIZATION_LEVEL="-O" \
+            2>&1 | tee build.log
+
+      - name: Показать ошибки компиляции
+        if: failure()
+        run: |
+          echo "=== Ошибки компиляции ==="
+          grep -E " error: " build.log | sort -u | head -40 || true

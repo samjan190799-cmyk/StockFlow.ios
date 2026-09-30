@@ -51,8 +51,6 @@ struct SystemSettingsView: View {
     @State private var lastTapTime: Date = Date.distantPast
     @State private var showTesterPanel: Bool = StoreManager.shared.isTesterOverrideActive
     @State private var testerProEnabled: Bool = UserDefaults.standard.bool(forKey: "debug_tester_pro_mock_value")
-    // Новый дизайн галереи (включается тестером, см. GalleryRootView)
-    @AppStorage("ui_v2_gallery") private var galleryV2: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -691,20 +689,6 @@ struct SystemSettingsView: View {
             
             Divider().background(Color.white.opacity(0.1))
             
-            Toggle(isOn: $galleryV2) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Новый дизайн галереи".localized)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.primary)
-                    Text("Сетка, этапы и панель действий. Переключается мгновенно.".localized)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .tint(.orange)
-
-            Divider().background(Color.white.opacity(0.1))
-
             Button(action: {
                 HapticHelper.trigger(.medium)
                 storeManager.setTesterProOverride(active: false, isPro: false)

@@ -2,28 +2,12 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 
-// MARK: - Переключатель старого и нового экрана галереи
-// Флаг "ui_v2_gallery" включается в скрытой панели тестера (5 тапов по версии).
-@MainActor
-struct GalleryRootView: View {
-    @ObservedObject var viewModel: QueueViewModel
-    @AppStorage("ui_v2_gallery") private var galleryV2: Bool = false
-
-    var body: some View {
-        if galleryV2 {
-            GalleryV2View(viewModel: viewModel)
-        } else {
-            UploadQueueView(viewModel: viewModel)
-        }
-    }
-}
-
-// MARK: - Новый главный экран: сетка, этапы, контекстная панель
+// MARK: - Главный экран: сетка, этапы, контекстная панель
 // iPhone: чипы этапов + сетка, детали в шите.
 // iPad в портрете: то же, сетка шире.
 // iPad в альбомной ориентации: колонка этапов + сетка + панель деталей.
 @MainActor
-struct GalleryV2View: View {
+struct GalleryView: View {
     @ObservedObject var viewModel: QueueViewModel
     @ObservedObject private var storeManager = StoreManager.shared
     @ObservedObject private var rewardManager = RewardAdManager.shared

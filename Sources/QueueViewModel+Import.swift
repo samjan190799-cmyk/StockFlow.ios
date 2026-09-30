@@ -1,8 +1,7 @@
 import SwiftUI
 import PhotosUI
 
-// Импорт из системного PhotosPicker для нового экрана галереи.
-// Логика один в один повторяет UploadQueueView.loadSelectedPhotos (старый экран не менялся).
+// Импорт из системного PhotosPicker для главного экрана галереи (GalleryView).
 extension QueueViewModel {
     func importPickerItems(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }

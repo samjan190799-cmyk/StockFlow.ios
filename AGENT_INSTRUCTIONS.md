@@ -162,7 +162,8 @@ StockFlow.ios/
 │   ├── AIMetadataView.swift  ← UI генерации метаданных
 │   ├── AIAssistantView.swift ← UI ИИ-ассистента
 │   ├── StockSettingsView.swift ← UI настроек стоков
-│   ├── UploadQueueView.swift ← UI очереди загрузки
+│   ├── GalleryView.swift     ← главный экран (сетка, этапы, панель действий)
+│   ├── QueueViewModel.swift  ← очередь: ИИ, загрузка, импорт
 │   ├── SystemSettingsView.swift ← Системные настройки
 │   ├── AuthHelper.swift      ← Помощник авторизации
 │   ├── KeychainHelper.swift  ← Работа с Keychain
