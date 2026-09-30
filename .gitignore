@@ -21,3 +21,4 @@ DerivedData/
 # Screenshots cache
 AppStore_Screenshots/
 Screenshots_For_6.5_Display/
+__pycache__/
