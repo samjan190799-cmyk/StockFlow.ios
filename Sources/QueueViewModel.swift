@@ -652,6 +652,9 @@ class QueueViewModel: ObservableObject {
         }
     }
     
+    /// «Отправить все»: каждый готовый файл уходит тем же путём, что и при отправке одного файла
+    /// или выбранных файлов (общая очередь, учёт лимитов, индикаторы, фоновая задача).
+    /// Раньше здесь был отдельный цикл, минующий очередь, — при трёх и более файлах приложение закрывалось.
     func uploadAllReady() {
         let readyPhotos = photos.filter { $0.status == .ready }
         guard !readyPhotos.isEmpty else {
@@ -663,58 +666,17 @@ class QueueViewModel: ObservableObject {
             return
         }
         
+        FTPTranscriptLogger.shared.logStep("Отправить все: в очередь \(readyPhotos.count) файлов")
         triggerToast("Началась отправка".localized + " \(readyPhotos.count) " + "файлов...".localized)
         
-        BackgroundTaskManager.shared.beginTask(named: "SmartStock.BatchUpload")
-        
-        Task {
-            defer {
-                BackgroundTaskManager.shared.endTask(named: "SmartStock.BatchUpload")
+        for photo in readyPhotos {
+            guard RewardAdManager.shared.canPerformAction(isAIAnalysis: false) else {
+                triggerToast("Достигнут дневной лимит отправок. Оформите PRO для продолжения.".localized)
+                shouldShowDailyLimitAlert = true
+                HapticHelper.notification(.warning)
+                break
             }
-            
-            let journal = FTPTranscriptLogger.shared
-            journal.logStep("Отправить все: к отправке \(readyPhotos.count) файлов")
-            var successCount = 0
-            for (position, photo) in readyPhotos.enumerated() {
-                journal.logStep("Отправка \(position + 1)/\(readyPhotos.count): \(photo.filename)")
-                guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: false) else {
-                    self.triggerToast("Достигнут дневной лимит отправок. Оформите PRO для продолжения.".localized)
-                    self.shouldShowDailyLimitAlert = true
-                    break
-                }
-                
-                if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
-                    self.photos[idx].status = .uploading
-                }
-                
-                do {
-                    try await self.performRealUpload(for: photo)
-                    journal.logStep("Отправка \(position + 1)/\(readyPhotos.count): готово")
-                    if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
-                        self.photos[idx].status = .success
-                        self.photos[idx].uploadProgress = 1.0
-                        self.photos[idx].errorMessage = nil
-                        self.savePhotosToDisk()
-                        successCount += 1
-                    }
-                } catch {
-                    journal.logError("Отправка \(position + 1)/\(readyPhotos.count): \(error.localizedDescription)")
-                    RewardAdManager.shared.refundActionSlot(isAIAnalysis: false)
-                    if let idx = self.photos.firstIndex(where: { $0.id == photo.id }) {
-                        self.photos[idx].status = .error
-                        self.photos[idx].errorMessage = error.localizedDescription
-                        self.savePhotosToDisk()
-                    }
-                }
-                
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-            }
-            
-            NotificationHelper.sendNotification(
-                title: "Выгрузка завершена".localized,
-                body: "Все готовые файлы успешно отправлены на стоки!".localized
-            )
-            self.triggerToast("Выгрузка успешно завершена!".localized)
+            uploadPhoto(photo.id)
         }
     }
     
