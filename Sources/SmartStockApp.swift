@@ -50,7 +50,7 @@ struct SmartStockApp: App {
         appearance.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
         appearance.shadowColor = UIColor.white.withAlphaComponent(0.08)
         
-        let activeColor = UIColor(red: 0/255, green: 122/255, blue: 255/255, alpha: 1.0)
+        let activeColor = UIColor(red: 10/255, green: 108/255, blue: 255/255, alpha: 1.0)
         let normalColor = UIColor.secondaryLabel
         
         appearance.stackedLayoutAppearance.selected.iconColor = activeColor
@@ -98,7 +98,7 @@ struct SmartStockApp: App {
                 }
             }
             .preferredColorScheme(colorScheme)
-            .tint(Color(hex: "007AFF"))
+            .tint(AppPalette.accent)
         }
     }
 }
