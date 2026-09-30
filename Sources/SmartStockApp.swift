@@ -76,7 +76,7 @@ struct SmartStockApp: App {
                 LiquidBackgroundView(isAnimated: true) // Единый фон на уровне всего приложения
                 
                 TabView {
-                    UploadQueueView(viewModel: viewModel)
+                    GalleryRootView(viewModel: viewModel)
                         .tabItem {
                             Label("Галерея".localized, systemImage: "photo.on.rectangle")
                         }
