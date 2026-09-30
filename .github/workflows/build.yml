@@ -203,12 +203,20 @@ jobs:
       - name: Upload to TestFlight
         run: |
           echo "🚀 Отправка сборки SmartStock в TestFlight..."
+          set -o pipefail
           xcrun altool --upload-app \
             -f build/SmartStock.ipa \
             -t ios \
             --apiKey "$APPSTORE_KEY_ID" \
             --apiIssuer "$APPSTORE_ISSUER_ID" \
-            --verbose
+            --verbose 2>&1 | tee "$RUNNER_TEMP/altool_upload.log"
+
+          # altool возвращает код 0, даже когда Apple отклонила сборку, поэтому проверяем его вывод
+          if grep -q -E "UPLOAD FAILED|Failed to upload package|Validation failed" "$RUNNER_TEMP/altool_upload.log"; then
+            echo "::error::Apple отклонила загрузку сборки. Причина:"
+            grep -E "ERROR:|Validation failed|detail :" "$RUNNER_TEMP/altool_upload.log" | head -10
+            exit 1
+          fi
 
           echo "✅ Сборка SmartStock успешно выгружена в TestFlight!"
 

@@ -22,6 +22,13 @@
     <array>
         <string>UIInterfaceOrientationPortrait</string>
     </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Приложению нужен доступ к Фото для выбора изображений для загрузки на фотостоки.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>

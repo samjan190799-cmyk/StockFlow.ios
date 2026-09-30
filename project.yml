@@ -21,6 +21,11 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSPhotoLibraryUsageDescription: "Приложению нужен доступ к вашей галерее для выбора фотографий на отправку."
         ITSAppUsesNonExemptEncryption: false
         CFBundleIconName: AppIcon
