@@ -658,7 +658,16 @@ struct Localizer {
         "Нажмите на кадр, чтобы оставить именно его.": "Tap a shot to keep that one.",
         "Убрать лишние": "Remove extras",
         "Оставить": "Keep",
-        "Лишний": "Extra"
+        "Лишний": "Extra",
+        "ВЫГОДА": "SAVE",
+        "дн. бесплатно": "days free",
+        "день бесплатно": "day free",
+        "затем": "then",
+        "Попробовать бесплатно": "Try for free",
+        "Всего ~%@ в месяц. Списание после пробного периода.": "Just ~%@ / mo. Billed annually after the free trial.",
+        "Всего ~%@ в месяц.": "Just ~%@ / mo.",
+        "каждый год. Отмена в любое время в настройках Apple ID.": "every year. Cancel anytime in Apple ID settings.",
+        "Годовой доступ со всеми обновлениями.": "Annual access with all updates."
     ]
     
     private static let hyTranslations: [String: String] = [

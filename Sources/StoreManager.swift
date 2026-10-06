@@ -23,13 +23,23 @@ public final class StoreManager: ObservableObject {
     @Published public var isLoading: Bool = false
     @Published public var errorMessage: String? = nil
     
-    // Режим эмуляции PRO для тестировщиков (активируется только секретным жестом)
-    @Published public private(set) var isTesterOverrideActive: Bool = UserDefaults.standard.bool(forKey: "debug_tester_pro_override_active")
+    /// Продукты, для которых пользователю доступен бесплатный пробный период: идентификатор -> число дней.
+    /// Заполняется из данных App Store: пробный период есть не в каждом регионе и недоступен тем, кто его уже использовал.
+    @Published public private(set) var freeTrialDays: [String: Int] = [:]
+    
+    // Режим эмуляции PRO для тестировщиков: работает только в отладочной сборке (в боевой всегда выключен)
+    @Published public private(set) var isTesterOverrideActive: Bool = false
     
     private var updateListenerTask: Task<Void, Error>? = nil
     
     private init() {
+        #if DEBUG
         self.isTesterOverrideActive = UserDefaults.standard.bool(forKey: "debug_tester_pro_override_active")
+        #else
+        // В боевой сборке эмуляции PRO нет: стираем флаги, которые могли остаться от прежних тестовых сборок
+        UserDefaults.standard.removeObject(forKey: "debug_tester_pro_override_active")
+        UserDefaults.standard.removeObject(forKey: "debug_tester_pro_mock_value")
+        #endif
         updateEffectiveProStatus()
         
         // Начинаем слушать обновления транзакций Apple в реальном времени
@@ -59,6 +69,7 @@ public final class StoreManager: ObservableObject {
                 return false
             }
             self.isLoading = false
+            await refreshTrialEligibility()
         } catch {
             print("StoreKit: Ошибка загрузки продуктов: \(error.localizedDescription)")
             self.errorMessage = "Не удалось загрузить тарифы: \(error.localizedDescription)"
@@ -149,24 +160,55 @@ public final class StoreManager: ObservableObject {
         
         self.purchasedProductIDs = activePurchases
         updateEffectiveProStatus()
+        await refreshTrialEligibility()
+    }
+    
+    // MARK: - Пробный период (по данным App Store, а не по тексту в интерфейсе)
+    
+    /// Определяет, каким тарифам доступен бесплатный пробный период именно этому пользователю
+    private func refreshTrialEligibility() async {
+        var result: [String: Int] = [:]
+        for product in products {
+            guard let subscription = product.subscription,
+                  let offer = subscription.introductoryOffer,
+                  offer.paymentMode == .freeTrial else { continue }
+            if await subscription.isEligibleForIntroOffer {
+                result[product.id] = StoreManager.days(in: offer.period)
+            }
+        }
+        self.freeTrialDays = result
+    }
+    
+    nonisolated private static func days(in period: Product.SubscriptionPeriod) -> Int {
+        switch period.unit {
+        case .day: return period.value
+        case .week: return period.value * 7
+        case .month: return period.value * 30
+        case .year: return period.value * 365
+        @unknown default: return period.value
+        }
     }
     
     // MARK: - Управление режимом тестирования (QA / Dev)
     
-    /// Установка эмуляции статуса PRO для тестировщиков (включается только секретным жестом)
+    #if DEBUG
+    /// Установка эмуляции статуса PRO для тестировщиков (только отладочная сборка)
     public func setTesterProOverride(active: Bool, isPro: Bool) {
         UserDefaults.standard.set(active, forKey: "debug_tester_pro_override_active")
         UserDefaults.standard.set(isPro, forKey: "debug_tester_pro_mock_value")
         self.isTesterOverrideActive = active
         updateEffectiveProStatus()
     }
+    #endif
     
     private func updateEffectiveProStatus() {
+        #if DEBUG
         if UserDefaults.standard.bool(forKey: "debug_tester_pro_override_active") {
             self.isProUser = UserDefaults.standard.bool(forKey: "debug_tester_pro_mock_value")
-        } else {
-            self.isProUser = !purchasedProductIDs.isEmpty
+            return
         }
+        #endif
+        self.isProUser = !purchasedProductIDs.isEmpty
     }
     
     // MARK: - Слушатель транзакций

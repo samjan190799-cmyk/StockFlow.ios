@@ -102,6 +102,10 @@ struct SmartStockApp: App {
             .tint(AppPalette.accent)
             .onChange(of: scenePhase) { phase in
                 FTPTranscriptLogger.shared.logLifecycle(phase)
+                // Подписка могла закончиться или продлиться, пока приложение было в фоне
+                if phase == .active {
+                    Task { await StoreManager.shared.updateCustomerProductStatus() }
+                }
             }
         }
     }

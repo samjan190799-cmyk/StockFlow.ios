@@ -46,11 +46,14 @@ struct SystemSettingsView: View {
     @State private var savedToastMessage = ""
     @State private var showGoogleHelpSheet = false
     
-    // Секретный жест для тестировщиков (5 быстрых тапов по версии)
+    #if DEBUG
+    // Секретный жест для тестировщиков (5 быстрых тапов по версии). Только в отладочной сборке:
+    // в боевой скрытой функции бесплатного PRO нет (правило App Review 2.3.1 и потеря дохода).
     @State private var versionTapCount: Int = 0
     @State private var lastTapTime: Date = Date.distantPast
     @State private var showTesterPanel: Bool = StoreManager.shared.isTesterOverrideActive
     @State private var testerProEnabled: Bool = UserDefaults.standard.bool(forKey: "debug_tester_pro_mock_value")
+    #endif
 
     var body: some View {
         NavigationStack {
@@ -107,9 +110,11 @@ struct SystemSettingsView: View {
         AppScreen {
             primarySections
             secondarySections
+            #if DEBUG
             if showTesterPanel {
                 testerDebugSection
             }
+            #endif
             versionFooterSection
         }
     }
@@ -662,7 +667,7 @@ struct SystemSettingsView: View {
         .appCard()
     }
 
-    // MARK: - Версия (5 быстрых тапов открывают панель тестировщика)
+    // MARK: - Версия (в отладочной сборке 5 быстрых тапов открывают панель тестировщика)
 
     private var versionFooterSection: some View {
         Text("SmartStock v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7") (Сборка \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "8"))")
@@ -671,10 +676,13 @@ struct SystemSettingsView: View {
             .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(Rectangle())
             .onTapGesture {
+                #if DEBUG
                 handleVersionTap()
+                #endif
             }
     }
 
+    #if DEBUG
     private func handleVersionTap() {
         let now = Date()
         if now.timeIntervalSince(lastTapTime) > 1.5 {
@@ -772,6 +780,7 @@ struct SystemSettingsView: View {
         )
         .transition(.asymmetric(insertion: .scale(scale: 0.95).combined(with: .opacity), removal: .opacity))
     }
+    #endif
 
     // MARK: - Helpers
 

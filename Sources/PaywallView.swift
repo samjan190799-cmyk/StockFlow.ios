@@ -268,7 +268,7 @@ public struct PaywallView: View {
             // Годовой тариф (Рекомендуемый) с динамическим расчетом цены за месяц
             pricingCard(
                 productID: StoreManager.ProductID.yearly,
-                badge: "ВЫГОДА 50% • 3 ДНЯ БЕСПЛАТНО".localized,
+                badge: yearlyBadge,
                 title: "Годовая подписка".localized,
                 price: getFormattedPriceWithPeriod(for: StoreManager.ProductID.yearly),
                 subtitle: yearlySubtitle,
@@ -293,14 +293,61 @@ public struct PaywallView: View {
         if let yearlyProduct = storeManager.products.first(where: { $0.id == StoreManager.ProductID.yearly }) {
             let monthlyPriceDecimal = yearlyProduct.price / 12
             let formattedMonthly = monthlyPriceDecimal.formatted(yearlyProduct.priceFormatStyle)
-            let localizedPattern = "Всего ~%@ в месяц. Списание после 3-дневного триала.".localized
+            // Про пробный период пишем только если App Store подтвердил его для этого пользователя
+            let pattern = hasYearlyTrial
+                ? "Всего ~%@ в месяц. Списание после пробного периода."
+                : "Всего ~%@ в месяц."
+            let localizedPattern = pattern.localized
             if localizedPattern.contains("%@") {
                 return String(format: localizedPattern, formattedMonthly)
             } else {
-                return "Всего ~\(formattedMonthly) в месяц. Списание после 3-дневного триала."
+                return pattern.replacingOccurrences(of: "%@", with: formattedMonthly)
             }
         }
-        return "Всего ~249 ₽ в месяц. Списание после 3-дневного триала.".localized
+        return "Годовой доступ со всеми обновлениями.".localized
+    }
+    
+    // MARK: - Пробный период и выгода по данным App Store
+    
+    /// Дни бесплатного пробного периода годового тарифа: только если он есть в App Store и доступен этому пользователю
+    private var yearlyTrialDays: Int? {
+        storeManager.freeTrialDays[StoreManager.ProductID.yearly]
+    }
+    
+    private var hasYearlyTrial: Bool {
+        yearlyTrialDays != nil
+    }
+    
+    /// «3 дн. бесплатно» / «1 день бесплатно»
+    private func trialLabel(days: Int) -> String {
+        if days == 1 {
+            return "1 " + "день бесплатно".localized
+        }
+        return "\(days) " + "дн. бесплатно".localized
+    }
+    
+    /// Выгода годового тарифа против 12 месячных платежей по реальным ценам App Store, в процентах (округляется вниз)
+    private var yearlySavingsPercent: Int? {
+        guard let yearly = storeManager.products.first(where: { $0.id == StoreManager.ProductID.yearly }),
+              let monthly = storeManager.products.first(where: { $0.id == StoreManager.ProductID.monthly }) else {
+            return nil
+        }
+        let yearlyPrice = NSDecimalNumber(decimal: yearly.price).doubleValue
+        let monthlyTotal = NSDecimalNumber(decimal: monthly.price).doubleValue * 12
+        guard monthlyTotal > 0 else { return nil }
+        let percent = Int(((1 - yearlyPrice / monthlyTotal) * 100).rounded(.down))
+        return percent >= 5 ? percent : nil
+    }
+    
+    private var yearlyBadge: String? {
+        var parts: [String] = []
+        if let percent = yearlySavingsPercent {
+            parts.append("\("ВЫГОДА".localized) \(percent)%")
+        }
+        if let days = yearlyTrialDays {
+            parts.append(trialLabel(days: days).uppercased())
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " • ")
     }
     
     private func pricingCard(
@@ -430,7 +477,11 @@ public struct PaywallView: View {
     private var actionButtonTitle: String {
         switch selectedProductID {
         case StoreManager.ProductID.yearly:
-            return "Попробовать 3 дня бесплатно".localized
+            if hasYearlyTrial {
+                return "Попробовать бесплатно".localized
+            }
+            let price = getPriceString(for: StoreManager.ProductID.yearly, fallback: "$19.99")
+            return "\("Подписаться за".localized) \(price) / \("год".localized)"
         case StoreManager.ProductID.monthly:
             let price = getPriceString(for: StoreManager.ProductID.monthly, fallback: "$3.99")
             return "\("Подписаться за".localized) \(price) / \("мес.".localized)"
@@ -445,7 +496,10 @@ public struct PaywallView: View {
         
         switch selectedProductID {
         case StoreManager.ProductID.yearly:
-            return "\("3 дня бесплатно, затем".localized) \(yearlyPrice) \("в год. Отмена в любой момент в настройках Apple ID.".localized)"
+            if let days = yearlyTrialDays {
+                return "\(trialLabel(days: days)), \("затем".localized) \(yearlyPrice) \("в год. Отмена в любой момент в настройках Apple ID.".localized)"
+            }
+            return "\("Списание".localized) \(yearlyPrice) \("каждый год. Отмена в любое время в настройках Apple ID.".localized)"
         case StoreManager.ProductID.monthly:
             return "\("Списание".localized) \(monthlyPrice) \("каждый месяц. Отмена в любое время в настройках Apple ID.".localized)"
         default:
@@ -465,7 +519,9 @@ public struct PaywallView: View {
                 Text("• Подписка продлевается автоматически, если автопродление не отключено не менее чем за 24 часа до окончания текущего периода.".localized)
                 Text("• Плата за продление будет взиматься в течение 24 часов до окончания текущего расчетного периода с указанием стоимости.".localized)
                 Text("• Управлять подпиской и отключить автопродление можно в настройках учетной записи Apple ID в любое время после покупки.".localized)
-                Text("• Любая неиспользованная часть бесплатного пробного периода аннулируется при приобретении подписки.".localized)
+                if !storeManager.freeTrialDays.isEmpty {
+                    Text("• Любая неиспользованная часть бесплатного пробного периода аннулируется при приобретении подписки.".localized)
+                }
             }
             .font(.caption2)
             .foregroundStyle(.white.opacity(0.68))
