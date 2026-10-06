@@ -79,6 +79,11 @@ struct GalleryView: View {
             .navigationTitle(isSelecting ? "\("Выбрано".localized) \(selectedIds.count)" : "Очередь".localized)
             .navigationBarTitleDisplayMode(.large)
             .toolbar { toolbarContent }
+            #if DEBUG
+            .task {
+                await ScreenshotScenario.run(viewModel: viewModel) { detailPhoto = $0 }
+            }
+            #endif
             .searchable(text: $searchText, prompt: Text("Поиск по названию и ключам".localized))
             .sheet(item: $detailPhoto) { photo in
                 PhotoDetailSheet(photo: photo, viewModel: viewModel)

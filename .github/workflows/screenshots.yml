@@ -1,0 +1,68 @@
+name: App Store screenshots
+
+# Снимает скриншоты для App Store в симуляторе (демо-режим, без секретов и без загрузки куда-либо).
+# Результат — артефакт "appstore-screenshots". Запускается вручную или пушем в ветку ci/screenshots.
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "ci/screenshots" ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    name: Скриншоты (iPhone 6.9", iPad 13")
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Select Latest Xcode
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -n 1)
+          echo "Using: $LATEST_XCODE"
+          sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Build для симулятора (Debug)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project SmartStock.xcodeproj \
+            -scheme SmartStock \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED="NO" \
+            CODE_SIGNING_REQUIRED="NO" \
+            2>&1 | tee build.log
+
+      - name: Показать ошибки компиляции
+        if: failure()
+        run: grep -E " error: " build.log | sort -u | head -40 || true
+
+      - name: Снять скриншоты
+        run: |
+          chmod +x .github/scripts/take_screenshots.sh
+          .github/scripts/take_screenshots.sh "$PWD/build/Build/Products/Debug-iphonesimulator/SmartStock.app" "$PWD/screenshots"
+
+      - name: Сохранить скриншоты
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appstore-screenshots
+          path: screenshots
+          if-no-files-found: warn
