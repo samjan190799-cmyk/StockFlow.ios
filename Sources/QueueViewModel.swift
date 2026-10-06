@@ -760,7 +760,11 @@ class QueueViewModel: ObservableObject {
             guard let progressContinuation = box.continuation else { return }
             
             let progressTask = Task { @MainActor in
+                // Прогресс публикуется не чаще чем на 1%: иначе каждый блок данных перерисовывает всю очередь
+                var lastPublished = -1.0
                 for await prog in progressStream {
+                    guard prog >= 1.0 || abs(prog - lastPublished) >= 0.01 else { continue }
+                    lastPublished = prog
                     if let index = self.photos.firstIndex(where: { $0.id == id }) {
                         self.photos[index].uploadProgress = prog
                         let now = Date()

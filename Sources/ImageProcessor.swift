@@ -69,9 +69,20 @@ actor ImageProcessor {
         return finalData
     }
     
-    /// Апскейл изображения с использованием высшего качества фильтрации
+    /// Максимум пикселей после апскейла: 40 Мп ≈ 160 МБ в памяти. Раньше 4x для 12-Мп снимка давал 192 Мп (~770 МБ),
+    /// и система закрывала приложение.
+    private static let maxUpscaledPixels: CGFloat = 40_000_000
+    
+    /// Апскейл изображения с использованием высшего качества фильтрации.
+    /// Возвращает nil, если увеличение невозможно без превышения лимита памяти (снимок и так достаточно большой).
     func upscaleImage(_ image: UIImage, scaleFactor: CGFloat) -> UIImage? {
-        let targetSize = CGSize(width: image.size.width * scaleFactor, height: image.size.height * scaleFactor)
+        let sourcePixels = image.size.width * image.size.height
+        guard sourcePixels > 0 else { return nil }
+        let allowedFactor = (Self.maxUpscaledPixels / sourcePixels).squareRoot()
+        let factor = min(scaleFactor, allowedFactor)
+        guard factor > 1.05 else { return nil }
+        
+        let targetSize = CGSize(width: image.size.width * factor, height: image.size.height * factor)
         
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1.0
@@ -144,6 +155,99 @@ actor ImageProcessor {
     }
     
     private static let rawExtensions: Set<String> = ["dng", "cr2", "cr3", "nef", "arw", "raf", "orf", "rw2", "raw"]
+    
+    /// Приводит выбранный снимок к JPEG-файлу в папке очереди, не загружая его целиком в память.
+    /// JPEG копируется как есть; HEIC, PNG, TIFF и RAW перекодируются через ImageIO с ограничением размера
+    /// (раньше они целиком декодировались через UIImage: ProRAW на 48 Мп занимал гигабайты).
+    /// Возвращает размер получившегося файла в байтах или nil при ошибке.
+    func importPhoto(from sourceURL: URL, to targetURL: URL) -> Int64? {
+        return autoreleasepool { () -> Int64? in
+            let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+            guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, sourceOptions) else { return nil }
+            
+            let typeIdentifier = (CGImageSourceGetType(source) as String?) ?? ""
+            let sourceType = UTType(typeIdentifier)
+            let isJPEG = sourceType?.conforms(to: .jpeg) ?? false
+            let isRAW = (sourceType?.conforms(to: .rawImage) ?? false)
+                || Self.rawExtensions.contains(sourceURL.pathExtension.lowercased())
+            
+            try? FileManager.default.removeItem(at: targetURL)
+            
+            if isJPEG {
+                do {
+                    try FileManager.default.copyItem(at: sourceURL, to: targetURL)
+                } catch {
+                    return nil
+                }
+            } else {
+                let maxSide = isRAW ? 6000 : 8192
+                guard let cgImage = Self.downsampledImage(from: source, maxSide: maxSide, preferEmbeddedPreview: isRAW),
+                      let destination = CGImageDestinationCreateWithURL(targetURL as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else {
+                    return nil
+                }
+                
+                var properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]) ?? [:]
+                // Поворот уже применён к пикселям, служебные блоки RAW в JPEG не нужны
+                properties[kCGImagePropertyOrientation as String] = 1
+                properties.removeValue(forKey: kCGImagePropertyDNGDictionary as String)
+                properties.removeValue(forKey: "{Raw}")
+                if var tiff = properties[kCGImagePropertyTIFFDictionary as String] as? [String: Any] {
+                    tiff[kCGImagePropertyTIFFOrientation as String] = 1
+                    properties[kCGImagePropertyTIFFDictionary as String] = tiff
+                }
+                properties[kCGImageDestinationLossyCompressionQuality as String] = 0.95
+                CGImageDestinationAddImage(destination, cgImage, properties as CFDictionary)
+                
+                guard CGImageDestinationFinalize(destination) else {
+                    try? FileManager.default.removeItem(at: targetURL)
+                    return nil
+                }
+            }
+            
+            return ((try? FileManager.default.attributesOfItem(atPath: targetURL.path))?[.size] as? Int64) ?? 0
+        }
+    }
+    
+    /// Уменьшенная копия снимка. Для RAW сначала берётся встроенный JPEG-предпросмотр (почти без памяти);
+    /// полное декодирование RAW — только если предпросмотра нет или он слишком мал.
+    private static func downsampledImage(from source: CGImageSource, maxSide: Int, preferEmbeddedPreview: Bool) -> CGImage? {
+        if preferEmbeddedPreview {
+            let previewOptions: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: false,
+                kCGImageSourceThumbnailMaxPixelSize: maxSide
+            ]
+            if let preview = CGImageSourceCreateThumbnailAtIndex(source, 0, previewOptions as CFDictionary),
+               max(preview.width, preview.height) >= 3000 {
+                return preview
+            }
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: false,
+            kCGImageSourceThumbnailMaxPixelSize: maxSide
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+    
+    /// Авто-апскейл JPEG-файла на месте с ограничением итогового размера. Возвращает true, если файл изменён.
+    func upscaleJPEGFile(at url: URL, scaleFactor: CGFloat) -> Bool {
+        return autoreleasepool { () -> Bool in
+            guard let image = UIImage(contentsOfFile: url.path),
+                  let upscaled = upscaleImage(image, scaleFactor: scaleFactor),
+                  let data = upscaled.jpegData(compressionQuality: 0.92) else {
+                return false
+            }
+            do {
+                try data.write(to: url, options: .atomic)
+                return true
+            } catch {
+                return false
+            }
+        }
+    }
     
     /// Готовит фото к отправке, читая исходный файл с диска (а не целиком в память).
     /// Результат — JPEG с IPTC/EXIF во временном файле. Вызывающий обязан удалить файл.

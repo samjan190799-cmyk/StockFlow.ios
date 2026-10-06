@@ -31,6 +31,9 @@ class FTPTranscriptLogger: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.logError("Система просит освободить память. Занято: \(Self.footprintMB()) МБ")
+                // Освобождаем всё, что можно пересоздать: кэш картинок и сетевой кэш
+                ImageCacheHelper.shared.clearCache()
+                URLCache.shared.removeAllCachedResponses()
             }
         }
     }

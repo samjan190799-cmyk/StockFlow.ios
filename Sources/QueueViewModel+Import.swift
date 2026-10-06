@@ -1,5 +1,22 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
+
+/// Файловый импорт фото из PhotosPicker: снимок копируется на диск, а не читается целиком в память.
+struct PhotoFileTransferable: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .image) { received in
+            let ext = received.file.pathExtension
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("import_\(UUID().uuidString)")
+                .appendingPathExtension(ext.isEmpty ? "img" : ext)
+            try FileManager.default.copyItem(at: received.file, to: tempURL)
+            return PhotoFileTransferable(url: tempURL)
+        }
+    }
+}
 
 // Импорт из системного PhotosPicker для главного экрана галереи (GalleryView).
 extension QueueViewModel {
@@ -61,52 +78,52 @@ extension QueueViewModel {
                     }
 
                 } else {
-                    // Загружаем фото как Data
+                    // Фото копируется файлом, а не читается целиком в память; HEIC/PNG/RAW переводятся в JPEG через ImageIO.
+                    // Раньше снимок целиком декодировался через UIImage: ProRAW на 48 Мп занимал гигабайты, и приложение закрывала система.
                     do {
-                        guard let data = try await item.loadTransferable(type: Data.self) else {
-                            print("[Photo] loadTransferable вернул nil")
+                        let photoId = UUID()
+                        let targetURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).jpg")
+                        let randomNum = Int.random(in: 1000...9999)
+                        var fileBytes: Int64? = nil
+
+                        if let file = try? await item.loadTransferable(type: PhotoFileTransferable.self) {
+                            fileBytes = await ImageProcessor.shared.importPhoto(from: file.url, to: targetURL)
+                            try? FileManager.default.removeItem(at: file.url)
+                        }
+
+                        // Запасной путь: данные в памяти, но конвертация всё равно идёт через ImageIO
+                        if fileBytes == nil, let data = try await item.loadTransferable(type: Data.self) {
+                            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("import_\(UUID().uuidString)")
+                            try data.write(to: tempURL, options: .atomic)
+                            fileBytes = await ImageProcessor.shared.importPhoto(from: tempURL, to: targetURL)
+                            try? FileManager.default.removeItem(at: tempURL)
+                        }
+
+                        guard var bytes = fileBytes else {
+                            journal.logError("Галерея iPhone \(index + 1)/\(items.count): не удалось получить снимок")
                             continue
                         }
 
-                        var finalData = data
-                        let randomNum = Int.random(in: 1000...9999)
-
-                        // Авто-конвертация не-JPEG (HEIC, PNG, RAW) в JPEG
-                        let isJpeg = data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
-                        if !isJpeg {
-                            if let uiImage = UIImage(data: data), let jpegData = uiImage.jpegData(compressionQuality: 0.95) {
-                                finalData = jpegData
-                                FTPTranscriptLogger.shared.logInfo("[Diagnostic] Авто-конвертация не-JPEG в JPEG (\(data.count) -> \(jpegData.count))")
-                            } else {
-                                FTPTranscriptLogger.shared.logInfo("[WARNING] Не удалось конвертировать в UIImage")
-                            }
-                        }
-
-                        // Авто-апскейл
-                        let autoUpscaleEnabled = UserDefaults.standard.bool(forKey: "sys_auto_upscale")
-                        if autoUpscaleEnabled {
+                        // Авто-апскейл (с ограничением итогового размера, чтобы не раздувать память)
+                        if UserDefaults.standard.bool(forKey: "sys_auto_upscale") {
                             let thresholdStr = UserDefaults.standard.string(forKey: "sys_upscale_threshold") ?? "Меньше 4 МБ (Рекомендуется)"
                             let factorStr = UserDefaults.standard.string(forKey: "sys_upscale_factor") ?? "Увеличение 2x (Бикубическое)"
                             let thresholdMB: Double = thresholdStr.contains("2 МБ") ? 2.0 : (thresholdStr.contains("8 МБ") ? 8.0 : 4.0)
-                            let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
-                            if sizeMB < thresholdMB, let uiImage = UIImage(data: finalData) {
+                            let sizeMB = Double(bytes) / (1024.0 * 1024.0)
+                            if sizeMB < thresholdMB {
                                 let scale: CGFloat = factorStr.contains("4x") ? 4.0 : 2.0
-                                if let upscaled = await ImageProcessor.shared.upscaleImage(uiImage, scaleFactor: scale),
-                                   let upscaledData = upscaled.jpegData(compressionQuality: 0.92) {
-                                    finalData = upscaledData
-                                    FTPTranscriptLogger.shared.logInfo("[Upscale] \(String(format: "%.1f", sizeMB)) МБ -> \(String(format: "%.1f", Double(upscaledData.count)/1024/1024)) МБ (\(Int(scale))x)")
+                                if await ImageProcessor.shared.upscaleJPEGFile(at: targetURL, scaleFactor: scale) {
+                                    let newBytes = ((try? FileManager.default.attributesOfItem(atPath: targetURL.path))?[.size] as? Int64) ?? bytes
+                                    FTPTranscriptLogger.shared.logInfo("[Upscale] \(String(format: "%.1f", sizeMB)) МБ -> \(String(format: "%.1f", Double(newBytes) / 1024 / 1024)) МБ")
+                                    bytes = newBytes
                                 }
                             }
                         }
 
-                        let photoId = UUID()
-                        let targetURL = self.photosDirectoryURL.appendingPathComponent("\(photoId.uuidString).jpg")
-                        try finalData.write(to: targetURL, options: .atomic)
-
                         let thumbImage = await ImageCacheHelper.shared.loadAndDownsample(fileURL: targetURL, maxPixelSize: 300)
                         let thumbData = thumbImage?.jpegData(compressionQuality: 0.75)
 
-                        let sizeMB = Double(finalData.count) / (1024.0 * 1024.0)
+                        let sizeMB = Double(bytes) / (1024.0 * 1024.0)
                         let fileSizeStr = String(format: "%.2f МБ", sizeMB)
                         let filename = "IMG_\(randomNum).JPG"
 
