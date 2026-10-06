@@ -18,12 +18,14 @@ enum DuplicateSensitivity: Int, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// Порог расстояния между отпечатками изображений Vision: чем меньше, тем кадры более одинаковые
+    /// Порог расстояния между отпечатками изображений Vision (revision 1): чем меньше, тем кадры более одинаковые.
+    /// Шкала измерена пробой в CI: побитово одинаковые миниатюры — 0, тот же кадр с шумом сенсора, другой яркостью,
+    /// кропом или JPEG — примерно 2–8, соседние кадры серии — 4–8, разные сцены — заметно выше.
     var threshold: Float {
         switch self {
-        case .strict: return 0.18
-        case .normal: return 0.35
-        case .loose: return 0.55
+        case .strict: return 5.0
+        case .normal: return 8.0
+        case .loose: return 12.0
         }
     }
 }
@@ -50,7 +52,7 @@ actor DuplicateDetector {
     /// Максимум файлов за один проход: сравнение идёт попарно
     private let maxItems = 1500
     /// Расстояние, при котором файлы считаются точной копией
-    private let exactThreshold: Float = 0.03
+    private let exactThreshold: Float = 1.0
 
     struct Item: Sendable {
         let id: UUID
