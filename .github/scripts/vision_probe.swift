@@ -1,137 +1,151 @@
-// Одноразовая проба: какие расстояния выдаёт Vision (feature print, revision 1) для пар «одинаковые / похожие / разные».
-// Нужна только чтобы проверить пороги в DuplicateSensitivity. Ничего не пишет и не отправляет.
+// Одноразовая проба: какие расстояния выдаёт Vision (feature print, revision 1) на реальных фотографиях
+// (системные обои macOS на раннере) для пар «тот же кадр / лёгкая обработка / соседний кадр / другая сцена».
+// Повторяет конвейер приложения: миниатюра 300 px -> JPEG 0.75 -> отпечаток. Ничего не пишет и не отправляет.
 import Foundation
 import CoreGraphics
 import ImageIO
 import Vision
 import UniformTypeIdentifiers
 
-struct LCG {
-    var state: UInt32
-    mutating func next() -> CGFloat {
-        state = state &* 1664525 &+ 1013904223
-        return CGFloat((state >> 8) & 0xFFFF) / 65535.0
-    }
+func loadSource(_ url: URL, maxPixel: Int) -> CGImage? {
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+    let options: [CFString: Any] = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceShouldCacheImmediately: true,
+        kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+    ]
+    return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
 }
 
-let width = 640
-let height = 427
-
-func render(_ draw: (CGContext) -> Void) -> CGImage {
-    let context = CGContext(
-        data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
-        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-    )!
-    draw(context)
-    return context.makeImage()!
-}
-
-func gradient(_ ctx: CGContext, _ top: [CGFloat], _ bottom: [CGFloat], _ rect: CGRect) {
-    let colors = [CGColor(red: top[0], green: top[1], blue: top[2], alpha: 1),
-                  CGColor(red: bottom[0], green: bottom[1], blue: bottom[2], alpha: 1)] as CFArray
-    let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1])!
-    ctx.saveGState()
-    ctx.clip(to: rect)
-    ctx.drawLinearGradient(g, start: CGPoint(x: 0, y: rect.maxY), end: CGPoint(x: 0, y: rect.minY), options: [])
-    ctx.restoreGState()
-}
-
-/// Горный пейзаж с «фотографической» текстурой: параметры имитируют соседние кадры серии
-func mountains(shift: CGFloat = 0, zoom: CGFloat = 1, brightness: CGFloat = 0, noiseSeed: UInt32 = 1, noise: CGFloat = 0.04) -> CGImage {
-    render { ctx in
-        let w = CGFloat(width), h = CGFloat(height)
-        ctx.translateBy(x: w / 2 + shift, y: h / 2)
-        ctx.scaleBy(x: zoom, y: zoom)
-        ctx.translateBy(x: -w / 2, y: -h / 2)
-        let b = brightness
-        gradient(ctx, [0.35 + b, 0.6 + b, 0.95 + b], [0.85 + b, 0.92 + b, 1.0], CGRect(x: -50, y: h * 0.4, width: w + 100, height: h * 0.7))
-        let peaks: [(CGFloat, CGFloat)] = [(0.15, 0.62), (0.4, 0.82), (0.7, 0.7), (0.92, 0.58)]
-        for (x, y) in peaks {
-            ctx.setFillColor(CGColor(red: 0.35 + b, green: 0.4 + b, blue: 0.5 + b, alpha: 1))
-            ctx.move(to: CGPoint(x: w * x - 230, y: h * 0.4))
-            ctx.addLine(to: CGPoint(x: w * x, y: h * y))
-            ctx.addLine(to: CGPoint(x: w * x + 230, y: h * 0.4))
-            ctx.fillPath()
-        }
-        gradient(ctx, [0.3 + b, 0.45 + b, 0.6 + b], [0.1 + b, 0.2 + b, 0.35 + b], CGRect(x: -50, y: -50, width: w + 100, height: h * 0.4 + 50))
-        var rng = LCG(state: noiseSeed)
-        for _ in 0..<5000 {
-            let level = rng.next() * noise * 2 - noise
-            ctx.setFillColor(CGColor(red: 0.5 + level, green: 0.5 + level, blue: 0.5 + level, alpha: 0.25))
-            ctx.fill(CGRect(x: rng.next() * w, y: rng.next() * h, width: 2, height: 2))
-        }
-    }
-}
-
-/// Совсем другая сцена: ночной город
-func city() -> CGImage {
-    render { ctx in
-        let w = CGFloat(width), h = CGFloat(height)
-        gradient(ctx, [0.04, 0.06, 0.2], [0.2, 0.2, 0.45], CGRect(x: 0, y: 0, width: w, height: h))
-        var rng = LCG(state: 9)
-        var x: CGFloat = 0
-        while x < w {
-            let bw = 40 + rng.next() * 50
-            let bh = h * (0.2 + rng.next() * 0.5)
-            ctx.setFillColor(CGColor(red: 0.07, green: 0.09, blue: 0.18, alpha: 1))
-            ctx.fill(CGRect(x: x, y: 0, width: bw, height: bh))
-            var wy: CGFloat = 8
-            while wy < bh - 8 {
-                var wx = x + 6
-                while wx < x + bw - 8 {
-                    if rng.next() > 0.45 {
-                        ctx.setFillColor(CGColor(red: 1, green: 0.85, blue: 0.4, alpha: 1))
-                        ctx.fill(CGRect(x: wx, y: wy, width: 5, height: 7))
-                    }
-                    wx += 12
-                }
-                wy += 15
-            }
-            x += bw + 3
-        }
-    }
-}
-
-func reencode(_ image: CGImage, quality: Double) -> CGImage {
+func jpegRoundTrip(_ image: CGImage, quality: Double) -> CGImage? {
     let data = NSMutableData()
-    let dest = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil)!
+    guard let dest = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
     CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
-    CGImageDestinationFinalize(dest)
-    let source = CGImageSourceCreateWithData(data, nil)!
-    return CGImageSourceCreateImageAtIndex(source, 0, nil)!
+    guard CGImageDestinationFinalize(dest), let source = CGImageSourceCreateWithData(data, nil) else { return nil }
+    return CGImageSourceCreateImageAtIndex(source, 0, nil)
 }
 
-func featurePrint(_ image: CGImage) -> VNFeaturePrintObservation {
+func resized(_ image: CGImage, maxSide: Int) -> CGImage? {
+    let scale = Double(maxSide) / Double(max(image.width, image.height))
+    let w = max(1, Int(Double(image.width) * scale)), h = max(1, Int(Double(image.height) * scale))
+    guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    ctx.interpolationQuality = .high
+    ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+    return ctx.makeImage()
+}
+
+/// Миниатюра как в приложении: 300 px, JPEG 0.75
+func appThumb(_ image: CGImage, quality: Double = 0.75) -> CGImage? {
+    guard let small = resized(image, maxSide: 300) else { return nil }
+    return jpegRoundTrip(small, quality: quality)
+}
+
+func cropped(_ image: CGImage, fraction: Double, offsetX: Double = 0) -> CGImage? {
+    let w = Double(image.width) * fraction, h = Double(image.height) * fraction
+    let x = (Double(image.width) - w) / 2 + offsetX * Double(image.width)
+    let y = (Double(image.height) - h) / 2
+    return image.cropping(to: CGRect(x: max(0, x), y: y, width: w, height: h))
+}
+
+func brighter(_ image: CGImage, amount: Double) -> CGImage? {
+    guard let ctx = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    let rect = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+    ctx.draw(image, in: rect)
+    ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: amount))
+    ctx.fill(rect)
+    return ctx.makeImage()
+}
+
+func featurePrint(_ image: CGImage) -> VNFeaturePrintObservation? {
     let request = VNGenerateImageFeaturePrintRequest()
     request.revision = VNGenerateImageFeaturePrintRequestRevision1
     request.imageCropAndScaleOption = .scaleFill
     let handler = VNImageRequestHandler(cgImage: image, options: [:])
-    try! handler.perform([request])
-    return request.results!.first as! VNFeaturePrintObservation
+    guard (try? handler.perform([request])) != nil else { return nil }
+    return request.results?.first as? VNFeaturePrintObservation
 }
 
-func distance(_ a: CGImage, _ b: CGImage) -> Float {
+func distance(_ a: VNFeaturePrintObservation, _ b: VNFeaturePrintObservation) -> Float {
     var d: Float = 0
-    try! featurePrint(a).computeDistance(&d, to: featurePrint(b))
+    try? a.computeDistance(&d, to: b)
     return d
 }
 
-let base = mountains()
-let rows: [(String, CGImage)] = [
-    ("тот же кадр, JPEG q0.5", reencode(base, quality: 0.5)),
-    ("тот же кадр, JPEG q0.8", reencode(base, quality: 0.8)),
-    ("другой шум сенсора", mountains(noiseSeed: 77)),
-    ("яркость +6%", mountains(brightness: 0.06)),
-    ("сдвиг 10 px", mountains(shift: 10)),
-    ("сдвиг 40 px", mountains(shift: 40)),
-    ("зум 1.05x", mountains(zoom: 1.05)),
-    ("зум 1.15x", mountains(zoom: 1.15)),
-    ("зум 1.15x + сдвиг 30 + яркость +4%", mountains(shift: 30, zoom: 1.15, brightness: 0.04, noiseSeed: 5)),
-    ("ДРУГАЯ сцена (ночной город)", city()),
+func stats(_ values: [Float]) -> String {
+    guard !values.isEmpty else { return "нет данных" }
+    let sorted = values.sorted()
+    return String(format: "min %.2f · медиана %.2f · max %.2f (n=%d)", sorted.first!, sorted[sorted.count / 2], sorted.last!, sorted.count)
+}
+
+let fm = FileManager.default
+var files: [URL] = []
+for dir in ["/System/Library/Desktop Pictures", "/Library/Desktop Pictures"] {
+    if let items = try? fm.contentsOfDirectory(at: URL(fileURLWithPath: dir), includingPropertiesForKeys: nil) {
+        files += items.filter { ["heic", "jpg", "jpeg", "png"].contains($0.pathExtension.lowercased()) }
+    }
+}
+files.sort { $0.path < $1.path }
+print("Найдено изображений: \(files.count)")
+if files.isEmpty {
+    print("Нет системных обоев на раннере, проба невозможна")
+    exit(0)
+}
+
+// Не более 14 файлов, равномерно по списку
+let step = max(1, files.count / 14)
+let chosen = stride(from: 0, to: files.count, by: step).map { files[$0] }.prefix(14)
+
+struct Entry {
+    let name: String
+    let source: CGImage
+    let base: VNFeaturePrintObservation
+}
+var entries: [Entry] = []
+for url in chosen {
+    guard let source = loadSource(url, maxPixel: 1200), let thumb = appThumb(source), let fp = featurePrint(thumb) else {
+        print("  пропуск: \(url.lastPathComponent)")
+        continue
+    }
+    entries.append(Entry(name: url.deletingPathExtension().lastPathComponent, source: source, base: fp))
+}
+print("Обработано: \(entries.count)")
+
+let variants: [(String, (CGImage) -> CGImage?)] = [
+    ("тот же файл, миниатюра заново", { appThumb($0) }),
+    ("JPEG миниатюры q0.5", { appThumb($0, quality: 0.5) }),
+    ("кроп 97%", { cropped($0, fraction: 0.97).flatMap { appThumb($0) } }),
+    ("кроп 90%", { cropped($0, fraction: 0.90).flatMap { appThumb($0) } }),
+    ("кроп 90% со сдвигом 4%", { cropped($0, fraction: 0.90, offsetX: 0.04).flatMap { appThumb($0) } }),
+    ("кроп 80%", { cropped($0, fraction: 0.80).flatMap { appThumb($0) } }),
+    ("яркость +6%", { brighter($0, amount: 0.06).flatMap { appThumb($0) } }),
+    ("яркость +12%", { brighter($0, amount: 0.12).flatMap { appThumb($0) } }),
 ]
 
-print("Расстояния Vision (feature print rev.1) от базового кадра:")
-for (name, image) in rows {
-    print(String(format: "  %.3f  %@", distance(base, image), name))
+print("\nОдин и тот же снимок, обработанный по-разному (расстояние до исходной миниатюры):")
+for (name, transform) in variants {
+    var values: [Float] = []
+    for entry in entries {
+        if let image = transform(entry.source), let fp = featurePrint(image) {
+            values.append(distance(entry.base, fp))
+        }
+    }
+    print("  \(name): \(stats(values))")
 }
-print("Пороги в приложении: точная копия <= 0.03, Строго 0.18, Обычно 0.35, Серии 0.55")
+
+print("\nРазные файлы между собой:")
+var cross: [(Float, String, String)] = []
+for i in 0..<entries.count {
+    for j in (i + 1)..<entries.count {
+        cross.append((distance(entries[i].base, entries[j].base), entries[i].name, entries[j].name))
+    }
+}
+cross.sort { $0.0 < $1.0 }
+print("  \(stats(cross.map { $0.0 }))")
+print("  Самые близкие пары:")
+for item in cross.prefix(8) {
+    print(String(format: "    %.2f  %@  <->  %@", item.0, item.1, item.2))
+}
+print("\nПороги в приложении сейчас: точная копия <= 0.03, Строго 0.18, Обычно 0.35, Серии 0.55")
