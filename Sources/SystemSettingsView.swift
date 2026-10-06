@@ -59,8 +59,7 @@ struct SystemSettingsView: View {
     var body: some View {
         NavigationStack {
             mainContent
-                .navigationTitle("Параметры системы".localized)
-                .navigationBarTitleDisplayMode(.large)
+                .bannerTopChrome(title: "Параметры системы".localized)
                 .overlay(alignment: .bottom) { toastOverlay }
                 .modifier(SettingsObservers1(
                     sysLanguage: $sysLanguage,
@@ -108,7 +107,7 @@ struct SystemSettingsView: View {
     // MARK: - Контент (разбит на группы, чтобы не упираться в лимит ViewBuilder)
 
     private var mainContent: some View {
-        AppScreen {
+        AppScreen(title: "Параметры системы".localized) {
             primarySections
             secondarySections
             #if DEBUG

@@ -76,10 +76,12 @@ struct GalleryView: View {
                 }
                 .overlay(alignment: .bottom) { toast }
             }
-            .navigationTitle(isSelecting ? "\("Выбрано".localized) \(selectedIds.count)" : "Очередь".localized)
-            .navigationBarTitleDisplayMode(.large)
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
-            .searchable(text: $searchText, prompt: Text("Поиск по названию и ключам".localized))
+            .safeAreaInset(edge: .top, spacing: 0) {
+                AdBannerView()
+            }
             .sheet(item: $detailPhoto) { photo in
                 PhotoDetailSheet(photo: photo, viewModel: viewModel)
             }
@@ -184,17 +186,24 @@ struct GalleryView: View {
             photoGrid(mode: mode)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                AdBannerView()
-                actionBar
-            }
+            actionBar
         }
     }
 
     // MARK: Верхняя часть: тип файлов, лента этапов, чипы
 
+    private var queueTitle: String {
+        isSelecting ? "\("Выбрано".localized) \(selectedIds.count)" : "Очередь".localized
+    }
+
     private func headerControls(counts: GalleryCounts, showChips: Bool) -> some View {
         VStack(spacing: 10) {
+            ScreenLargeTitle(text: queueTitle)
+                .padding(.horizontal, 16)
+
+            ScreenSearchField(text: $searchText, prompt: "Поиск по названию и ключам".localized)
+                .padding(.horizontal, 16)
+
             HStack(spacing: 12) {
                 Text("\(mediaTab == 0 ? "Фото".localized : "Видео".localized) · \(counts.total)")
                     .font(.subheadline)
@@ -439,8 +448,12 @@ struct GalleryView: View {
 
     private var emptyState: some View {
         ScrollView {
-            emptyStateContent
-                .frame(maxWidth: .infinity)
+            VStack(spacing: 16) {
+                ScreenLargeTitle(text: queueTitle)
+                    .padding(.horizontal, 16)
+                emptyStateContent
+                    .frame(maxWidth: .infinity)
+            }
         }
     }
 
