@@ -713,7 +713,7 @@ struct AIMetadataView: View {
                         frames = await ImageCacheHelper.shared.extractFrames(fileURL: fileURL, count: 3)
                     }
                     imagesData = frames
-                    if promptToUse.isEmpty {
+                    if promptToUse.isEmpty || promptToUse == AIManager.defaultPrompt {
                         promptToUse = AIManager.videoPrompt
                     }
                     if let info = await ImageCacheHelper.shared.videoInfo(fileURL: fileURL) {

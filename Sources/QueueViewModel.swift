@@ -395,7 +395,8 @@ class QueueViewModel: ObservableObject {
         let custom = (UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         var prompt = custom
-        if custom.isEmpty {
+        // Стандартный фото-промпт (его вкладка «ИИ» подставляет по умолчанию) для ролика заменяется видеопромптом
+        if custom.isEmpty || (photo.isVideo && custom == AIManager.defaultPrompt) {
             prompt = photo.isVideo ? AIManager.videoPrompt : AIManager.defaultPrompt
         }
 
