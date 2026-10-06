@@ -4,11 +4,16 @@ on:
   push:
     branches: [ "main", "master" ]
   workflow_dispatch:
+    inputs:
+      upload:
+        description: "Загрузить сборку в TestFlight (выключите для проверочной сборки: подпись проверяется, но загрузки нет)"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
 
-# Сборки идут строго по очереди: параллельные запуски создают и отзывают сертификаты друг у друга.
+# Сборки идут строго по очереди.
 concurrency:
   group: build-smartstock
   cancel-in-progress: false
@@ -99,6 +104,7 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
 
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+          echo "KEYCHAIN_PASSWORD=$KP" >> $GITHUB_ENV
           echo "✅ Временный Keychain настроен"
 
       - name: Update Build Number
@@ -144,8 +150,13 @@ jobs:
           fi
           echo "=== Archive успешно создан ==="
 
-      - name: Auto Setup Certificates & Profiles
-        run: python3 .github/scripts/auto_cert_setup.py
+      # Постоянный сертификат Apple Distribution лежит в секретах (DIST_CERT_P12_*) и подключается как есть.
+      # Сертификаты здесь не создаются и не отзываются: см. .github/scripts/setup_signing.py
+      - name: Install signing certificate & profile
+        env:
+          DIST_CERT_P12_BASE64: ${{ secrets.DIST_CERT_P12_BASE64 }}
+          DIST_CERT_P12_PASSWORD: ${{ secrets.DIST_CERT_P12_PASSWORD }}
+        run: python3 .github/scripts/setup_signing.py
 
       - name: Create ExportOptions.plist
         run: |
@@ -165,7 +176,7 @@ jobs:
             <key>signingStyle</key>
             <string>manual</string>
             <key>signingCertificate</key>
-            <string>iPhone Distribution</string>
+            <string>Apple Distribution</string>
             <key>provisioningProfiles</key>
             <dict>
               <key>com.samvel.smartstock.SmartStock</key>
@@ -188,10 +199,6 @@ jobs:
             -archivePath "$RUNNER_TEMP/SmartStock.xcarchive" \
             -exportPath "$RUNNER_TEMP/Export" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -authenticationKeyPath "$AUTH_KEY_PATH" \
-            -authenticationKeyID "$APPSTORE_KEY_ID" \
-            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID" \
-            -allowProvisioningUpdates \
             2>&1 | tee "$RUNNER_TEMP/export.log"
 
           IPA=$(find "$RUNNER_TEMP/Export" -name "*.ipa" | head -1)
@@ -205,7 +212,50 @@ jobs:
           echo "✅ Подписанный IPA сформирован: $(ls -lh build/SmartStock.ipa)"
           echo "Размер: $(du -h build/SmartStock.ipa | cut -f1)"
 
+      # Проверяем, что IPA подписан именно постоянным сертификатом из секретов, до любой загрузки.
+      - name: Verify IPA signature
+        run: |
+          set -e
+          WORK="$RUNNER_TEMP/ipa_check"
+          rm -rf "$WORK" && mkdir -p "$WORK"
+          unzip -q build/SmartStock.ipa -d "$WORK"
+          APP="$WORK/Payload/SmartStock.app"
+
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dvv "$APP" 2>&1 | grep -E "^Authority|^TeamIdentifier|^Identifier=" || true
+
+          cd "$WORK"
+          codesign -d --extract-certificates=signer_ "$APP" > /dev/null 2>&1
+          ACTUAL=$(shasum -a 1 signer_0 | cut -d' ' -f1 | tr 'a-f' 'A-F')
+          echo "SHA-1 сертификата подписи IPA: $ACTUAL"
+          echo "SHA-1 постоянного сертификата: $SIGNING_CERT_SHA1"
+          if [ "$ACTUAL" != "$SIGNING_CERT_SHA1" ]; then
+            echo "::error::IPA подписан не постоянным сертификатом из секретов."
+            exit 1
+          fi
+          echo "✅ Подпись IPA корректна"
+
+      # Проверочная сборка: Apple валидирует IPA (в том числе подпись), но ничего не загружается.
+      - name: Validate IPA with Apple (dry run)
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.upload }}
+        run: |
+          set -o pipefail
+          xcrun altool --validate-app \
+            -f build/SmartStock.ipa \
+            -t ios \
+            --apiKey "$APPSTORE_KEY_ID" \
+            --apiIssuer "$APPSTORE_ISSUER_ID" \
+            --verbose 2>&1 | tee "$RUNNER_TEMP/altool_validate.log"
+
+          if ! grep -q "No errors validating" "$RUNNER_TEMP/altool_validate.log"; then
+            echo "::error::Apple не подтвердила IPA. Причина:"
+            grep -E "ERROR:|Validation failed|detail :|ITMS-" "$RUNNER_TEMP/altool_validate.log" | head -10
+            exit 1
+          fi
+          echo "✅ Apple подтвердила IPA (подпись и метаданные в порядке), загрузка не выполнялась"
+
       - name: Upload to TestFlight
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.upload }}
         run: |
           echo "🚀 Отправка сборки SmartStock в TestFlight..."
           set -o pipefail
@@ -249,7 +299,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Сертификат и профиль этого запуска НЕЛЬЗЯ отзывать после сборки: Apple повторно проверяет подпись
-      # при отправке сборки на бета-проверку и в App Review. Если сертификат к тому моменту отозван,
-      # сборка получает «Ошибка двоичного файла» (ITMS-90035 Invalid Signature).
-      # Освобождением слотов занимается только auto_cert_setup.py при создании нового сертификата.
+      # Сертификат подписи НЕЛЬЗЯ отзывать после сборки: Apple повторно проверяет подпись при отправке
+      # сборки на бета-проверку и в App Review. Отозванный сертификат => «Ошибка двоичного файла»
+      # (ITMS-90035 Invalid Signature). Поэтому здесь нет шагов очистки, а сертификат постоянный.
