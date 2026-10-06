@@ -359,24 +359,32 @@ public struct PaywallView: View {
             selectedProductID = productID
         }) {
             ZStack(alignment: .topTrailing) {
-                HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
+                    // Бейдж на своей строке во всю ширину карточки: рядом с названием он сжимался и переносился на 4 строки
+                    if let badge = badge {
+                        Text(badge)
+                            .font(.caption2.weight(.heavy))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(
+                                    isPopular
+                                        ? LinearGradient(colors: [.orange, .red], startPoint: .leading, endPoint: .trailing)
+                                        : LinearGradient(colors: [.purple, .blue], startPoint: .leading, endPoint: .trailing)
+                                )
+                            )
+                    }
+
+                    HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 8) {
-                            Text(title)
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(.white)
-                            
-                            if let badge = badge {
-                                Text(badge)
-                                    .font(.caption2.weight(.heavy))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3)
-                                    .background(isPopular ? LinearGradient(colors: [.orange, .red], startPoint: .leading, endPoint: .trailing) : LinearGradient(colors: [.purple, .blue], startPoint: .leading, endPoint: .trailing))
-                                    .clipShape(Capsule())
-                            }
-                        }
-                        
+                        Text(title)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.white)
+                            .fixedSize(horizontal: false, vertical: true)
+
                         Text(subtitle)
                             .font(.footnote)
                             .foregroundStyle(.white.opacity(0.70))
@@ -390,7 +398,10 @@ public struct PaywallView: View {
                             .font(Font.system(.subheadline, design: .rounded).weight(.bold))
                             .foregroundStyle(.white)
                             .multilineTextAlignment(.trailing)
-                        
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .layoutPriority(1)
+
                         ZStack {
                             Circle()
                                 .stroke(isSelected ? AppPalette.accentLight : Color.white.opacity(0.3), lineWidth: 2)
@@ -403,6 +414,7 @@ public struct PaywallView: View {
                                     .transition(.scale.combined(with: .opacity))
                             }
                         }
+                    }
                     }
                 }
                 .padding(14)
