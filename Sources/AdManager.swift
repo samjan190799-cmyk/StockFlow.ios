@@ -151,6 +151,7 @@ struct AdBannerView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: isLoaded ? nil : 1)
+            .padding(.bottom, isLoaded ? 6 : 0)
             .task {
                 await AdManager.shared.startIfNeeded()
                 if bannerState == nil {

@@ -60,13 +60,12 @@ struct AIAssistantView: View {
     
     var body: some View {
         NavigationStack {
-            AppScreen {
+            AppScreen(title: "ИИ-Ассистент".localized) {
                 headerCard
                 statusSection
                 promptSection
             }
-            .navigationTitle("ИИ-Ассистент".localized)
-            .navigationBarTitleDisplayMode(.large)
+            .bannerTopChrome(title: "ИИ-Ассистент".localized)
             .sheet(isPresented: $showPaywall) {
                 PaywallView()
             }

@@ -45,30 +45,40 @@ shoot_device() {
     --cellularMode active --cellularBars 4 --wifiMode active --wifiBars 3 || true
   xcrun simctl install "$udid" "$APP"
 
-  for lang in ru en; do
+  capture() {
+    # capture <папка> <язык> <сцена> <имя файла> <доп. пауза> [доп. аргументы запуска...]
+    local dir="$1" lang="$2" scene="$3" name="$4" extra="$5"
+    shift 5
     local lang_value="Русский"
     [ "$lang" = "en" ] && lang_value="English"
-    mkdir -p "$OUT/$label-$lang"
+    mkdir -p "$OUT/$dir"
+    xcrun simctl terminate "$udid" "$BUNDLE_ID" >/dev/null 2>&1 || true
+    local data
+    data=$(xcrun simctl get_app_container "$udid" "$BUNDLE_ID" data)
+    rm -f "$data/Documents/ss_done"
+    xcrun simctl launch "$udid" "$BUNDLE_ID"       -ss_scene "$scene" -sys_language "$lang_value" -sys_theme "Темная" -sys_notifications NO       -AppleLanguages "($lang)" -AppleLocale "$lang" "$@" >/dev/null
+    local waited=0
+    until [ -f "$data/Documents/ss_done" ] || [ "$waited" -ge 120 ]; do
+      sleep 1
+      waited=$((waited + 1))
+    done
+    [ -f "$data/Documents/ss_done" ] || echo "ВНИМАНИЕ: $dir/$scene не дошёл до готовности за 120 с"
+    sleep "$extra"
+    xcrun simctl io "$udid" screenshot --type=png "$OUT/$dir/$name.png"
+    echo "OK $dir/$name.png"
+  }
+
+  for lang in ru en; do
     local n=0
     for scene in "${SCENES[@]}"; do
       n=$((n + 1))
-      xcrun simctl terminate "$udid" "$BUNDLE_ID" >/dev/null 2>&1 || true
-      local data
-      data=$(xcrun simctl get_app_container "$udid" "$BUNDLE_ID" data)
-      rm -f "$data/Documents/ss_done"
-      xcrun simctl launch "$udid" "$BUNDLE_ID" \
-        -ss_scene "$scene" -sys_language "$lang_value" -sys_theme "Темная" -sys_notifications NO \
-        -AppleLanguages "($lang)" -AppleLocale "$lang" >/dev/null
-      local waited=0
-      until [ -f "$data/Documents/ss_done" ] || [ "$waited" -ge 120 ]; do
-        sleep 1
-        waited=$((waited + 1))
-      done
-      [ -f "$data/Documents/ss_done" ] || echo "ВНИМАНИЕ: $label/$lang/$scene не дошёл до готовности за 120 с"
-      sleep 1
-      xcrun simctl io "$udid" screenshot --type=png "$OUT/$label-$lang/0${n}-${scene}.png"
-      echo "OK $label-$lang/0${n}-${scene}.png"
+      capture "$label-$lang" "$lang" "$scene" "0${n}-${scene}" 1
     done
+  done
+
+  # Проверочные кадры с включённой рекламой (не для App Store): как выглядит баннер на каждой вкладке
+  for scene in queue-new queue-ready prompt agencies settings; do
+    capture "check-ads-$label" ru "$scene" "$scene" 10 -ss_ads 1
   done
 
   xcrun simctl shutdown "$udid" || true

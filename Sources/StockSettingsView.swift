@@ -18,12 +18,11 @@ struct StockSettingsView: View {
 
     var body: some View {
         NavigationStack {
-            AppScreen(maxWidth: 960) {
+            AppScreen(title: "Настройки стоков".localized, maxWidth: 960) {
                 platformsSection
                 disclaimerSection
             }
-            .navigationTitle("Настройки стоков".localized)
-            .navigationBarTitleDisplayMode(.large)
+            .bannerTopChrome(title: "Настройки стоков".localized)
             .onAppear(perform: loadPlatforms)
             .sheet(item: Binding(
                 get: {

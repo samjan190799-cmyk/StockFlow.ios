@@ -26,7 +26,9 @@ enum ScreenshotScenario {
         try? FileManager.default.removeItem(at: marker)
 
         // PRO: без рекламы и без ограничений, чтобы на скриншотах не было баннеров
-        StoreManager.shared.setTesterProOverride(active: true, isPro: true)
+        // (аргумент -ss_ads 1 оставляет рекламу: так проверяют, как выглядит баннер)
+        let showAds = UserDefaults.standard.bool(forKey: "ss_ads")
+        StoreManager.shared.setTesterProOverride(active: true, isPro: !showAds)
 
         switch scene {
         case "prompt":

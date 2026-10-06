@@ -67,10 +67,12 @@ enum AppTone {
 // MARK: - Контейнер экрана: фон, прокрутка, читаемая ширина (на iPad не растягиваем)
 
 struct AppScreen<Content: View>: View {
+    private let title: String?
     private let maxWidth: CGFloat
     private let content: Content
 
-    init(maxWidth: CGFloat = 720, @ViewBuilder content: () -> Content) {
+    init(title: String? = nil, maxWidth: CGFloat = 720, @ViewBuilder content: () -> Content) {
+        self.title = title
         self.maxWidth = maxWidth
         self.content = content()
     }
@@ -80,6 +82,9 @@ struct AppScreen<Content: View>: View {
             LiquidBackgroundView()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    if let title {
+                        ScreenLargeTitle(text: title)
+                    }
                     content
                 }
                 .frame(maxWidth: maxWidth)
@@ -89,6 +94,68 @@ struct AppScreen<Content: View>: View {
                 .padding(.bottom, 32)
             }
         }
+    }
+}
+
+// MARK: - Крупный заголовок экрана, строка поиска и полоса с баннером
+
+/// Крупный заголовок, который экран рисует сам: так баннер встаёт между панелью кнопок и заголовком
+struct ScreenLargeTitle: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.largeTitle.weight(.bold))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// Строка поиска в стиле приложения (вместо системной, которая не даёт поставить баннер над заголовком)
+struct ScreenSearchField: View {
+    @Binding var text: String
+    let prompt: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField(prompt, text: $text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel("Очистить".localized)
+            }
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, text.isEmpty ? 12 : 0)
+        .frame(minHeight: 44)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(0.08))
+        )
+    }
+}
+
+extension View {
+    /// Верх экрана без системного крупного заголовка: под панелью кнопок стоит баннер, заголовок рисует сам экран.
+    /// Название остаётся для VoiceOver; пустую панель навигации прячем, если на ней нет кнопок.
+    func bannerTopChrome(title: String, hidesNavigationBar: Bool = true) -> some View {
+        self
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(hidesNavigationBar ? .hidden : .automatic, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                AdBannerView()
+            }
     }
 }
 
