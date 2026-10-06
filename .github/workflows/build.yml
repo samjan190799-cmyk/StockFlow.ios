@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+# Сборки идут строго по очереди: параллельные запуски создают и отзывают сертификаты друг у друга.
+concurrency:
+  group: build-smartstock
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build & Deploy SmartStock to TestFlight
@@ -244,8 +249,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Убираем сертификат и профиль, созданные этим запуском, чтобы не занимать слоты аккаунта Apple.
-      # Чужие сертификаты (другие приложения) не затрагиваются.
-      - name: Cleanup CI signing certificate
-        if: always()
-        run: python3 .github/scripts/auto_cert_setup.py cleanup
+      # Сертификат и профиль этого запуска НЕЛЬЗЯ отзывать после сборки: Apple повторно проверяет подпись
+      # при отправке сборки на бета-проверку и в App Review. Если сертификат к тому моменту отозван,
+      # сборка получает «Ошибка двоичного файла» (ITMS-90035 Invalid Signature).
+      # Освобождением слотов занимается только auto_cert_setup.py при создании нового сертификата.
