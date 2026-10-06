@@ -1,0 +1,24 @@
+name: Vision probe (одноразовая проверка порогов дублей)
+
+# Только считает расстояния Vision на синтетических изображениях. Без секретов, ничего не отправляет.
+on:
+  push:
+    branches: [ "claude/features-demo-video-dedupe" ]
+    paths:
+      - ".github/workflows/vision-probe.yml"
+      - ".github/scripts/vision_probe.swift"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Latest Xcode
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -n 1)
+          sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+      - name: Measure Vision distances
+        run: swift .github/scripts/vision_probe.swift
