@@ -28,14 +28,16 @@ types.sort(key=key)
 print(types[-1]["identifier"] if types else "")' "$1"
 }
 IPHONE_TYPE=$(pick_type '^iPhone \d+ Pro Max$')
+IPHONE63_TYPE=$(pick_type '^iPhone \d+ Pro$')
 IPAD_TYPE=$(pick_type '^iPad Pro 13-inch')
 echo "iPhone: $IPHONE_TYPE"
+echo "iPhone 6.3: $IPHONE63_TYPE"
 echo "iPad:   $IPAD_TYPE"
 
 mkdir -p "$OUT"
 
 shoot_device() {
-  local label="$1" type="$2"
+  local label="$1" type="$2" with_ads_check="${3:-yes}"
   [ -z "$type" ] && { echo "Нет типа устройства для $label, пропуск"; return; }
   local udid
   udid=$(xcrun simctl create "shots-$label" "$type" "$RUNTIME")
@@ -77,15 +79,18 @@ shoot_device() {
   done
 
   # Проверочные кадры с включённой рекламой (не для App Store): как выглядит баннер на каждой вкладке
-  for scene in queue-new queue-ready prompt agencies settings; do
-    capture "check-ads-$label" ru "$scene" "$scene" 10 -ss_ads 1
-  done
+  if [ "$with_ads_check" = "yes" ]; then
+    for scene in queue-new queue-ready prompt agencies settings; do
+      capture "check-ads-$label" ru "$scene" "$scene" 10 -ss_ads 1
+    done
+  fi
 
   xcrun simctl shutdown "$udid" || true
   xcrun simctl delete "$udid" || true
 }
 
 shoot_device iphone-6.9 "$IPHONE_TYPE"
+shoot_device iphone-6.3 "$IPHONE63_TYPE" no
 shoot_device ipad-13 "$IPAD_TYPE"
 
 find "$OUT" -name '*.png' -exec file {} \; | sed 's/PNG image data, //' | head -60
