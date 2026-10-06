@@ -43,6 +43,7 @@ struct SystemSettingsView: View {
     @ObservedObject private var storeManager = StoreManager.shared
     @State private var showPaywall = false
     @State private var showingSavedToast = false
+    @State private var showAdvancedSettings = false
     @State private var savedToastMessage = ""
     @State private var showGoogleHelpSheet = false
     
@@ -124,17 +125,50 @@ struct SystemSettingsView: View {
         subscriptionSection
         interfaceSection
         googlePhotosSection
-        schedulerSection
-        upscaleSection
+        advancedToggleRow
+        if showAdvancedSettings {
+            schedulerSection
+            upscaleSection
+            uploadSection
+            pcServerSection
+            cacheSection
+        }
     }
 
     @ViewBuilder
     private var secondarySections: some View {
-        uploadSection
-        pcServerSection
-        cacheSection
         supportSection
         disclaimerSection
+    }
+
+    /// Редкие настройки спрятаны под одной строкой, чтобы основной экран не перегружал
+    private var advancedToggleRow: some View {
+        Button {
+            HapticHelper.selection()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showAdvancedSettings.toggle()
+            }
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    SwiftUI.Label("Дополнительные настройки".localized, systemImage: "slider.horizontal.3")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Планировщик, апскейл, потоки отправки, ПК-сервер, кэш".localized)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: showAdvancedSettings ? "chevron.up" : "chevron.down")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .appCard()
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Подписка

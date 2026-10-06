@@ -174,7 +174,7 @@ struct DuplicatesView: View {
         )
         .overlay(alignment: .bottom) {
             Text(isKeep ? "Оставить".localized : "Лишний".localized)
-                .font(.system(size: 10, weight: .bold))
+                .scaledFont(size: 10, weight: .bold)
                 .foregroundStyle(Color.white)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)

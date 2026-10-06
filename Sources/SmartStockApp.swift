@@ -7,6 +7,7 @@ struct SmartStockApp: App {
     @AppStorage("sys_theme") private var sysTheme: String = "Темная"
     @AppStorage("sys_language") private var sysLanguage: String = "Русский"
     @StateObject private var viewModel = QueueViewModel()
+    @ObservedObject private var router = AppRouter.shared
     @Environment(\.scenePhase) private var scenePhase
     
     var colorScheme: ColorScheme? {
@@ -45,7 +46,8 @@ struct SmartStockApp: App {
             }
         }
         
-        // Настройка TabBar в стеклянном стиле (полупрозрачный blur)
+        // Настройка TabBar в стеклянном стиле (полупрозрачный blur). На iOS 26+ остаётся системный Liquid Glass.
+        if #unavailable(iOS 26.0) {
         let appearance = UITabBarAppearance()
         appearance.configureWithTransparentBackground()
         appearance.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
@@ -61,6 +63,7 @@ struct SmartStockApp: App {
         
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
+        }
         
         // Запрос авторизации для уведомлений при запуске
         if UserDefaults.standard.bool(forKey: "sys_notifications") {
@@ -76,26 +79,30 @@ struct SmartStockApp: App {
             ZStack {
                 LiquidBackgroundView(isAnimated: true) // Единый фон на уровне всего приложения
                 
-                TabView {
+                TabView(selection: $router.selectedTab) {
                     GalleryView(viewModel: viewModel)
                         .tabItem {
-                            Label("Галерея".localized, systemImage: "photo.on.rectangle")
+                            Label("Очередь".localized, systemImage: "photo.on.rectangle")
                         }
+                        .tag(AppRouter.Tab.queue)
                     
                     AIAssistantView()
                          .tabItem {
-                             Label("ИИ".localized, systemImage: "brain")
+                             Label("Промпт".localized, systemImage: "text.bubble")
                          }
+                         .tag(AppRouter.Tab.prompt)
                     
                     StockSettingsView()
                         .tabItem {
-                            Label("Агентства".localized, systemImage: "arrow.left.and.right")
+                            Label("Агентства".localized, systemImage: "building.2")
                         }
+                        .tag(AppRouter.Tab.agencies)
                     
                     SystemSettingsView()
                         .tabItem {
                             Label("Настройки".localized, systemImage: "gearshape")
                         }
+                        .tag(AppRouter.Tab.settings)
                 }
             }
             .preferredColorScheme(colorScheme)

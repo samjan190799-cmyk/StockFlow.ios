@@ -328,6 +328,7 @@ struct PlatformRowView: View {
                 onInfoTap()
             } label: {
                 Image(systemName: "questionmark.circle")
+                    .accessibilityLabel("Справка".localized)
                     .font(.title3)
                     .foregroundStyle(AppPalette.accentLight)
                     .frame(width: 40, height: 40)

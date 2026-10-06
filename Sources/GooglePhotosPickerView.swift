@@ -198,6 +198,7 @@ struct GooglePhotosPickerView: View {
                             showHelpSheet = true
                         }) {
                             Image(systemName: "questionmark.circle.fill")
+                                .accessibilityLabel("Справка".localized)
                                 .font(.system(size: 18))
                                 .foregroundStyle(Color(hex: "4285F4"))
                         }
@@ -208,6 +209,7 @@ struct GooglePhotosPickerView: View {
                                 Task { await manager.loadDriveItems(forceReload: true) }
                             }) {
                                 Image(systemName: "arrow.clockwise")
+                                    .accessibilityLabel("Обновить".localized)
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(.secondary)
                             }
@@ -730,6 +732,7 @@ struct GooglePhotosPickerView: View {
                     previewItem = item
                 }) {
                     Image(systemName: "eye.fill")
+                        .accessibilityLabel("Просмотр".localized)
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(6)
@@ -946,6 +949,7 @@ struct GoogleMediaPreviewModal: View {
 
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
+                            .accessibilityLabel("Закрыть".localized)
                             .font(.system(size: 26))
                             .foregroundStyle(.white.opacity(0.8))
                     }

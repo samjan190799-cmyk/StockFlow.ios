@@ -95,6 +95,7 @@ struct StockSignInHelperView: View {
                     webView.goBack()
                 }) {
                     Image(systemName: "chevron.left")
+                        .accessibilityLabel("Назад".localized)
                         .font(.system(size: 16, weight: .bold))
                         .frame(width: 44, height: 44)
                         .background(Color.primary.opacity(0.05))
@@ -108,6 +109,7 @@ struct StockSignInHelperView: View {
                     webView.reload()
                 }) {
                     Image(systemName: "arrow.clockwise")
+                        .accessibilityLabel("Обновить".localized)
                         .font(.system(size: 16, weight: .bold))
                         .frame(width: 44, height: 44)
                         .background(Color.primary.opacity(0.05))
@@ -119,7 +121,7 @@ struct StockSignInHelperView: View {
                         Image(systemName: "doc.on.clipboard")
                         Text("Из буфера".localized)
                     }
-                    .font(.system(size: 11, weight: .bold))
+                    .scaledFont(size: 11, weight: .bold)
                     .frame(height: 44)
                     .padding(.horizontal, 10)
                     .background(Color.primary.opacity(0.05))
@@ -134,7 +136,7 @@ struct StockSignInHelperView: View {
                         Image(systemName: "sparkles")
                         Text("Сканировать".localized)
                     }
-                    .font(.system(size: 13, weight: .bold))
+                    .scaledFont(size: 13, weight: .bold)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                     .background(AppPalette.accent)

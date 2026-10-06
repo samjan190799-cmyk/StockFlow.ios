@@ -153,6 +153,7 @@ struct DetailCardView: View {
                         onEditMetadata()
                     }) {
                         Image(systemName: "square.and.pencil")
+                            .accessibilityLabel("Редактировать метаданные".localized)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(Color(hex: "7C3AED"))
                     }
@@ -418,6 +419,7 @@ struct QueueKeywordChip: View {
                 onRemove()
             }) {
                 Image(systemName: "xmark")
+                    .accessibilityLabel("Удалить ключевое слово".localized)
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
             }

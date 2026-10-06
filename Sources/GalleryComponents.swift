@@ -32,12 +32,35 @@ struct GalleryTile: View {
             .overlay(alignment: .topLeading) { editorialBadge }
             .overlay(alignment: .bottomLeading) { statusBadge }
             .overlay(alignment: .bottomTrailing) { demoBadge }
+            .overlay(alignment: .topTrailing) { attentionBadge }
             .overlay(selectionOverlay)
             .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(photo.filename), \(photo.status.rawValue)")
+            .accessibilityLabel(accessibilitySummary)
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    // Предупреждение: метаданные готового файла неполные, сток может его отклонить
+    @ViewBuilder
+    private var attentionBadge: some View {
+        if !isSelecting && MetadataCheck.needsAttention(photo) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Color.white)
+                .padding(5)
+                .background(Circle().fill(Color.orange))
+                .padding(5)
+        }
+    }
+
+    private var accessibilitySummary: String {
+        var summary = "\(photo.filename), \(photo.status.rawValue)"
+        if MetadataCheck.needsAttention(photo) {
+            let problems = MetadataCheck.issues(for: photo).map { $0.localized }.joined(separator: ", ")
+            summary += ". " + "Неполные метаданные".localized + ": " + problems
+        }
+        return summary
     }
 
     // Пометка демо-файла: он не уходит в сеть
@@ -45,7 +68,7 @@ struct GalleryTile: View {
     private var demoBadge: some View {
         if photo.isDemo {
             Text("ДЕМО".localized)
-                .font(.system(size: 9, weight: .heavy))
+                .scaledFont(size: 9, weight: .heavy)
                 .foregroundStyle(Color.white)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
@@ -772,6 +795,7 @@ struct GalleryInspector: View {
                 viewModel.runAIForPhoto(photo.id)
             } label: {
                 Image(systemName: "arrow.triangle.2.circlepath")
+                    .accessibilityLabel("ИИ-анализ".localized)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(GalleryPalette.amber)
                     .frame(width: 48, height: 44)

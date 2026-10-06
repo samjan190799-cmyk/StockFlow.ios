@@ -418,6 +418,7 @@ public struct StockAgencyGuideSheet: View {
                     openURL(url)
                 }) {
                     Image(systemName: "safari.fill")
+                        .accessibilityLabel("Открыть сайт".localized)
                         .font(.system(size: 20))
                         .foregroundStyle(AppPalette.accentLight)
                         .padding(8)

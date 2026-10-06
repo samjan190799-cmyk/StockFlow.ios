@@ -414,6 +414,13 @@ struct GalleryView: View {
     // MARK: Пустая очередь
 
     private var emptyState: some View {
+        ScrollView {
+            emptyStateContent
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var emptyStateContent: some View {
         VStack(spacing: 16) {
             SmartStockLogoView(size: 72)
             Text("Очередь пуста".localized)
@@ -432,6 +439,8 @@ struct GalleryView: View {
                     .background(Capsule().fill(GalleryPalette.primaryGradient))
             }
 
+            onboardingCard
+
             VStack(spacing: 6) {
                 Button {
                     HapticHelper.trigger(.medium)
@@ -449,6 +458,97 @@ struct GalleryView: View {
         }
         .padding(32)
         .frame(maxWidth: 420)
+    }
+
+    // MARK: Вводная карточка: путь от первого запуска до первой отправки
+
+    private var onboardingCard: some View {
+        let stockReady = viewModel.hasConfiguredStock
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Как это работает".localized)
+                .font(.subheadline.weight(.bold))
+            onboardingStep(
+                number: 1,
+                title: "Подключите сток".localized,
+                detail: stockReady
+                    ? "Готово: логин и пароль сохранены".localized
+                    : "Логин и пароль от FTP вашего стока".localized,
+                done: stockReady,
+                actionTitle: stockReady ? nil : "Открыть".localized
+            ) {
+                AppRouter.shared.selectedTab = .agencies
+            }
+            onboardingStep(
+                number: 2,
+                title: "Добавьте фото или видео".localized,
+                detail: "Из галереи, Google Фото или Файлов".localized,
+                done: false,
+                actionTitle: nil,
+                action: {}
+            )
+            onboardingStep(
+                number: 3,
+                title: "ИИ заполнит метаданные".localized,
+                detail: "Название, описание, ключевые слова и категории".localized,
+                done: false,
+                actionTitle: nil,
+                action: {}
+            )
+            onboardingStep(
+                number: 4,
+                title: "Отправьте на сток".localized,
+                detail: "Одним нажатием, с прогрессом по каждому файлу".localized,
+                done: false,
+                actionTitle: nil,
+                action: {}
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard(cornerRadius: 16, padding: 14)
+    }
+
+    private func onboardingStep(
+        number: Int,
+        title: String,
+        detail: String,
+        done: Bool,
+        actionTitle: String?,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(done ? GalleryPalette.green : GalleryPalette.accent.opacity(0.16))
+                    .frame(width: 28, height: 28)
+                if done {
+                    Image(systemName: "checkmark")
+                        .font(.footnote.weight(.bold))
+                        .foregroundStyle(Color.white)
+                } else {
+                    Text("\(number)")
+                        .font(.footnote.weight(.bold))
+                        .foregroundStyle(GalleryPalette.accent)
+                }
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            if let actionTitle {
+                Button(actionTitle) {
+                    HapticHelper.selection()
+                    action()
+                }
+                .font(.footnote.weight(.semibold))
+                .frame(minHeight: 44)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: Тост

@@ -136,6 +136,7 @@ struct AIMetadataView: View {
                 }
             }) {
                 Image(systemName: "chevron.left")
+                    .accessibilityLabel("Предыдущий файл".localized)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.primary)
                     .padding(8)
@@ -167,6 +168,7 @@ struct AIMetadataView: View {
                 }
             }) {
                 Image(systemName: "chevron.right")
+                    .accessibilityLabel("Следующий файл".localized)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.primary)
                     .padding(8)
@@ -547,7 +549,7 @@ struct AIMetadataView: View {
                 .textCase(.uppercase)
             
             TextEditor(text: binding(\.description))
-                .font(.system(size: 14))
+                .scaledFont(size: 14)
                 .scrollContentBackground(.hidden)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 6)
@@ -798,6 +800,7 @@ private struct KeywordChip: View {
                 onRemove()
             }) {
                 Image(systemName: "xmark")
+                    .accessibilityLabel("Удалить ключевое слово".localized)
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
             }

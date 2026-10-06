@@ -108,6 +108,7 @@ public struct PaywallView: View {
                 dismiss()
             }) {
                 Image(systemName: "xmark")
+                    .accessibilityLabel("Закрыть".localized)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.white.opacity(0.85))
                     .frame(width: 34, height: 34)
@@ -524,7 +525,7 @@ public struct PaywallView: View {
                 }
             }
             .font(.caption2)
-            .foregroundStyle(.white.opacity(0.68))
+            .foregroundStyle(.white.opacity(0.82))
             .lineSpacing(2.5)
             .padding(12)
             .background(Color.white.opacity(0.04))
@@ -539,7 +540,7 @@ public struct PaywallView: View {
                 Link("Условия использования (EULA)".localized, destination: termsOfUseURL)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(AppPalette.accentLight)
-                    .frame(minHeight: 32)
+                    .frame(minHeight: 44)
                 
                 Text("•")
                     .foregroundStyle(.white.opacity(0.3))
@@ -547,7 +548,7 @@ public struct PaywallView: View {
                 Link("Политика конфиденциальности".localized, destination: privacyPolicyURL)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(AppPalette.accentLight)
-                    .frame(minHeight: 32)
+                    .frame(minHeight: 44)
             }
             .padding(.top, 2)
             
@@ -558,7 +559,7 @@ public struct PaywallView: View {
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(.white.opacity(0.75))
                     .underline()
-                    .frame(minHeight: 32)
+                    .frame(minHeight: 44)
             }
             .buttonStyle(.plain)
         }

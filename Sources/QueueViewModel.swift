@@ -1364,7 +1364,10 @@ class QueueViewModel: ObservableObject {
 
 
     
-    private func checkStockCredentials() -> Bool {
+    /// Есть ли хотя бы один включённый сток с сохранёнными логином и паролем
+    var hasConfiguredStock: Bool { checkStockCredentials() }
+    
+    func checkStockCredentials() -> Bool {
         if let data = UserDefaults.standard.data(forKey: "stock_platforms"),
            let decoded = try? JSONDecoder().decode([StockPlatform].self, from: data) {
             let activePlatforms = decoded.filter { $0.isEnabled }

@@ -448,3 +448,23 @@ extension ButtonStyle where Self == AppCapsuleButtonStyle {
         AppCapsuleButtonStyle(tint: tint)
     }
 }
+
+// MARK: - Шрифт фиксированного размера с учётом размера текста в настройках iOS (Dynamic Type)
+
+struct ScaledFontModifier: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let size: CGFloat
+    let weight: Font.Weight
+
+    func body(content: Content) -> some View {
+        // Рост ограничен 1.6x, чтобы крупный текст не ломал плотные плашки
+        let scaled = min(UIFontMetrics(forTextStyle: .body).scaledValue(for: size), size * 1.6)
+        return content.font(.system(size: scaled, weight: weight))
+    }
+}
+
+extension View {
+    func scaledFont(size: CGFloat, weight: Font.Weight = .regular) -> some View {
+        modifier(ScaledFontModifier(size: size, weight: weight))
+    }
+}

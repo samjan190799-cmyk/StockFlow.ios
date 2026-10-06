@@ -39,11 +39,11 @@ struct SimulatedSignInView: View {
                     
                     VStack(spacing: 6) {
                         Text("Вход через ".localized + "\(provider)")
-                            .font(.system(size: 20, weight: .bold))
+                            .scaledFont(size: 20, weight: .bold)
                             .foregroundStyle(.primary)
                         
                         Text("Введите вашу электронную почту для синхронизации аккаунта.".localized)
-                            .font(.system(size: 13))
+                            .scaledFont(size: 13)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 24)
@@ -55,7 +55,7 @@ struct SimulatedSignInView: View {
                                 .tint(.purple)
                                 .scaleEffect(1.2)
                             Text(statusMessage)
-                                .font(.system(size: 13, weight: .medium))
+                                .scaledFont(size: 13, weight: .medium)
                                 .foregroundStyle(.secondary)
                         }
                         .frame(height: 120)
@@ -64,7 +64,7 @@ struct SimulatedSignInView: View {
                     } else {
                         VStack(alignment: .leading, spacing: 14) {
                             Text("Адрес электронной почты".localized)
-                                .font(.system(size: 11, weight: .bold))
+                                .scaledFont(size: 11, weight: .bold)
                                 .foregroundStyle(.secondary)
                                 .textCase(.uppercase)
                             
@@ -88,7 +88,7 @@ struct SimulatedSignInView: View {
                         Button(action: handleSignIn) {
                             HStack {
                                 Text("Продолжить".localized)
-                                    .font(.system(size: 15, weight: .bold))
+                                    .scaledFont(size: 15, weight: .bold)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
@@ -108,7 +108,7 @@ struct SimulatedSignInView: View {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 11))
                         Text("Безопасное соединение по стандарту OAuth 2.0".localized)
-                            .font(.system(size: 11))
+                            .scaledFont(size: 11)
                     }
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 12)
