@@ -133,7 +133,10 @@ class QueueViewModel: ObservableObject {
     @Published var uploadSpeedKBps: [UUID: Double] = [:]
     
     private var saveTask: Task<Void, Never>? = nil
-    
+
+    /// Похожие кадры серии: для каждого файла — другие файлы из его группы (заполняется перед пакетным ИИ-анализом)
+    private var seriesSiblings: [UUID: [UUID]] = [:]
+
     private var metadataURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("queue_photos.json")
@@ -354,7 +357,11 @@ class QueueViewModel: ObservableObject {
                 if needStop { sourceURL.stopAccessingSecurityScopedResource() }
             }
             if photo.isVideo {
-                let frames = await ImageCacheHelper.shared.extractFrames(fileURL: sourceURL, count: 3)
+                // До 6 кадров по всему ролику, уменьшенные до 1024 px и без чёрных; запасной вариант — прежние 3 кадра
+                var frames = await ImageCacheHelper.shared.extractAIFrames(fileURL: sourceURL, count: 6)
+                if frames.isEmpty {
+                    frames = await ImageCacheHelper.shared.extractFrames(fileURL: sourceURL, count: 3)
+                }
                 if !frames.isEmpty {
                     return frames
                 }
@@ -380,10 +387,147 @@ class QueueViewModel: ObservableObject {
         return []
     }
     
+    // MARK: - Промпт, серии похожих кадров, демо-режим, дубли
+
+    /// Промпт для ИИ: пользовательский или стандартный (для видео — видеопромпт с данными ролика)
+    /// плюс подсказка не повторять тексты, уже написанные для похожих кадров серии.
+    private func aiPrompt(for photo: PhotoMetadata) async -> String {
+        let custom = (UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        var prompt = custom
+        if custom.isEmpty {
+            prompt = photo.isVideo ? AIManager.videoPrompt : AIManager.defaultPrompt
+        }
+
+        if photo.isVideo, let (sourceURL, needStop) = resolveSourceURL(for: photo) {
+            defer {
+                if needStop { sourceURL.stopAccessingSecurityScopedResource() }
+            }
+            if let info = await ImageCacheHelper.shared.videoInfo(fileURL: sourceURL) {
+                prompt += "\n\n" + AIManager.videoContext(info)
+            }
+        }
+
+        if let siblingIds = seriesSiblings[photo.id] {
+            let usedTitles = photos
+                .filter { siblingIds.contains($0.id) && !$0.title.isEmpty }
+                .prefix(4)
+                .map { "\"\($0.title)\"" }
+            if !usedTitles.isEmpty {
+                prompt += "\n\nThis file belongs to a series of very similar shots. Titles already used for the other shots: "
+                    + usedTitles.joined(separator: ", ")
+                    + ". Write a clearly different title and description for this one by focusing on what is visually different"
+                    + " (framing, light, foreground, details). Do not reuse their wording."
+            }
+        }
+        return prompt
+    }
+
+    /// Находит серии похожих кадров среди реальных файлов, чтобы ИИ не писал для них одинаковые тексты
+    private func prepareSeriesIndex() async {
+        let items = duplicateItems(from: photos.filter { !$0.isDemo })
+        guard items.count > 1 else {
+            seriesSiblings = [:]
+            return
+        }
+        let groups = await DuplicateDetector.shared.findGroups(items: items, threshold: DuplicateSensitivity.loose.threshold)
+        var map: [UUID: [UUID]] = [:]
+        for group in groups {
+            for id in group.photoIDs {
+                map[id] = group.photoIDs.filter { $0 != id }
+            }
+        }
+        seriesSiblings = map
+    }
+
+    /// Данные файлов для поиска дублей (по миниатюрам, оригиналы не читаются)
+    func duplicateItems(from source: [PhotoMetadata]) -> [DuplicateDetector.Item] {
+        source.compactMap { photo in
+            guard let thumbnail = photo.thumbnailData, !thumbnail.isEmpty else { return nil }
+            return DuplicateDetector.Item(
+                id: photo.id,
+                thumbnail: thumbnail,
+                isUploaded: photo.status == .success,
+                fileBytes: parseFileSizeToBytes(photo.fileSize)
+            )
+        }
+    }
+
+    /// Удаляет файлы из очереди вместе с их копиями в папке приложения
+    func removePhotosAndFiles(_ ids: Set<UUID>) {
+        let directory = photosDirectoryURL.standardizedFileURL.path
+        for photo in photos where ids.contains(photo.id) {
+            if let path = photo.localURLPath {
+                let fileURL = URL(fileURLWithPath: path).standardizedFileURL
+                if fileURL.path.hasPrefix(directory) {
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+            }
+            uploadSpeedKBps.removeValue(forKey: photo.id)
+        }
+        photos.removeAll(where: { ids.contains($0.id) })
+        savePhotosToDisk()
+    }
+
+    /// Добавляет в очередь примеры для демо-режима
+    func addDemoFiles() {
+        let samples = DemoMode.makeSamplePhotos(into: photosDirectoryURL)
+        for sample in samples.reversed() {
+            addPhoto(sample)
+        }
+        triggerToast("Добавлены демо-файлы. В сеть они не отправляются.".localized)
+    }
+
+    /// Убирает из очереди все демо-файлы
+    func removeDemoFiles() {
+        let ids = Set(photos.filter { $0.isDemo }.map { $0.id })
+        guard !ids.isEmpty else { return }
+        removePhotosAndFiles(ids)
+    }
+
+    /// Имитация ИИ-анализа демо-файла: заготовленные метаданные, без сети и без списания лимита
+    private func demoAnalyze(_ id: UUID) async {
+        guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
+        photos[idx].status = .aiAnalyzing
+        let filename = photos[idx].filename
+        try? await Task.sleep(nanoseconds: 900_000_000)
+        guard let index = photos.firstIndex(where: { $0.id == id }) else { return }
+        let result = DemoMode.metadata(forFilename: filename)
+        photos[index].title = result.title
+        photos[index].description = result.description
+        photos[index].keywords = result.keywords
+        photos[index].categories = result.categories ?? []
+        photos[index].errorMessage = nil
+        photos[index].status = .ready
+        savePhotosToDisk()
+    }
+
+    /// Имитация отправки демо-файла на вымышленный сток: индикатор доходит до 100%, ничего не уходит в сеть
+    private func demoUpload(_ id: UUID) async {
+        guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
+        photos[idx].status = .uploading
+        photos[idx].uploadProgress = 0.0
+        photos[idx].errorMessage = nil
+        for step in 1...10 {
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            guard let index = photos.firstIndex(where: { $0.id == id }) else { return }
+            photos[index].uploadProgress = Double(step) / 10.0
+        }
+        if let index = photos.firstIndex(where: { $0.id == id }) {
+            photos[index].status = .success
+            photos[index].uploadProgress = 1.0
+            savePhotosToDisk()
+        }
+    }
+
     func runAIForPhoto(_ id: UUID) {
         guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
-        
-        let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
+
+        if photos[idx].isDemo {
+            Task { await demoAnalyze(id) }
+            return
+        }
+
         let provider = AIProvider.gemini.rawValue
         let apiKey = AIManager.defaultSystemGeminiKey
         
@@ -407,7 +551,8 @@ class QueueViewModel: ObservableObject {
             }
             
             let imagesData = await getAIImagesData(for: photo)
-            
+            let customPrompt = await aiPrompt(for: photo)
+
             do {
                 let metadata = try await AIManager.shared.analyzePhoto(
                     imagesData: imagesData,
@@ -415,7 +560,7 @@ class QueueViewModel: ObservableObject {
                     provider: provider,
                     apiKey: apiKey
                 )
-                
+
                 if let index = self.photos.firstIndex(where: { $0.id == id }) {
                     self.photos[index].title = metadata.title
                     self.photos[index].keywords = metadata.keywords
@@ -458,8 +603,16 @@ class QueueViewModel: ObservableObject {
                 self.isAnalyzingAll = false
             }
             
+            // Серии похожих кадров: ИИ получит подсказку не повторять уже написанные для них тексты
+            await prepareSeriesIndex()
+
             var processedCount = 0
             for photo in unanalyzed {
+                if photo.isDemo {
+                    await demoAnalyze(photo.id)
+                    processedCount += 1
+                    continue
+                }
                 guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true) else {
                     self.triggerToast("Достигнут дневной лимит ИИ. Оформите PRO для продолжения.".localized)
                     self.shouldShowDailyLimitAlert = true
@@ -471,10 +624,10 @@ class QueueViewModel: ObservableObject {
                 }
                 
                 let imagesData = await getAIImagesData(for: photo)
-                let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
+                let customPrompt = await aiPrompt(for: photo)
                 let provider = AIProvider.gemini.rawValue
                 let apiKey = AIManager.defaultSystemGeminiKey
-                
+
                 do {
                     let metadata = try await AIManager.shared.analyzePhoto(
                         imagesData: imagesData,
@@ -531,6 +684,16 @@ class QueueViewModel: ObservableObject {
     
     func uploadPhoto(_ id: UUID) {
         guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
+
+        // Демо-файл: отправка имитируется, нужных стоков и паролей не требуется, лимиты не списываются
+        if photos[idx].isDemo {
+            Task {
+                await demoUpload(id)
+                self.triggerToast("Демо: файл «отправлен» на тестовый сток. В сеть ничего не ушло.".localized)
+            }
+            return
+        }
+
         guard checkStockCredentials() else {
             triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!".localized)
             return
@@ -661,20 +824,23 @@ class QueueViewModel: ObservableObject {
             triggerToast("Нет файлов, готовых к отправке.".localized)
             return
         }
-        guard checkStockCredentials() else {
+        // Пароли стоков нужны только для настоящих файлов; демо-файлы «отправляются» без них
+        if readyPhotos.contains(where: { !$0.isDemo }) && !checkStockCredentials() {
             triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!".localized)
             return
         }
-        
+
         FTPTranscriptLogger.shared.logStep("Отправить все: в очередь \(readyPhotos.count) файлов")
         triggerToast("Началась отправка".localized + " \(readyPhotos.count) " + "файлов...".localized)
-        
+
         for photo in readyPhotos {
-            guard RewardAdManager.shared.canPerformAction(isAIAnalysis: false) else {
-                triggerToast("Достигнут дневной лимит отправок. Оформите PRO для продолжения.".localized)
-                shouldShowDailyLimitAlert = true
-                HapticHelper.notification(.warning)
-                break
+            if !photo.isDemo {
+                guard RewardAdManager.shared.canPerformAction(isAIAnalysis: false) else {
+                    triggerToast("Достигнут дневной лимит отправок. Оформите PRO для продолжения.".localized)
+                    shouldShowDailyLimitAlert = true
+                    HapticHelper.notification(.warning)
+                    break
+                }
             }
             uploadPhoto(photo.id)
         }
@@ -687,11 +853,11 @@ class QueueViewModel: ObservableObject {
             triggerToast("Все файлы в очереди уже успешно загружены!".localized)
             return
         }
-        guard checkStockCredentials() else {
+        if targets.contains(where: { !$0.isDemo }) && !checkStockCredentials() {
             triggerToast("Ошибка: Нет активных стоков или не введены логин/пароль!".localized)
             return
         }
-        
+
         isRunningAutopilot = true
         triggerToast("⚡️ Автопилот запущен для".localized + " \(targets.count) " + "файлов...".localized)
         
@@ -703,9 +869,22 @@ class QueueViewModel: ObservableObject {
                 self.isRunningAutopilot = false
             }
             
+            // Серии похожих кадров: ИИ получит подсказку не повторять уже написанные для них тексты
+            await prepareSeriesIndex()
+
             var processedCount = 0
-            
+
             for photo in targets {
+                // Демо-файлы: имитация ИИ-анализа и отправки без сети и без лимитов
+                if photo.isDemo {
+                    if photo.status == .new || photo.status == .error {
+                        await self.demoAnalyze(photo.id)
+                    }
+                    await self.demoUpload(photo.id)
+                    processedCount += 1
+                    continue
+                }
+
                 // 1. ИИ Анализ (если требуется)
                 if photo.status == .new || photo.status == .error {
                     guard RewardAdManager.shared.consumeActionSlot(isAIAnalysis: true) else {
@@ -719,10 +898,10 @@ class QueueViewModel: ObservableObject {
                     }
                     
                     let imagesData = await getAIImagesData(for: photo)
-                    let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
+                    let customPrompt = await aiPrompt(for: photo)
                     let provider = AIProvider.gemini.rawValue
                     let apiKey = AIManager.defaultSystemGeminiKey
-                    
+
                     do {
                         let metadata = try await AIManager.shared.analyzePhoto(
                             imagesData: imagesData,

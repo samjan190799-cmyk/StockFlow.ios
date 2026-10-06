@@ -31,12 +31,27 @@ struct GalleryTile: View {
             .overlay(stateOverlay)
             .overlay(alignment: .topLeading) { editorialBadge }
             .overlay(alignment: .bottomLeading) { statusBadge }
+            .overlay(alignment: .bottomTrailing) { demoBadge }
             .overlay(selectionOverlay)
             .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(photo.filename), \(photo.status.rawValue)")
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    // Пометка демо-файла: он не уходит в сеть
+    @ViewBuilder
+    private var demoBadge: some View {
+        if photo.isDemo {
+            Text("ДЕМО".localized)
+                .font(.system(size: 9, weight: .heavy))
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color.orange))
+                .padding(5)
+        }
     }
 
     // Затемнение и индикаторы процесса поверх превью

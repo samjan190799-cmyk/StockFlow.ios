@@ -660,6 +660,16 @@ struct AIMetadataView: View {
     }
 
     private func regenerate() {
+        // Демо-файл: заготовленные метаданные без обращения к сети и без списания лимита
+        if photos[currentIndex].isDemo {
+            let demo = DemoMode.metadata(forFilename: photos[currentIndex].filename)
+            photos[currentIndex].title = demo.title
+            photos[currentIndex].description = demo.description
+            photos[currentIndex].keywords = demo.keywords
+            photos[currentIndex].categories = demo.categories ?? []
+            return
+        }
+
         let customPrompt = UserDefaults.standard.string(forKey: "ai_custom_prompt") ?? ""
         let provider = AIProvider.gemini.rawValue
         let apiKey = AIManager.defaultSystemGeminiKey
@@ -694,12 +704,21 @@ struct AIMetadataView: View {
                 }
             }
             do {
+                var promptToUse = customPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
                 let imagesData: [Data]
                 if isVideo {
-                    imagesData = await ImageCacheHelper.shared.extractFrames(
-                        fileURL: fileURL,
-                        count: 3
-                    )
+                    // До 6 кадров по всему ролику и видеопромпт с данными ролика (как при пакетном анализе)
+                    var frames = await ImageCacheHelper.shared.extractAIFrames(fileURL: fileURL, count: 6)
+                    if frames.isEmpty {
+                        frames = await ImageCacheHelper.shared.extractFrames(fileURL: fileURL, count: 3)
+                    }
+                    imagesData = frames
+                    if promptToUse.isEmpty {
+                        promptToUse = AIManager.videoPrompt
+                    }
+                    if let info = await ImageCacheHelper.shared.videoInfo(fileURL: fileURL) {
+                        promptToUse += "\n\n" + AIManager.videoContext(info)
+                    }
                 } else {
                     if let image = await ImageCacheHelper.shared.loadAndDownsample(fileURL: fileURL, maxPixelSize: 1568),
                        let jpeg = image.jpegData(compressionQuality: 0.85) {
@@ -713,7 +732,7 @@ struct AIMetadataView: View {
                 
                 let result = try await AIManager.shared.analyzePhoto(
                     imagesData: imagesData,
-                    customPrompt: customPrompt,
+                    customPrompt: promptToUse,
                     provider: provider,
                     apiKey: apiKey
                 )

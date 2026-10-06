@@ -65,6 +65,28 @@ final class AIManager: Sendable {
     
     static let defaultPrompt = "Analyze this image for a stock photo agency. Provide: 1. A commercially viable Title (max 70 characters), 2. A detailed Description (max 200 characters), 3. A list of 25-35 highly relevant Keywords (comma separated), 4. Select exactly 1 or 2 categories that describe this image from this list: [Abstract, Animals/Wildlife, Arts, Backgrounds/Textures, Beauty/Fashion, Buildings/Landmarks, Business/Finance, Celebrities, Education, Food and drink, Healthcare/Medical, Holidays, Industrial, Interiors, Miscellaneous, Nature, Objects, Parks/Outdoor, People, Religion, Science, Signs/Symbols, Sports/Recreation, Technology, Transportation, Vintage]. Output strictly in JSON format matching this schema: {\"title\": \"string\", \"description\": \"string\", \"keywords\": [\"keyword1\", \"keyword2\", ...], \"categories\": [\"category1\", \"category2\"]}"
     
+    /// Промпт для видеороликов: кадры идут в хронологическом порядке, описывать нужно весь ролик, а не один кадр
+    static let videoPrompt = "Analyze this VIDEO CLIP for a stock footage agency. The attached images are frames taken from the clip in chronological order (first to last), so describe the whole clip, not a single frame. Provide: 1. A commercially viable Title (max 70 characters) that names the main subject and mentions the camera work or motion only when it is clearly visible from the frames (for example aerial view, time-lapse, panning shot, static shot), 2. A detailed Description (max 200 characters), 3. A list of 25-35 highly relevant Keywords (comma separated) that includes footage-specific terms such as video, footage and clip, plus the resolution label (for example 4K) when it is given below, 4. Select exactly 1 or 2 categories that describe this clip from this list: [Abstract, Animals/Wildlife, Arts, Backgrounds/Textures, Beauty/Fashion, Buildings/Landmarks, Business/Finance, Celebrities, Education, Food and drink, Healthcare/Medical, Holidays, Industrial, Interiors, Miscellaneous, Nature, Objects, Parks/Outdoor, People, Religion, Science, Signs/Symbols, Sports/Recreation, Technology, Transportation, Vintage]. Do not invent anything that is not visible in the frames. Output strictly in JSON format matching this schema: {\"title\": \"string\", \"description\": \"string\", \"keywords\": [\"keyword1\", \"keyword2\", ...], \"categories\": [\"category1\", \"category2\"]}"
+
+    /// Технические данные ролика для подсказки ИИ: длительность, разрешение, частота кадров, ориентация
+    static func videoContext(_ info: VideoClipInfo) -> String {
+        var parts: [String] = ["Clip info: duration \(String(format: "%.1f", info.duration)) seconds"]
+        if info.width > 0 && info.height > 0 {
+            let longSide = max(info.width, info.height)
+            let label: String
+            if longSide >= 3840 { label = "4K" }
+            else if longSide >= 1920 { label = "Full HD" }
+            else if longSide >= 1280 { label = "HD" }
+            else { label = "SD" }
+            let orientation = info.height > info.width ? "vertical" : "horizontal"
+            parts.append("\(info.width)x\(info.height) (\(label)), \(orientation)")
+        }
+        if info.fps > 0 {
+            parts.append("\(Int(info.fps.rounded())) fps")
+        }
+        return parts.joined(separator: ", ") + "."
+    }
+
     /// Разрешает ключ: если передан или настроен пользовательский — использует его, иначе системный дефолтный ключ Gemini
     private func resolveApiKey(provider: String, explicitKey: String) -> String {
         let clean = explicitKey.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -50,7 +50,10 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
     var isVideo: Bool = false
     var uploadProgress: Double = 0.0
     var errorMessage: String? = nil
-    
+
+    /// Демо-файл: ИИ-анализ и «отправка» для него имитируются локально, в сеть ничего не уходит
+    var isDemo: Bool = false
+
     // MARK: - Editorial Metadata (Microstock Standard)
     var isEditorial: Bool = false
     var editorialCity: String? = nil
@@ -59,7 +62,7 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
     
     enum CodingKeys: String, CodingKey {
         case id, filename, fileSize, title, keywords, description, categories, status, selectedStocks, localURLPath, localBookmarkData, thumbnailData, isVideo, uploadProgress, errorMessage
-        case isEditorial, editorialCity, editorialCountry, editorialDate
+        case isEditorial, editorialCity, editorialCountry, editorialDate, isDemo
     }
     
     init(
@@ -80,7 +83,8 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         isEditorial: Bool = false,
         editorialCity: String? = nil,
         editorialCountry: String? = nil,
-        editorialDate: Date? = nil
+        editorialDate: Date? = nil,
+        isDemo: Bool = false
     ) {
         self.id = id
         self.filename = filename
@@ -100,8 +104,9 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         self.editorialCity = editorialCity
         self.editorialCountry = editorialCountry
         self.editorialDate = editorialDate
+        self.isDemo = isDemo
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -123,6 +128,7 @@ struct PhotoMetadata: Identifiable, Sendable, Codable {
         editorialCity = try? container.decode(String.self, forKey: .editorialCity)
         editorialCountry = try? container.decode(String.self, forKey: .editorialCountry)
         editorialDate = try? container.decode(Date.self, forKey: .editorialDate)
+        isDemo = (try? container.decode(Bool.self, forKey: .isDemo)) ?? false
     }
 }
 

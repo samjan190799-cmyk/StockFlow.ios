@@ -28,6 +28,7 @@ struct GalleryView: View {
     @State private var showFileImporter = false
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var confirmDelete = false
+    @State private var showDuplicates = false
 
     private enum LayoutMode {
         case compact
@@ -87,6 +88,9 @@ struct GalleryView: View {
             }
             .sheet(isPresented: $showLogViewer) {
                 LogViewer()
+            }
+            .sheet(isPresented: $showDuplicates) {
+                DuplicatesView(viewModel: viewModel)
             }
             .sheet(isPresented: $showGooglePicker) {
                 GooglePhotosPickerView { items in
@@ -199,6 +203,11 @@ struct GalleryView: View {
             }
             .padding(.horizontal, 16)
 
+            if viewModel.photos.contains(where: { $0.isDemo }) {
+                demoBanner
+                    .padding(.horizontal, 16)
+            }
+
             GalleryPipelineBar(counts: counts)
                 .padding(.horizontal, 16)
 
@@ -208,6 +217,26 @@ struct GalleryView: View {
         }
         .padding(.top, 4)
         .padding(.bottom, 8)
+    }
+
+    // MARK: Демо-режим
+
+    private var demoBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "play.rectangle.fill")
+                .foregroundStyle(GalleryPalette.amber)
+            Text("Демо-режим: файлы никуда не отправляются.".localized)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Убрать демо".localized) {
+                viewModel.removeDemoFiles()
+            }
+            .font(.footnote.weight(.semibold))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.06)))
     }
 
     // MARK: Сетка
@@ -402,6 +431,21 @@ struct GalleryView: View {
                     .frame(minHeight: 48)
                     .background(Capsule().fill(GalleryPalette.primaryGradient))
             }
+
+            VStack(spacing: 6) {
+                Button {
+                    HapticHelper.trigger(.medium)
+                    viewModel.addDemoFiles()
+                } label: {
+                    SwiftUI.Label("Попробовать демо".localized, systemImage: "play.circle")
+                        .font(.subheadline.weight(.semibold))
+                }
+                Text("Примеры файлов без аккаунтов и ключей: ИИ-анализ и отправка имитируются.".localized)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, 4)
         }
         .padding(32)
         .frame(maxWidth: 420)
@@ -548,6 +592,26 @@ struct GalleryView: View {
                     preview: SharePreview("dreamstime_metadata.csv", image: Image(systemName: "tablecells"))
                 ) {
                     SwiftUI.Label("Dreamstime CSV", systemImage: "d.circle.fill")
+                }
+            }
+            if viewModel.photos.count > 1 {
+                Button {
+                    showDuplicates = true
+                } label: {
+                    SwiftUI.Label("Найти дубли".localized, systemImage: "square.on.square")
+                }
+            }
+            if viewModel.photos.contains(where: { $0.isDemo }) {
+                Button(role: .destructive) {
+                    viewModel.removeDemoFiles()
+                } label: {
+                    SwiftUI.Label("Убрать демо-файлы".localized, systemImage: "xmark.bin")
+                }
+            } else {
+                Button {
+                    viewModel.addDemoFiles()
+                } label: {
+                    SwiftUI.Label("Демо-режим: добавить примеры".localized, systemImage: "play.circle")
                 }
             }
             Button {
