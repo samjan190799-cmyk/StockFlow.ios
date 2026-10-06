@@ -219,6 +219,12 @@ class QueueViewModel: ObservableObject {
     }
     
     func addGoogleMediaItems(_ items: [GoogleMediaItem]) {
+        // Импорт из Google Фото входит в PRO (запасная проверка на случай любого другого входа в импорт)
+        guard StoreManager.shared.isProUser else {
+            triggerToast("Импорт из Google Фото доступен в PRO.".localized)
+            shouldShowPaywallFromLimit = true
+            return
+        }
         Task {
             let total = items.count
             var imported = 0

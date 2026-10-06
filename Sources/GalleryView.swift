@@ -650,9 +650,16 @@ struct GalleryView: View {
             }
             Button {
                 HapticHelper.trigger(.medium)
-                showGooglePicker = true
+                if storeManager.isProUser {
+                    showGooglePicker = true
+                } else {
+                    showPaywall = true
+                }
             } label: {
-                SwiftUI.Label("Google Фото".localized, systemImage: "photo.stack.fill")
+                SwiftUI.Label(
+                    storeManager.isProUser ? "Google Фото".localized : "Google Фото · PRO".localized,
+                    systemImage: storeManager.isProUser ? "photo.stack.fill" : "lock.fill"
+                )
             }
             Button {
                 HapticHelper.trigger(.medium)

@@ -236,7 +236,7 @@ struct SystemSettingsView: View {
                             .font(.headline)
                             .foregroundStyle(Color.white)
                             .multilineTextAlignment(.leading)
-                        Text("Безлимитный ИИ, 10+ стоков и автозагрузка".localized)
+                        Text("Без лимитов, все стоки и Google Фото".localized)
                             .font(.footnote)
                             .foregroundStyle(Color.white.opacity(0.85))
                             .multilineTextAlignment(.leading)
@@ -321,7 +321,11 @@ struct SystemSettingsView: View {
                                 .font(.subheadline.weight(.semibold))
                         }
 
-                        Text(googlePhotosManager.isAuthenticated ? googlePhotosManager.userEmail : "Импорт видео и фото из архива Google Фото".localized)
+                        Text(googlePhotosManager.isAuthenticated
+                             ? googlePhotosManager.userEmail
+                             : (storeManager.isProUser
+                                ? "Импорт видео и фото из архива Google Фото".localized
+                                : "Доступно в PRO: импорт видео и фото из архива Google Фото".localized))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -341,6 +345,11 @@ struct SystemSettingsView: View {
                     } else {
                         Button {
                             HapticHelper.trigger(.medium)
+                            // Импорт из Google Фото входит в PRO: без подписки вместо входа открываем экран подписки
+                            guard storeManager.isProUser else {
+                                showPaywall = true
+                                return
+                            }
                             Task {
                                 await googlePhotosManager.signInWithGoogle()
                                 if googlePhotosManager.isAuthenticated {

@@ -183,12 +183,12 @@ public struct PaywallView: View {
                     .stroke(LinearGradient(colors: [.yellow.opacity(0.6), AppPalette.accentLight.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
             )
             
-            Text("Максимум продаж на стоках".localized)
+            Text("Работайте без ограничений".localized)
                 .font(Font.system(.title2, design: .rounded).weight(.bold))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white)
             
-            Text("Автоматизируйте рутину и отправляйте сотни фото и видео на 10+ стоков в один клик.".localized)
+            Text("Без дневных лимитов отправляйте фото и видео на все стоки и импортируйте из Google Фото.".localized)
                 .font(.footnote)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.78))
@@ -202,36 +202,22 @@ public struct PaywallView: View {
             featureRow(
                 icon: "sparkles",
                 color: Color(hex: "A855F7"),
-                title: "Безлимитный ИИ-Ассистент".localized,
-                subtitle: "Генерация названий, описаний и SEO-тегов для сотен файлов без дневных лимитов".localized
+                title: "Без дневных лимитов".localized,
+                subtitle: "ИИ-анализ и отправка без ограничений. В бесплатной версии — 15 в день каждого.".localized
             )
-            
+
             featureRow(
                 icon: "paperplane.fill",
                 color: Color(hex: "3B82F6"),
-                title: "Выгрузка на все 10+ стоков сразу".localized,
-                subtitle: "Shutterstock, Adobe Stock, Getty, Freepik, Depositphotos, Dreamstime и др.".localized
+                title: "Все доступные стоки сразу".localized,
+                subtitle: "В бесплатной версии — 2 стока. Adobe Stock и Freepik работают через ПК-сервер.".localized
             )
-            
-            featureRow(
-                icon: "infinity",
-                color: Color(hex: "10B981"),
-                title: "Безлимитная очередь файлов".localized,
-                subtitle: "Пакетная обработка и загрузка сотен фото и 4K/8K видео без пауз и ограничений".localized
-            )
-            
+
             featureRow(
                 icon: "icloud.and.arrow.down.fill",
                 color: Color(hex: "F97316"),
                 title: "Google Фото и Google Диск".localized,
-                subtitle: "Неограниченный импорт исходных медиафайлов прямо из облака".localized
-            )
-            
-            featureRow(
-                icon: "tablecells.fill",
-                color: Color(hex: "06B6D4"),
-                title: "Экспорт CSV и метаданных".localized,
-                subtitle: "Мгновенное создание таблиц метаданных для любых агентств".localized
+                subtitle: "Импорт исходных файлов прямо из облака".localized
             )
         }
         .appCard(cornerRadius: 20, padding: 14)

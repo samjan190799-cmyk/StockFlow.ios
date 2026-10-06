@@ -696,7 +696,18 @@ struct Localizer {
         "Просмотр": "Preview",
         "Редактировать метаданные": "Edit metadata",
         "Открыть сайт": "Open website",
-        "Назад": "Back"
+        "Назад": "Back",
+        "Без дневных лимитов": "No daily limits",
+        "ИИ-анализ и отправка без ограничений. В бесплатной версии — 15 в день каждого.": "AI analysis and uploads without limits. The free version allows 15 of each per day.",
+        "Все доступные стоки сразу": "All supported agencies at once",
+        "В бесплатной версии — 2 стока. Adobe Stock и Freepik работают через ПК-сервер.": "The free version allows 2 agencies. Adobe Stock and Freepik work through the PC server.",
+        "Импорт исходных файлов прямо из облака": "Import original files straight from the cloud",
+        "Без дневных лимитов отправляйте фото и видео на все стоки и импортируйте из Google Фото.": "Upload photos and videos to every agency without daily limits and import from Google Photos.",
+        "Без лимитов, все стоки и Google Фото": "No limits, all agencies and Google Photos",
+        "Google Фото · PRO": "Google Photos · PRO",
+        "Доступно в PRO: импорт видео и фото из архива Google Фото": "PRO feature: import photos and videos from your Google Photos archive",
+        "Импорт из Google Фото доступен в PRO.": "Google Photos import is a PRO feature.",
+        "Работайте без ограничений": "Work without limits"
     ]
     
     private static let hyTranslations: [String: String] = [
