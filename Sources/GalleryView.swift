@@ -81,7 +81,11 @@ struct GalleryView: View {
             .toolbar { toolbarContent }
             #if DEBUG
             .task {
-                await ScreenshotScenario.run(viewModel: viewModel) { detailPhoto = $0 }
+                await ScreenshotScenario.run(
+                    viewModel: viewModel,
+                    focus: { focusedId = $0.id },
+                    openDetail: { detailPhoto = $0 }
+                )
             }
             #endif
             .searchable(text: $searchText, prompt: Text("Поиск по названию и ключам".localized))

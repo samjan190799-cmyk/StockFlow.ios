@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 #if DEBUG
 /// Сценарии для съёмки скриншотов App Store в симуляторе (только отладочная сборка, в релиз не попадает).
@@ -12,8 +13,13 @@ enum ScreenshotScenario {
 
     static var isActive: Bool { name != nil }
 
-    /// Запускает сценарий. `openDetail` открывает карточку файла поверх очереди.
-    static func run(viewModel: QueueViewModel, openDetail: @escaping (PhotoMetadata) -> Void) async {
+    /// Запускает сценарий. `openDetail` открывает карточку файла поверх очереди (iPhone),
+    /// `focus` выбирает файл в правой панели (iPad).
+    static func run(
+        viewModel: QueueViewModel,
+        focus: @escaping (PhotoMetadata) -> Void,
+        openDetail: @escaping (PhotoMetadata) -> Void
+    ) async {
         guard let scene = name else { return }
         let marker = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ss_done")
@@ -43,7 +49,11 @@ enum ScreenshotScenario {
                 viewModel.uploadAllReady()
                 await wait(until: { viewModel.photos.allSatisfy { $0.status == .success } }, timeout: 60)
             }
-            if scene == "detail", let first = viewModel.photos.first {
+            let isPad = UIDevice.current.userInterfaceIdiom == .pad
+            if scene != "queue-new", isPad {
+                let index = scene == "detail" ? 1 : 0
+                if viewModel.photos.indices.contains(index) { focus(viewModel.photos[index]) }
+            } else if scene == "detail", let first = viewModel.photos.first {
                 openDetail(first)
             }
         }

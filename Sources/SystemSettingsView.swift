@@ -112,7 +112,7 @@ struct SystemSettingsView: View {
             primarySections
             secondarySections
             #if DEBUG
-            if showTesterPanel {
+            if showTesterPanel && !ScreenshotScenario.isActive {
                 testerDebugSection
             }
             #endif
