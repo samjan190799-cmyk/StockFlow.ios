@@ -46,6 +46,14 @@
 - Навигация между вкладками — через `AppRouter.shared.selectedTab`
 - На iOS 26+ панель вкладок остаётся системной (Liquid Glass), кастомный `UITabBarAppearance` только для iOS 16–25
 
+## 📢 РЕКЛАМА (Яндекс Mobile Ads SDK 8.x)
+
+- Показывается только без PRO: баннер под лентой очереди (`AdBannerView`) и ролик за бонусные действия (`AdManager.showRewardedAd`, +5, до 5 в день)
+- SDK запускается лениво (`AdManager.startIfNeeded`), подписчикам он не нужен
+- Идентификаторы блоков и выключатель `AdsEnabled` лежат в `project.yml` (свойства Info.plist). По умолчанию там **тестовые** блоки Яндекса: перед выпуском подставить свои из partner.yandex.ru
+- Запроса ATT нет, отслеживания нет (`NSPrivacyTracking = false`), реклама неперсонализированная. Данные, которые собирает SDK (в нём же AppMetrica), перечислены в `PrivacyInfo.xcprivacy`, в App Privacy в App Store Connect они должны совпадать
+- В `build.yml` нельзя задавать `SKIP_INSTALL` и `INSTALL_PATH` в командной строке архива: они применятся к пакетам и сломают экспорт
+
 **Совместимость:**
 ```swift
 // ОБЯЗАТЕЛЬНО оборачивать iOS 17+ API:
