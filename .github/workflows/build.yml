@@ -130,6 +130,8 @@ jobs:
           set -o pipefail
           echo "=== Starting xcodebuild archive ==="
 
+          # SKIP_INSTALL и INSTALL_PATH заданы в project.yml только для приложения. В командной строке их задавать нельзя:
+          # они применились бы и к пакетам (Яндекс Реклама), и в архив попали бы лишние продукты.
           xcodebuild archive \
             -project SmartStock.xcodeproj \
             -scheme SmartStock \
@@ -140,8 +142,6 @@ jobs:
             CODE_SIGNING_REQUIRED="NO" \
             DEVELOPMENT_TEAM="V7J345DY58" \
             SWIFT_OPTIMIZATION_LEVEL="-O" \
-            SKIP_INSTALL="NO" \
-            INSTALL_PATH="/Applications" \
             2>&1 | tee build_archive.log
 
           if [ ! -d "$RUNNER_TEMP/SmartStock.xcarchive" ]; then
