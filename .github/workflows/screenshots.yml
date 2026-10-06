@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   screenshots:
-    name: Скриншоты (iPhone 6.9", iPad 13")
+    name: 'Скриншоты (iPhone 6.9 и iPad 13)'
     runs-on: macos-15
     timeout-minutes: 60
 
@@ -52,7 +52,8 @@ jobs:
 
       - name: Показать ошибки компиляции
         if: failure()
-        run: grep -E " error: " build.log | sort -u | head -40 || true
+        run: |
+          grep -E " error: " build.log | sort -u | head -40 || true
 
       - name: Снять скриншоты
         run: |
