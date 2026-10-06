@@ -80,36 +80,82 @@ func stats(_ values: [Float]) -> String {
     return String(format: "min %.2f · медиана %.2f · max %.2f (n=%d)", sorted.first!, sorted[sorted.count / 2], sorted.last!, sorted.count)
 }
 
-let fm = FileManager.default
-var files: [URL] = []
-for dir in ["/System/Library/Desktop Pictures", "/Library/Desktop Pictures"] {
-    if let items = try? fm.contentsOfDirectory(at: URL(fileURLWithPath: dir), includingPropertiesForKeys: nil) {
-        files += items.filter { ["heic", "jpg", "jpeg", "png"].contains($0.pathExtension.lowercased()) }
+// Процедурные «природные» сцены: сумма октав value-noise (спектр близок к фотографиям), три канала с разным сдвигом
+struct Grid {
+    let size: Int
+    var values: [Float]
+    init(size: Int, seed: UInt32) {
+        self.size = size
+        var state = seed &* 2654435761 &+ 12345
+        values = (0..<(size * size)).map { _ in
+            state = state &* 1664525 &+ 1013904223
+            return Float((state >> 8) & 0xFFFF) / 65535.0
+        }
+    }
+    func sample(_ x: Float, _ y: Float) -> Float {
+        let fx = x * Float(size - 1), fy = y * Float(size - 1)
+        let x0 = Int(fx), y0 = Int(fy)
+        let x1 = min(x0 + 1, size - 1), y1 = min(y0 + 1, size - 1)
+        let tx = fx - Float(x0), ty = fy - Float(y0)
+        let a = values[y0 * size + x0], b = values[y0 * size + x1]
+        let c = values[y1 * size + x0], d = values[y1 * size + x1]
+        return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty
     }
 }
-files.sort { $0.path < $1.path }
-print("Найдено изображений: \(files.count)")
-if files.isEmpty {
-    print("Нет системных обоев на раннере, проба невозможна")
-    exit(0)
+
+func fractalScene(seed: UInt32, width: Int = 1200, height: Int = 800) -> CGImage? {
+    let octaves = [4, 8, 16, 32, 64, 128].map { Grid(size: $0 + 1, seed: seed &* 31 &+ UInt32($0)) }
+    let weights: [Float] = [0.35, 0.25, 0.17, 0.12, 0.07, 0.04]
+    var pixels = [UInt8](repeating: 255, count: width * height * 4)
+    for y in 0..<height {
+        for x in 0..<width {
+            let u = Float(x) / Float(width - 1), v = Float(y) / Float(height - 1)
+            var channels: [Float] = [0, 0, 0]
+            for c in 0..<3 {
+                var value: Float = 0
+                for (index, grid) in octaves.enumerated() {
+                    value += weights[index] * grid.sample(min(max(u + Float(c) * 0.013, 0), 1), min(max(v, 0), 1))
+                }
+                channels[c] = value
+            }
+            let base = (y * width + x) * 4
+            for c in 0..<3 { pixels[base + c] = UInt8(max(0, min(255, channels[c] * 255 * 1.1))) }
+        }
+    }
+    let provider = CGDataProvider(data: Data(pixels) as CFData)!
+    return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
+                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                   provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
 }
 
-// Не более 14 файлов, равномерно по списку
-let step = max(1, files.count / 14)
-let chosen = stride(from: 0, to: files.count, by: step).map { files[$0] }.prefix(14)
+func noisy(_ image: CGImage, amplitude: Int) -> CGImage? {
+    let w = image.width, h = image.height
+    guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+    guard let data = ctx.data else { return nil }
+    let buffer = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
+    var state: UInt32 = 99
+    for i in 0..<(w * h) {
+        for c in 0..<3 {
+            state = state &* 1664525 &+ 1013904223
+            let delta = Int((state >> 8) % UInt32(amplitude * 2 + 1)) - amplitude
+            buffer[i * 4 + c] = UInt8(max(0, min(255, Int(buffer[i * 4 + c]) + delta)))
+        }
+    }
+    return ctx.makeImage()
+}
 
+print("Генерация процедурных сцен...")
 struct Entry {
     let name: String
     let source: CGImage
     let base: VNFeaturePrintObservation
 }
 var entries: [Entry] = []
-for url in chosen {
-    guard let source = loadSource(url, maxPixel: 1200), let thumb = appThumb(source), let fp = featurePrint(thumb) else {
-        print("  пропуск: \(url.lastPathComponent)")
-        continue
-    }
-    entries.append(Entry(name: url.deletingPathExtension().lastPathComponent, source: source, base: fp))
+for seed in 1...8 {
+    guard let source = fractalScene(seed: UInt32(seed)), let thumb = appThumb(source), let fp = featurePrint(thumb) else { continue }
+    entries.append(Entry(name: "scene\(seed)", source: source, base: fp))
 }
 print("Обработано: \(entries.count)")
 
@@ -122,6 +168,9 @@ let variants: [(String, (CGImage) -> CGImage?)] = [
     ("кроп 80%", { cropped($0, fraction: 0.80).flatMap { appThumb($0) } }),
     ("яркость +6%", { brighter($0, amount: 0.06).flatMap { appThumb($0) } }),
     ("яркость +12%", { brighter($0, amount: 0.12).flatMap { appThumb($0) } }),
+    ("шум сенсора ±6", { noisy($0, amplitude: 6).flatMap { appThumb($0) } }),
+    ("шум сенсора ±12", { noisy($0, amplitude: 12).flatMap { appThumb($0) } }),
+    ("соседний кадр: сдвиг 10% + зум 8%", { cropped($0, fraction: 0.92, offsetX: 0.10).flatMap { appThumb($0) } }),
 ]
 
 print("\nОдин и тот же снимок, обработанный по-разному (расстояние до исходной миниатюры):")
