@@ -707,7 +707,15 @@ struct Localizer {
         "Google Фото · PRO": "Google Photos · PRO",
         "Доступно в PRO: импорт видео и фото из архива Google Фото": "PRO feature: import photos and videos from your Google Photos archive",
         "Импорт из Google Фото доступен в PRO.": "Google Photos import is a PRO feature.",
-        "Работайте без ограничений": "Work without limits"
+        "Работайте без ограничений": "Work without limits",
+        "Смотреть рекламу": "Watch an ad",
+        "Загружаю рекламу…": "Loading the ad…",
+        "бонусных действий": "bonus actions",
+        "Реклама не загрузилась. Попробуйте позже.": "The ad failed to load. Try again later.",
+        "Видео не досмотрено — бонус не начислен.": "The video wasn't finished, so no bonus was added.",
+        "Лимит рекламных бонусов на сегодня исчерпан.": "Today's limit of ad bonuses is used up.",
+        "Без рекламы": "No ads",
+        "Баннеры и рекламные ролики не показываются": "No banners or ad videos"
     ]
     
     private static let hyTranslations: [String: String] = [

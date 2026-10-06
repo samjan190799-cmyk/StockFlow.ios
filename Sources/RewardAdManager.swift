@@ -15,6 +15,8 @@ public final class RewardAdManager: ObservableObject {
     private let dailyUploadsUsedKey = "daily_free_uploads_used_v3"
     private let dailyAIUsedKey = "daily_free_ai_used_v3"
     private let dailyDayKey = "daily_free_limits_day_v3"
+    private let rewardedAdsDayKey = "rewarded_ads_day_v1"
+    private let rewardedAdsCountKey = "rewarded_ads_count_v1"
     
     @Published public private(set) var bonusCredits: Int = 0
     @Published public private(set) var dailyUploadsUsed: Int = 0
@@ -48,6 +50,29 @@ public final class RewardAdManager: ObservableObject {
         }
     }
     
+    // MARK: - Бонусы за просмотр рекламы
+
+    /// Сколько роликов за бонус ещё можно посмотреть сегодня
+    public var rewardedAdsLeftToday: Int {
+        let today = currentDayOrdinal
+        if UserDefaults.standard.integer(forKey: rewardedAdsDayKey) != today {
+            UserDefaults.standard.set(today, forKey: rewardedAdsDayKey)
+            UserDefaults.standard.set(0, forKey: rewardedAdsCountKey)
+        }
+        let watched = UserDefaults.standard.integer(forKey: rewardedAdsCountKey)
+        return max(0, AdConfig.maxRewardedPerDay - watched)
+    }
+
+    /// Начисляет бонусные действия за досмотренный рекламный ролик
+    public func grantBonus(_ credits: Int) {
+        guard credits > 0 else { return }
+        bonusCredits += credits
+        UserDefaults.standard.set(bonusCredits, forKey: bonusCreditsKey)
+        _ = rewardedAdsLeftToday
+        let watched = UserDefaults.standard.integer(forKey: rewardedAdsCountKey)
+        UserDefaults.standard.set(watched + 1, forKey: rewardedAdsCountKey)
+    }
+
     // MARK: - Остаток доступных действий сегодня
     
     /// Остаток доступных отправок на стоки (15 базовых + бонусы)

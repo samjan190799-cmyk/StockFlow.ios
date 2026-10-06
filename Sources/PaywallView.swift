@@ -219,6 +219,13 @@ public struct PaywallView: View {
                 title: "Google Фото и Google Диск".localized,
                 subtitle: "Импорт исходных файлов прямо из облака".localized
             )
+
+            featureRow(
+                icon: "eye.slash.fill",
+                color: Color(hex: "64748B"),
+                title: "Без рекламы".localized,
+                subtitle: "Баннеры и рекламные ролики не показываются".localized
+            )
         }
         .appCard(cornerRadius: 20, padding: 14)
     }

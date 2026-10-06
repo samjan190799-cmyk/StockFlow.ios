@@ -135,6 +135,11 @@ struct GalleryView: View {
                 Button("👑 SmartStock PRO".localized) {
                     showPaywall = true
                 }
+                if AdManager.shared.canOfferRewarded {
+                    Button("\("Смотреть рекламу".localized) (+\(AdConfig.rewardCredits))") {
+                        watchRewardedAd()
+                    }
+                }
                 Button("Закрыть".localized, role: .cancel) {}
             } message: {
                 Text("В бесплатной версии доступно 15 ИИ-анализов и 15 отправок на стоки в день. Вы можете перейти на безлимитный PRO.".localized)
@@ -179,7 +184,10 @@ struct GalleryView: View {
             photoGrid(mode: mode)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            actionBar
+            VStack(spacing: 0) {
+                AdBannerView()
+                actionBar
+            }
         }
     }
 
@@ -217,6 +225,22 @@ struct GalleryView: View {
         }
         .padding(.top, 4)
         .padding(.bottom, 8)
+    }
+
+    // MARK: Реклама за бонусные действия
+
+    private func watchRewardedAd() {
+        viewModel.triggerToast("Загружаю рекламу…".localized)
+        AdManager.shared.showRewardedAd(
+            onReward: {
+                RewardAdManager.shared.grantBonus(AdConfig.rewardCredits)
+                viewModel.triggerToast("+\(AdConfig.rewardCredits) " + "бонусных действий".localized)
+                HapticHelper.notification(.success)
+            },
+            onFailure: { message in
+                viewModel.triggerToast(message)
+            }
+        )
     }
 
     // MARK: Демо-режим
