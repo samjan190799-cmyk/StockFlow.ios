@@ -18,7 +18,20 @@ struct SmartStockApp: App {
         }
     }
     
+    /// Язык интерфейса при первом запуске: по языку устройства (русский, армянский, иначе английский).
+    /// Уже выбранный пользователем язык не меняется.
+    private static func deviceDefaultLanguage() -> String {
+        let code = Locale.preferredLanguages.first?.lowercased() ?? "en"
+        if code.hasPrefix("ru") { return "Русский" }
+        if code.hasPrefix("hy") { return "Հայերեն" }
+        return "English"
+    }
+
     init() {
+        if UserDefaults.standard.object(forKey: "sys_language") == nil {
+            UserDefaults.standard.set(Self.deviceDefaultLanguage(), forKey: "sys_language")
+        }
+
         // Регистрация базовых дефолтных настроек системы
         UserDefaults.standard.register(defaults: [
             "sys_language": "Русский",

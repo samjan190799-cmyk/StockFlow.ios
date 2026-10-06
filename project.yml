@@ -33,7 +33,7 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSPhotoLibraryUsageDescription: "Приложению нужен доступ к вашей галерее для выбора фотографий на отправку."
+        NSPhotoLibraryUsageDescription: "SmartStock needs access to your photo library so you can pick photos and videos to prepare and upload. / Приложению нужен доступ к вашей галерее для выбора фотографий на отправку."
         # Реклама (Яндекс). Идентификаторы блоков по умолчанию тестовые: замените на свои из кабинета partner.yandex.ru.
         AdsEnabled: true
         YandexBannerUnitID: "demo-banner-yandex"
