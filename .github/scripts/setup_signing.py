@@ -24,7 +24,7 @@ key_path = os.environ.get("AUTH_KEY_PATH", "").strip()
 keychain_path = os.environ.get("KEYCHAIN_PATH", "").strip()
 keychain_password = os.environ.get("KEYCHAIN_PASSWORD", "")
 p12_b64 = "".join(os.environ.get("DIST_CERT_P12_BASE64", "").split())
-p12_password = os.environ.get("DIST_CERT_P12_PASSWORD", "")
+p12_password = os.environ.get("DIST_CERT_P12_PASSWORD", "").strip()
 runner_tmp = Path(os.environ.get("RUNNER_TEMP", "/tmp"))
 github_env = os.environ.get("GITHUB_ENV", "/tmp/env")
 
