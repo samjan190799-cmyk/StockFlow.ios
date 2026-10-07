@@ -101,3 +101,31 @@ for g in (groups or {}).get("data", []):
         state = state.get("state") if isinstance(state, dict) else state
         shot_text = f"{sa.get('fileName')} · {sa.get('fileSize')} байт · {state}" if sa else "нет"
         print(f"    • {a.get('productId')} · {a.get('name')} · состояние {a.get('state')} · скриншот для проверки: {shot_text}")
+        loc = get(f"/subscriptions/{s['id']}/subscriptionLocalizations?limit=10")
+        for l in (loc or {}).get("data", []):
+            la = l.get("attributes", {})
+            print(f"        локализация {la.get('locale')} · {la.get('state')} · «{la.get('name')}» · «{la.get('description')}»")
+        av = get(f"/subscriptions/{s['id']}/subscriptionAvailability?include=availableTerritories&limit[availableTerritories]=200")
+        if av and av.get("data"):
+            terr = [i for i in av.get("included", []) if i.get("type") == "territories"]
+            print(f"        доступность: новых территорий автоматически {av['data'].get('attributes', {}).get('availableInNewTerritories')}, территорий {len(terr)}")
+        else:
+            print("        доступность: НЕ НАСТРОЕНА (subscriptionAvailability пуст)")
+        pr = get(f"/subscriptions/{s['id']}/prices?limit=200&include=subscriptionPricePoint&fields[subscriptionPrices]=startDate,preserved")
+        print(f"        цен выставлено: {len((pr or {}).get('data', []))}")
+        for it in (pr or {}).get("included", [])[:3]:
+            print("        пример цены:", it.get("attributes", {}).get("customerPrice"), it.get("attributes", {}).get("proceeds"))
+        offers = get(f"/subscriptions/{s['id']}/introductoryOffers?limit=5")
+        print(f"        вводных предложений: {len((offers or {}).get('data', []))}")
+
+for sub in (subs or {}).get("data", []):
+    if (sub.get("attributes", {}) or {}).get("state") == "READY_FOR_REVIEW":
+        its = get(f"/reviewSubmissions/{sub['id']}/items?limit=20")
+        print()
+        print(f"Элементы черновика {sub['id']}: {json.dumps((its or {}).get('data', []), ensure_ascii=False)[:1200]}")
+
+vs = (versions or {}).get("data", [])
+if vs:
+    vb = get(f"/appStoreVersions/{vs[0]['id']}/build?fields[builds]=version,processingState")
+    print()
+    print("Сборка версии 1.0:", json.dumps((vb or {}).get("data"), ensure_ascii=False))
