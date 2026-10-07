@@ -11,6 +11,7 @@ on:
     paths:
       - ".github/workflows/asc-status.yml"
       - ".github/scripts/asc_build_status.py"
+      - ".github/scripts/asc_submission_status.py"
 
 permissions:
   contents: read
@@ -52,3 +53,6 @@ jobs:
 
       - name: Query build status
         run: python3 .github/scripts/asc_build_status.py
+
+      - name: Query submission status
+        run: python3 .github/scripts/asc_submission_status.py
