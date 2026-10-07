@@ -120,9 +120,15 @@ for g in (groups or {}).get("data", []):
 
 for sub in (subs or {}).get("data", []):
     if (sub.get("attributes", {}) or {}).get("state") == "READY_FOR_REVIEW":
-        its = get(f"/reviewSubmissions/{sub['id']}/items?limit=20")
+        its = get(f"/reviewSubmissions/{sub['id']}/items?limit=20&include=appStoreVersion&fields[reviewSubmissionItems]=state,appStoreVersion")
         print()
-        print(f"Элементы черновика {sub['id']}: {json.dumps((its or {}).get('data', []), ensure_ascii=False)[:1200]}")
+        print(f"Элементы черновика {sub['id']}:")
+        for it in (its or {}).get("data", []):
+            rel = (it.get("relationships", {}) or {})
+            print("  •", it.get("attributes", {}).get("state"), json.dumps({k: v for k, v in rel.items()}, ensure_ascii=False)[:400])
+        print("  included:", json.dumps((its or {}).get("included", []), ensure_ascii=False)[:600])
+        full = get(f"/reviewSubmissions/{sub['id']}")
+        print("  сама заявка:", json.dumps((full or {}).get("data", {}).get("attributes"), ensure_ascii=False), json.dumps({k: (v.get('data') if isinstance(v, dict) else v) for k, v in ((full or {}).get('data', {}).get('relationships') or {}).items()}, ensure_ascii=False)[:500])
 
 vs = (versions or {}).get("data", [])
 if vs:
