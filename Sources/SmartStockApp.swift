@@ -16,10 +16,21 @@ struct SmartStockApp: App {
         }
     }
     
+    private static var detectedDefaultLanguage: String {
+        let preferred = Locale.preferredLanguages.first?.lowercased() ?? ""
+        if preferred.hasPrefix("ru") {
+            return "Русский"
+        } else if preferred.hasPrefix("hy") {
+            return "Հայերեն"
+        } else {
+            return "English"
+        }
+    }
+    
     init() {
         // Регистрация базовых дефолтных настроек системы
         UserDefaults.standard.register(defaults: [
-            "sys_language": "Русский",
+            "sys_language": SmartStockApp.detectedDefaultLanguage,
             "sys_theme": "Темная",
             "sys_bg_scheduler": false,
             "sys_scheduler_interval_hours": 1,

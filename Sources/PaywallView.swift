@@ -123,17 +123,22 @@ public struct PaywallView: View {
             Button(action: {
                 restorePurchases()
             }) {
-                Text("Восстановить".localized)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Восстановить покупки".localized)
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(.white.opacity(0.95))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
+            .accessibilityLabel("Восстановить покупки".localized)
             .buttonStyle(PremiumButtonStyle())
         }
         .padding(.horizontal, 18)
@@ -509,13 +514,21 @@ public struct PaywallView: View {
             Button(action: {
                 restorePurchases()
             }) {
-                Text("Восстановить покупки".localized)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .underline()
-                    .frame(minHeight: 32)
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("Восстановить покупки".localized)
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(.white.opacity(0.85))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.08))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                .frame(minHeight: 44)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PremiumButtonStyle())
         }
         .padding(.top, 4)
     }
@@ -587,6 +600,8 @@ public struct PaywallView: View {
             isRestoring = false
             if hasRestored {
                 alertMessage = "Ваши покупки успешно восстановлены! Доступ к SmartStock PRO открыт.".localized
+            } else if let error = storeManager.errorMessage, !error.isEmpty {
+                alertMessage = error
             } else {
                 alertMessage = "Активных подписок не найдено. Если вы совершали покупку, убедитесь, что вошли под нужным Apple ID.".localized
             }

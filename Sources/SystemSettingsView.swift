@@ -45,6 +45,9 @@ struct SystemSettingsView: View {
     @State private var showingSavedToast = false
     @State private var savedToastMessage = ""
     @State private var showGoogleHelpSheet = false
+    @State private var isRestoringPurchases = false
+    @State private var showRestoreAlert = false
+    @State private var restoreAlertMessage = ""
     
     // Секретный жест для тестировщиков (5 быстрых тапов по версии)
     @State private var versionTapCount: Int = 0
@@ -97,6 +100,11 @@ struct SystemSettingsView: View {
                 }
                 .sheet(isPresented: $showPaywall) {
                     PaywallView()
+                }
+                .alert("SmartStock PRO", isPresented: $showRestoreAlert) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(restoreAlertMessage)
                 }
         }
     }
@@ -220,6 +228,35 @@ struct SystemSettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+            
+            Divider().background(Color.primary.opacity(0.08))
+            
+            // Кнопка "Восстановить покупки" (Apple Guideline 3.1.1 — обязательна)
+            Button(action: {
+                HapticHelper.trigger(.medium)
+                restoreFromSettings()
+            }) {
+                HStack(spacing: 8) {
+                    if isRestoringPurchases {
+                        ProgressView()
+                            .tint(Color(hex: "007AFF"))
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color(hex: "007AFF"))
+                    }
+                    Text("Восстановить покупки".localized)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color(hex: "007AFF"))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Color(hex: "007AFF").opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(isRestoringPurchases)
         }
         .glassCard()
     }
@@ -1004,6 +1041,24 @@ struct SystemSettingsView: View {
                     self.showingSavedToast = false
                 }
             }
+        }
+    }
+    
+    // MARK: - Восстановление покупок из Настроек (Apple Guideline 3.1.1)
+    
+    private func restoreFromSettings() {
+        isRestoringPurchases = true
+        Task {
+            let hasRestored = await storeManager.restorePurchases()
+            isRestoringPurchases = false
+            if hasRestored {
+                restoreAlertMessage = "Ваши покупки успешно восстановлены! Доступ к SmartStock PRO открыт.".localized
+            } else if let error = storeManager.errorMessage, !error.isEmpty {
+                restoreAlertMessage = error
+            } else {
+                restoreAlertMessage = "Активных подписок не найдено. Если вы совершали покупку, убедитесь, что вошли под нужным Apple ID.".localized
+            }
+            showRestoreAlert = true
         }
     }
 }
