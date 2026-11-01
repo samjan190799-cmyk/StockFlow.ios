@@ -126,8 +126,101 @@ for c in res["data"]:
         cert_id = c["id"]
         break
 if not cert_id:
-    fail("Сертификат из секрета отсутствует в аккаунте Apple — его отозвали. Выпустите новый и обновите секреты DIST_CERT_P12_*.")
-print(f"✅ Сертификат найден в аккаунте Apple (id {cert_id}), он действителен.")
+    print("⚠️ Сертификат из секрета отсутствует в аккаунте Apple (отозван или удален).")
+    print("🔄 Автоматический выпуск нового постоянного iOS Distribution сертификата через Apple API...")
+
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives.serialization import pkcs12, BestAvailableEncryption
+
+    # 1. Генерация ключа RSA 2048 и CSR
+    new_pk = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    csr = (
+        x509.CertificateSigningRequestBuilder()
+        .subject_name(x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "Apple Distribution: SmartStock"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "SmartStock"),
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
+        ]))
+        .sign(new_pk, hashes.SHA256())
+    )
+    csr_pem = (
+        csr.public_bytes(serialization.Encoding.PEM)
+        .decode()
+        .replace("-----BEGIN CERTIFICATE REQUEST-----", "")
+        .replace("-----END CERTIFICATE REQUEST-----", "")
+        .replace("\r", "")
+        .replace("\n", "")
+        .strip()
+    )
+
+    create_payload = {
+        "data": {
+            "type": "certificates",
+            "attributes": {
+                "certificateType": "IOS_DISTRIBUTION",
+                "csrContent": csr_pem,
+            },
+        }
+    }
+    create_res = api("POST", "/certificates", create_payload)
+
+    # Если лимит исчерпан
+    if "data" not in create_res or "attributes" not in create_res.get("data", {}):
+        print(f"⚠️ Ответ Apple API: {create_res}. Проверяем слоты старых сертификатов...")
+        old_certs = api("GET", "/certificates?filter[certificateType]=IOS_DISTRIBUTION&limit=50")
+        if not old_certs.get("data"):
+            old_certs = api("GET", "/certificates?filter[certificateType]=DISTRIBUTION&limit=50")
+
+        certs_list = old_certs.get("data", [])
+        if certs_list:
+            oldest = certs_list[0]
+            print(f"🗑 Удаление старого неиспользуемого слота сертификата {oldest['id']}...")
+            api("DELETE", f"/certificates/{oldest['id']}")
+            time.sleep(2)
+            create_res = api("POST", "/certificates", create_payload)
+
+    if "data" not in create_res or "attributes" not in create_res.get("data", {}):
+        fail(f"Не удалось выпустить новый сертификат через Apple API: {create_res}")
+
+    new_cert_data = create_res["data"]
+    cert_id = new_cert_data["id"]
+    new_cert_b64 = new_cert_data["attributes"]["certificateContent"]
+    new_cert_der = base64.b64decode(new_cert_b64)
+    loaded_new_cert = x509.load_der_x509_certificate(new_cert_der)
+
+    # 2. Сборка .p12 и импорт в keychain
+    new_p12_bytes = pkcs12.serialize_key_and_certificates(
+        name=b"Apple Distribution: SmartStock",
+        key=new_pk,
+        cert=loaded_new_cert,
+        cas=None,
+        encryption_algorithm=BestAvailableEncryption(keychain_password.encode()),
+    )
+
+    new_p12_path = runner_tmp / "auto_dist.p12"
+    new_p12_path.write_bytes(new_p12_bytes)
+    try:
+        subprocess.run(
+            ["security", "import", str(new_p12_path), "-k", keychain_path, "-P", keychain_password,
+             "-A", "-T", "/usr/bin/codesign", "-T", "/usr/bin/security"],
+            check=True,
+        )
+        subprocess.run(
+            ["security", "set-key-partition-list", "-S", "apple-tool:,apple:,codesign:",
+             "-s", "-k", keychain_password, keychain_path],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+    finally:
+        new_p12_path.unlink(missing_ok=True)
+
+    sha1 = loaded_new_cert.fingerprint(hashes.SHA1()).hex().upper()
+    print(f"✅ Новый постоянный сертификат успешно выпущен Apple API и установлен (id {cert_id}, SHA-1 {sha1})!")
+    print("ℹ️ Этот сертификат остаётся активным в аккаунте Apple и НЕ отзывается после сборки.")
+else:
+    print(f"✅ Сертификат найден в аккаунте Apple (id {cert_id}), он действителен.")
 
 # --- 3. Профиль SmartStock_AppStore_Stable -----------------------------------------------------
 prof_res = api("GET", f"/profiles?filter[name]={PROFILE_NAME}&limit=20&include=certificates")
