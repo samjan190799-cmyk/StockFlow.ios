@@ -132,7 +132,6 @@ if not cert_id:
     from cryptography import x509
     from cryptography.x509.oid import NameOID
     from cryptography.hazmat.primitives.asymmetric import rsa
-    from cryptography.hazmat.primitives.serialization import pkcs12, BestAvailableEncryption
 
     # 1. Генерация ключа RSA 2048 и CSR
     new_pk = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -166,20 +165,20 @@ if not cert_id:
     }
     create_res = api("POST", "/certificates", create_payload)
 
-    # Если лимит исчерпан
+    # Если лимит слотов исчерпан
     if "data" not in create_res or "attributes" not in create_res.get("data", {}):
-        print(f"⚠️ Ответ Apple API: {create_res}. Проверяем слоты старых сертификатов...")
+        print(f"⚠️ Ответ Apple API: {create_res}. Освобождаем слоты старых сертификатов...")
         old_certs = api("GET", "/certificates?filter[certificateType]=IOS_DISTRIBUTION&limit=50")
         if not old_certs.get("data"):
             old_certs = api("GET", "/certificates?filter[certificateType]=DISTRIBUTION&limit=50")
 
-        certs_list = old_certs.get("data", [])
-        if certs_list:
-            oldest = certs_list[0]
-            print(f"🗑 Удаление старого неиспользуемого слота сертификата {oldest['id']}...")
-            api("DELETE", f"/certificates/{oldest['id']}")
-            time.sleep(2)
+        for old in old_certs.get("data", []):
+            print(f"🗑 Освобождение слота сертификата {old['id']}...")
+            api("DELETE", f"/certificates/{old['id']}")
+            time.sleep(1)
             create_res = api("POST", "/certificates", create_payload)
+            if "data" in create_res and "attributes" in create_res.get("data", {}):
+                break
 
     if "data" not in create_res or "attributes" not in create_res.get("data", {}):
         fail(f"Не удалось выпустить новый сертификат через Apple API: {create_res}")
@@ -190,17 +189,39 @@ if not cert_id:
     new_cert_der = base64.b64decode(new_cert_b64)
     loaded_new_cert = x509.load_der_x509_certificate(new_cert_der)
 
-    # 2. Сборка .p12 и импорт в keychain
-    new_p12_bytes = pkcs12.serialize_key_and_certificates(
-        name=b"Apple Distribution: SmartStock",
-        key=new_pk,
-        cert=loaded_new_cert,
-        cas=None,
-        encryption_algorithm=BestAvailableEncryption(keychain_password.encode()),
+    # 2. Сохраняем приватный ключ (PEM) и сертификат (PEM) для создания совместимого .p12
+    key_pem = new_pk.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
     )
+    key_pem_path = runner_tmp / "auto_dist.key"
+    key_pem_path.write_bytes(key_pem)
+
+    cert_pem = loaded_new_cert.public_bytes(serialization.Encoding.PEM)
+    cert_pem_path = runner_tmp / "auto_dist.crt"
+    cert_pem_path.write_bytes(cert_pem)
 
     new_p12_path = runner_tmp / "auto_dist.p12"
-    new_p12_path.write_bytes(new_p12_bytes)
+
+    # Создаём .p12 через openssl с флагом -legacy (требуется macOS security import)
+    p12_cmd = [
+        "openssl", "pkcs12", "-export",
+        "-inkey", str(key_pem_path),
+        "-in", str(cert_pem_path),
+        "-out", str(new_p12_path),
+        "-password", f"pass:{keychain_password}",
+        "-legacy",
+    ]
+    if subprocess.run(p12_cmd).returncode != 0:
+        subprocess.run([
+            "openssl", "pkcs12", "-export",
+            "-inkey", str(key_pem_path),
+            "-in", str(cert_pem_path),
+            "-out", str(new_p12_path),
+            "-password", f"pass:{keychain_password}",
+        ], check=True)
+
     try:
         subprocess.run(
             ["security", "import", str(new_p12_path), "-k", keychain_path, "-P", keychain_password,
@@ -215,6 +236,8 @@ if not cert_id:
         )
     finally:
         new_p12_path.unlink(missing_ok=True)
+        key_pem_path.unlink(missing_ok=True)
+        cert_pem_path.unlink(missing_ok=True)
 
     sha1 = loaded_new_cert.fingerprint(hashes.SHA1()).hex().upper()
     print(f"✅ Новый постоянный сертификат успешно выпущен Apple API и установлен (id {cert_id}, SHA-1 {sha1})!")
