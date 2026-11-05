@@ -132,7 +132,7 @@ public final class StoreManager: ObservableObject {
             return isProUser
         } catch {
             print("StoreKit: Ошибка восстановления: \(error.localizedDescription)")
-            self.errorMessage = "Ошибка восстановления: \(error.localizedDescription)"
+            self.errorMessage = "Ошибка восстановления: ".localized + error.localizedDescription
             self.isLoading = false
             HapticHelper.notification(.error)
             return false

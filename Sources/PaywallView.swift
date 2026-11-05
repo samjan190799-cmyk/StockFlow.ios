@@ -123,21 +123,29 @@ public struct PaywallView: View {
             
             Spacer()
             
+            // Отдельная заметная кнопка «Восстановить покупки» (правило App Review 3.1.1)
             Button(action: {
                 restorePurchases()
             }) {
-                Text("Восстановить".localized)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption2.weight(.semibold))
+                    Text("Восстановить покупки".localized)
+                        .font(.footnote.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .foregroundStyle(.white.opacity(0.95))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(PremiumButtonStyle())
+            .accessibilityLabel("Восстановить покупки".localized)
         }
         .padding(.horizontal, 18)
         .padding(.top, 8)
@@ -557,16 +565,27 @@ public struct PaywallView: View {
             }
             .padding(.top, 2)
             
+            // Дубль кнопки внизу экрана: в виде заметной капсулы, а не мелкой ссылки
             Button(action: {
                 restorePurchases()
             }) {
-                Text("Восстановить покупки".localized)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.75))
-                    .underline()
-                    .frame(minHeight: 44)
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.footnote.weight(.semibold))
+                    Text("Восстановить покупки".localized)
+                        .font(.footnote.weight(.semibold))
+                }
+                .foregroundStyle(.white.opacity(0.9))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.08))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PremiumButtonStyle())
+            .accessibilityLabel("Восстановить покупки".localized)
         }
         .padding(.top, 4)
     }
@@ -638,6 +657,8 @@ public struct PaywallView: View {
             isRestoring = false
             if hasRestored {
                 alertMessage = "Ваши покупки успешно восстановлены! Доступ к SmartStock PRO открыт.".localized
+            } else if let error = storeManager.errorMessage, !error.isEmpty {
+                alertMessage = error
             } else {
                 alertMessage = "Активных подписок не найдено. Если вы совершали покупку, убедитесь, что вошли под нужным Apple ID.".localized
             }
